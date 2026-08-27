@@ -1,5 +1,6 @@
 import type { ElementId, PageEpoch } from './identifiers.js';
 import type { TargetFingerprint } from './fingerprint.js';
+import type { PrivacyFinding } from './privacy.js';
 
 export interface BoundingBox {
   x: number;
@@ -18,6 +19,9 @@ export type InputType =
   | 'radio'
   | 'submit'
   | 'button'
+  | 'search'
+  | 'textarea'
+  | 'select'
   | 'other';
 
 export interface RawElement {
@@ -32,22 +36,6 @@ export interface RawElement {
   bbox: BoundingBox;
   fingerprint?: TargetFingerprint;
   xpath?: string; // Local-only for DOM re-grounding
-}
-
-export type PrivacyClass =
-  | 'SECRET_AUTH'
-  | 'SECRET_OTP'
-  | 'SECRET_TOKEN'
-  | 'PII_DIRECT'
-  | 'PII_CONTEXT'
-  | 'PUBLIC_UI';
-
-export interface PrivacyFinding {
-  elementId?: ElementId;
-  privacyClass: PrivacyClass;
-  confidence: number;
-  source: 'browser_input_type' | 'pattern' | 'ocr' | 'visual_model' | 'context';
-  reason: string;
 }
 
 /**

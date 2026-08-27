@@ -7,6 +7,7 @@ import {
   createTargetFingerprint,
 } from '@n-eye/protocol';
 import type { ElementRegistry } from './registry.js';
+import { detectElementPrivacy } from '../privacy/detectors.js';
 
 const MAX_LABEL_LENGTH = 120;
 
@@ -51,9 +52,13 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
     el instanceof HTMLSelectElement
   ) {
     if (el.id) {
-      const labelElem = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-      if (labelElem && labelElem.textContent?.trim()) {
-        return sanitizeText(labelElem.textContent);
+      try {
+        const labelElem = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        if (labelElem && labelElem.textContent?.trim()) {
+          return sanitizeText(labelElem.textContent);
+        }
+      } catch {
+        // Fallback for special selector characters
       }
     }
     const parentLabel = el.closest('label');
@@ -88,7 +93,9 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
     role === 'button' ||
     role === 'link' ||
     role === 'tab' ||
-    role === 'menuitem'
+    role === 'menuitem' ||
+    role === 'switch' ||
+    role === 'option'
   ) {
     if (el.textContent && el.textContent.trim()) {
       return sanitizeText(el.textContent);
@@ -136,9 +143,32 @@ export function mapInputType(typeStr: string): InputType {
       return 'submit';
     case 'button':
       return 'button';
+    case 'search':
+      return 'search';
+    case 'textarea':
+      return 'textarea';
+    case 'select':
+      return 'select';
     default:
       return 'other';
   }
+}
+
+function collectCandidates(root: Document | ShadowRoot): HTMLElement[] {
+  const selector =
+    'button, input, select, textarea, a[href], [role="button"], [role="link"], [role="checkbox"], [role="tab"], [role="radio"], [role="menuitem"], [role="textbox"], [role="searchbox"], [role="combobox"], [role="switch"], [role="option"], [contenteditable="true"], [contenteditable=""]';
+
+  const elements: HTMLElement[] = Array.from(root.querySelectorAll<HTMLElement>(selector));
+
+  // Recursively inspect open shadow roots
+  const allNodes = root.querySelectorAll('*');
+  for (const node of allNodes) {
+    if (node.shadowRoot) {
+      elements.push(...collectCandidates(node.shadowRoot));
+    }
+  }
+
+  return elements;
 }
 
 /**
@@ -155,9 +185,7 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
   const rawElements: RawElement[] = [];
   const privacyFindings: PrivacyFinding[] = [];
 
-  const candidates = document.querySelectorAll<HTMLElement>(
-    'button, input, select, textarea, a[href], [role="button"], [role="link"], [role="checkbox"], [role="tab"], [role="radio"], [role="menuitem"]'
-  );
+  const candidates = collectCandidates(document);
 
   const viewWidth = Math.max(window.innerWidth || 1, 1);
   const viewHeight = Math.max(window.innerHeight || 1, 1);
@@ -169,14 +197,23 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
 
     const rect = el.getBoundingClientRect();
     const isInput = el instanceof HTMLInputElement;
-    const inputType = isInput ? mapInputType(el.type) : null;
+    const inputType = isInput
+      ? mapInputType(el.type)
+      : el instanceof HTMLTextAreaElement
+      ? 'textarea'
+      : el instanceof HTMLSelectElement
+      ? 'select'
+      : el.getAttribute('role') === 'textbox'
+      ? 'text'
+      : null;
+
     const isEnabled = !(el as HTMLButtonElement).disabled;
     const isSelected =
       (el as HTMLInputElement).checked ||
       el.getAttribute('aria-selected') === 'true' ||
       el.getAttribute('aria-checked') === 'true';
 
-    const labelCandidate = getSanitizedLabelCandidate(el);
+    const normalizedLabelCandidate = getSanitizedLabelCandidate(el);
     const role = el.getAttribute('role') || el.tagName.toLowerCase();
     const tagName = el.tagName.toLowerCase();
 
@@ -192,19 +229,19 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
       role,
       tagName,
       inputType,
-      labelCandidate,
+      normalizedLabelCandidate,
       relBbox
     );
 
     // Register with opaque ID e.g. e1, e2...
     const elemId = registry.register(el, epoch, fingerprint);
 
-    rawElements.push({
+    const rawEl: RawElement = {
       id: elemId,
       tagName,
       role,
       ariaLabel: el.getAttribute('aria-label') ? sanitizeText(el.getAttribute('aria-label')) : null,
-      innerTextCandidate: labelCandidate || null,
+      innerTextCandidate: normalizedLabelCandidate || null,
       inputType,
       isEnabled,
       isSelected: isSelected ? true : undefined,
@@ -215,34 +252,13 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
         height: Math.round(rect.height),
       },
       fingerprint,
-    });
+    };
 
-    // Detect browser semantic privacy classes
-    if (inputType === 'password') {
-      privacyFindings.push({
-        elementId: elemId,
-        privacyClass: 'SECRET_AUTH',
-        confidence: 1.0,
-        source: 'browser_input_type',
-        reason: 'Input type is password',
-      });
-    } else if (inputType === 'email' || labelCandidate.toLowerCase().includes('email')) {
-      privacyFindings.push({
-        elementId: elemId,
-        privacyClass: 'PII_DIRECT',
-        confidence: 0.9,
-        source: 'browser_input_type',
-        reason: 'Input has type=email or email label candidate',
-      });
-    } else if (inputType === 'tel' || labelCandidate.toLowerCase().includes('phone')) {
-      privacyFindings.push({
-        elementId: elemId,
-        privacyClass: 'PII_DIRECT',
-        confidence: 0.9,
-        source: 'browser_input_type',
-        reason: 'Input has type=tel or phone label candidate',
-      });
-    }
+    rawElements.push(rawEl);
+
+    // Run deterministic privacy detection
+    const findings = detectElementPrivacy(rawEl);
+    privacyFindings.push(...findings);
   }
 
   const durationMs = performance.now() - startTime;

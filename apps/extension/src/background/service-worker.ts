@@ -15,15 +15,11 @@ let currentTaskState: TaskState = {
 // Enable side panel on extension action icon click
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error) => console.error('[N-Eye SW] Failed to set side panel behavior:', error));
-
-chrome.runtime.onInstalled.addListener(() => {
-  console.log('[N-Eye SW] N-Eye Extension v0.1.0 initialized (Manifest V3)');
-});
+  .catch((_err) => {});
 
 function isSupportedUrl(url?: string): { isSupported: boolean; reason?: string } {
   if (!url) {
-    return { isSupported: false, reason: 'No URL available for this tab.' };
+    return { isSupported: false, reason: 'No active webpage URL detected.' };
   }
   if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('devtools://')) {
     return { isSupported: false, reason: 'Chrome internal pages cannot be observed by extensions.' };
@@ -37,11 +33,26 @@ function isSupportedUrl(url?: string): { isSupported: boolean; reason?: string }
   return { isSupported: true };
 }
 
+async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
+  try {
+    // 1. Try active tab in last focused window
+    const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    if (tab && tab.id !== undefined) return tab;
+
+    // 2. Fallback: query any active tab across normal windows
+    const allActive = await chrome.tabs.query({ active: true });
+    const normalActive = allActive.find((t) => t.id !== undefined && (t.url || t.pendingUrl));
+    return normalActive || allActive[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 async function getActiveTabInfo(): Promise<TabInfo | null> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = await getActiveTab();
   if (!tab || tab.id === undefined) return null;
 
-  const url = tab.url || '';
+  const url = tab.url || tab.pendingUrl || '';
   const title = tab.title || '';
   const { isSupported, reason } = isSupportedUrl(url);
 
@@ -62,6 +73,18 @@ async function getActiveTabInfo(): Promise<TabInfo | null> {
     isSupported,
     unsupportedReason: reason,
   };
+}
+
+async function ensureContentScriptInjected(tabId: number): Promise<boolean> {
+  try {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ['content.js'],
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function notifyTabChanged(): Promise<void> {
@@ -109,6 +132,15 @@ chrome.runtime.onMessage.addListener(
     if (message.type === 'GET_ACTIVE_TAB_INFO') {
       getActiveTabInfo().then((info) => {
         sendResponse({ success: true, data: info });
+      }).catch((err) => {
+        sendResponse({ success: false, error: (err as Error).message });
+      });
+      return true;
+    }
+
+    if (message.type === 'INJECT_CONTENT_SCRIPT') {
+      ensureContentScriptInjected(message.tabId).then((injected) => {
+        sendResponse({ success: injected });
       }).catch((err) => {
         sendResponse({ success: false, error: (err as Error).message });
       });

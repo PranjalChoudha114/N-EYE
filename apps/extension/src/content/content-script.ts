@@ -5,10 +5,11 @@ import {
 import { ElementRegistry } from './registry.js';
 import { PageEpochManager } from './epoch.js';
 import { observePage } from './observer.js';
+import { executeValidatedAction } from '../execution/executor.js';
 
 const registry = new ElementRegistry();
-const epochManager = new PageEpochManager(60, (newEpoch) => {
-  console.log('[N-Eye Content] PageEpoch incremented to:', newEpoch);
+const epochManager = new PageEpochManager(60, (_newEpoch) => {
+  // PageEpoch incremented on DOM mutation
 });
 
 // Content script message listener
@@ -37,7 +38,20 @@ chrome.runtime.onMessage.addListener(
         const scene = observePage(registry, epochManager.getEpoch());
         sendResponse({ success: true, data: scene });
       } catch (err) {
-        console.error('[N-Eye Content] Observation failed:', err);
+        sendResponse({ success: false, error: (err as Error).message });
+      }
+      return true;
+    }
+
+    if (message.type === 'EXECUTE_ACTION_REQUEST') {
+      try {
+        const result = executeValidatedAction(message.action, registry);
+        if (result.success) {
+          sendResponse({ success: true, data: result });
+        } else {
+          sendResponse({ success: false, error: result.error });
+        }
+      } catch (err) {
         sendResponse({ success: false, error: (err as Error).message });
       }
       return true;
@@ -46,5 +60,3 @@ chrome.runtime.onMessage.addListener(
     return false;
   }
 );
-
-console.log('[N-Eye Content] Active-web observer active on:', window.location.href);

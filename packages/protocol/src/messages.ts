@@ -1,7 +1,8 @@
-import type { ActionProposal, ValidatedAction } from './action-proposal.js';
-import type { TaskId } from './identifiers.js';
+import type { ActionId, TaskId } from './identifiers.js';
+import type { ActionProposal, ValidatedAction, VerificationResult } from './action-proposal.js';
 import type { RawScene } from './raw-scene.js';
 import type { SafeContext } from './safe-context.js';
+import type { PrivacyDecision, PrivacyFinding, StageMetric } from './privacy.js';
 
 export type TaskStatus =
   | 'IDLE'
@@ -31,11 +32,17 @@ export interface TabInfo {
 export interface TaskState {
   taskId: TaskId;
   goal: string;
+  sanitizedGoal?: string;
   status: TaskStatus;
   activeTab?: TabInfo;
   lastRawScene?: RawScene;
+  privacyFindings?: PrivacyFinding[];
+  privacyDecisions?: PrivacyDecision[];
   lastSafeContext?: SafeContext;
   lastProposal?: ActionProposal;
+  lastValidatedAction?: ValidatedAction;
+  lastVerification?: VerificationResult;
+  stageMetrics?: StageMetric[];
   error?: string;
 }
 
@@ -43,7 +50,7 @@ export interface TaskState {
 export type ExtensionMessage =
   | { type: 'PING' }
   | { type: 'PONG'; timestamp: number }
-  | { type: 'START_TASK'; goal: string }
+  | { type: 'START_TASK'; goal: string; cannedValues?: Record<string, string> }
   | { type: 'CANCEL_TASK'; taskId: TaskId }
   | { type: 'GET_STATE' }
   | { type: 'GET_ACTIVE_TAB_INFO' }
@@ -52,7 +59,10 @@ export type ExtensionMessage =
   | { type: 'OBSERVE_REQUEST' }
   | { type: 'OBSERVE_RESPONSE'; scene: RawScene }
   | { type: 'EXECUTE_ACTION_REQUEST'; action: ValidatedAction }
-  | { type: 'EXECUTE_ACTION_RESPONSE'; success: boolean; error?: string };
+  | { type: 'EXECUTE_ACTION_RESPONSE'; success: boolean; error?: string }
+  | { type: 'CONFIRM_ACTION'; actionId: ActionId; approved: boolean }
+  | { type: 'STEP_TASK' }
+  | { type: 'INJECT_CONTENT_SCRIPT'; tabId: number };
 
 export type ExtensionResponse<T = unknown> = {
   success: boolean;

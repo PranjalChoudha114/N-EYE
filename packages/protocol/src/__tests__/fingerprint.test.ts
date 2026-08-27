@@ -12,7 +12,7 @@ describe('TargetFingerprint & Digest Invariants', () => {
 
     expect(fp1.digest).toBe(fp2.digest);
     expect(fp1.digest).toMatch(/^fp_[0-9a-f]+$/);
-    expect(fp1.sanitizedLabel).toBe('Continue Application');
+    expect(fp1.normalizedLabelCandidate).toBe('Continue Application');
   });
 
   it('produces different digest when semantic label or role changes', () => {

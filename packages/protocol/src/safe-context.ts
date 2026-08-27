@@ -1,5 +1,6 @@
-import type { ElementId, PageEpoch, TaskId, TokenId } from './identifiers.js';
-import type { BoundingBox, InputType, PrivacyClass } from './raw-scene.js';
+import type { ActionId, ElementId, PageEpoch, TaskId, TokenId } from './identifiers.js';
+import type { BoundingBox, InputType } from './raw-scene.js';
+import type { PrivacyClass } from './privacy.js';
 
 export interface SafeElement {
   id: ElementId;
@@ -13,6 +14,7 @@ export interface SafeElement {
 
 export interface TokenCapability {
   tokenId: TokenId;
+  tokenSymbol: string; // e.g. "[EMAIL_1]"
   privacyClass: PrivacyClass;
   descriptionRole: string; // e.g. "Primary user email"
 }
@@ -40,4 +42,9 @@ export interface SafeContext {
   safeElements: SafeElement[];
   availableTokens: TokenCapability[];
   visualHints?: SafeVisualHint[];
+  priorOutcome?: {
+    actionId: ActionId;
+    status: 'SUCCESS' | 'FAILURE' | 'VERIFIED';
+    summary?: string;
+  };
 }

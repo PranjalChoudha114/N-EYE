@@ -19,7 +19,7 @@ export interface TargetFingerprint {
   role: string;
   tagName: string;
   inputType: InputType | null;
-  sanitizedLabel: string;
+  normalizedLabelCandidate: string;
   relativeBbox: RelativeBoundingBox;
   digest: string;
 }
@@ -31,10 +31,10 @@ export function computeFingerprintDigest(
   role: string,
   tagName: string,
   inputType: InputType | null,
-  sanitizedLabel: string,
+  normalizedLabelCandidate: string,
   relBbox: RelativeBoundingBox
 ): string {
-  const normLabel = sanitizedLabel.trim().toLowerCase().slice(0, 80);
+  const normLabel = normalizedLabelCandidate.trim().toLowerCase().slice(0, 80);
   const normRole = (role || tagName).toLowerCase();
   const normType = inputType || 'none';
   const bboxKey = `${Math.round(relBbox.xPercent)}_${Math.round(relBbox.yPercent)}_${Math.round(relBbox.widthPercent)}_${Math.round(relBbox.heightPercent)}`;
@@ -52,15 +52,15 @@ export function createTargetFingerprint(
   role: string,
   tagName: string,
   inputType: InputType | null,
-  sanitizedLabel: string,
+  normalizedLabelCandidate: string,
   relativeBbox: RelativeBoundingBox
 ): TargetFingerprint {
-  const digest = computeFingerprintDigest(role, tagName, inputType, sanitizedLabel, relativeBbox);
+  const digest = computeFingerprintDigest(role, tagName, inputType, normalizedLabelCandidate, relativeBbox);
   return {
     role,
     tagName,
     inputType,
-    sanitizedLabel,
+    normalizedLabelCandidate,
     relativeBbox,
     digest,
   };

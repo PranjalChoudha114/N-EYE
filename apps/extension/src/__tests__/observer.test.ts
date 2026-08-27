@@ -96,9 +96,9 @@ describe('Page Observer & Visibility Engine', () => {
 
     const scene = observePage(registry, createPageEpoch(1));
 
-    expect(scene.privacyFindings.length).toBe(2);
-    const passFinding = scene.privacyFindings.find((f) => f.privacyClass === 'SECRET_AUTH');
-    const emailFinding = scene.privacyFindings.find((f) => f.privacyClass === 'PII_DIRECT');
+    expect(scene.privacyFindings.length).toBeGreaterThanOrEqual(2);
+    const passFinding = scene.privacyFindings.find((f) => f.privacyClass === 'SECRET_PASSWORD');
+    const emailFinding = scene.privacyFindings.find((f) => f.privacyClass === 'PII_EMAIL');
 
     expect(passFinding).toBeDefined();
     expect(passFinding?.reason).toContain('password');

@@ -1,121 +1,122 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>N-Eye Trust Layer</title>
-  <link rel="stylesheet" href="./sidepanel.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye — Privacy Trust Layer</title>
+  <link rel="stylesheet" href="./sidepanel.css">
 </head>
 <body>
-  <div id="app" class="app-container">
+  <div class="panel-layout">
     <!-- Header -->
-    <header class="app-header" role="banner">
-      <div class="brand-row">
-        <div class="brand-badge">
-          <span class="brand-name">N-Eye</span>
-          <span class="brand-tag">TRUST LAYER</span>
-        </div>
-        <div id="status-pill" class="status-pill status-connecting" role="status" aria-live="polite">
-          <span class="status-dot"></span>
-          <span id="status-text">CONNECTING</span>
-        </div>
+    <header class="panel-header">
+      <div class="brand-group">
+        <div class="brand-badge">N-EYE</div>
+        <div class="brand-title">Trust Layer <span class="version-tag">v2.0</span></div>
       </div>
-      <div class="site-row">
-        <span class="site-icon" aria-hidden="true">🌐</span>
-        <span id="site-origin" class="site-origin truncate">Detecting active tab...</span>
+      <div id="connection-pill" class="status-pill status-idle" aria-live="polite">
+        <span class="status-dot"></span>
+        <span id="connection-text" class="status-label">INITIALIZING</span>
       </div>
     </header>
 
-    <!-- Main Content -->
-    <main class="app-main" role="main">
-      <!-- Unsupported Page Alert (hidden by default) -->
-      <section id="unsupported-banner" class="alert-banner" style="display: none;" role="alert">
-        <div class="alert-title">⚠️ Unsupported Browser Context</div>
-        <div id="unsupported-reason" class="alert-msg">N-Eye cannot inspect this browser page.</div>
-      </section>
+    <!-- Active Target Domain Bar -->
+    <section class="active-target-bar" aria-label="Active Webpage Information">
+      <div class="target-site-icon" aria-hidden="true">🌐</div>
+      <div class="target-details">
+        <div id="target-origin" class="target-origin">Connecting to browser...</div>
+        <div id="target-title" class="target-title">Awaiting active tab</div>
+      </div>
+    </section>
 
-      <!-- Active Page Status Card -->
-      <section class="card page-card" aria-labelledby="heading-page">
-        <div class="card-header">
-          <h2 id="heading-page" class="card-title">Active Webpage</h2>
-          <button id="btn-reobserve" class="btn btn-secondary btn-icon" title="Refresh local observation" aria-label="Refresh observation">
-            <span aria-hidden="true">↻</span> Refresh
-          </button>
+    <!-- Main Content Container -->
+    <main class="panel-content">
+      <!-- Unsupported Alert Banner -->
+      <div id="unsupported-banner" class="alert-banner alert-unsupported hidden" role="alert">
+        <div class="alert-icon">⚠️</div>
+        <div class="alert-content">
+          <div class="alert-title">Restricted Browser Page</div>
+          <div id="unsupported-reason" class="alert-desc">This internal browser page cannot be observed.</div>
         </div>
-        <div class="page-meta-grid">
-          <div class="meta-item">
-            <span class="meta-label">Title</span>
-            <span id="page-title" class="meta-value truncate">—</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Page Freshness</span>
-            <span id="page-epoch" class="meta-value highlight">Epoch 1</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Interactable Controls</span>
-            <span id="controls-count" class="meta-value highlight">0</span>
-          </div>
-          <div class="meta-item">
-            <span class="meta-label">Observation Latency</span>
-            <span id="latency-val" class="meta-value">—</span>
-          </div>
-        </div>
-      </section>
+      </div>
 
-      <!-- Protection Status Card -->
-      <section class="card protection-card" aria-labelledby="heading-protection">
-        <div class="card-header">
-          <h2 id="heading-protection" class="card-title">Privacy & Protection</h2>
-          <span class="shield-badge">🛡️ LOCAL SHIELD</span>
+      <!-- Trust Core Visualization -->
+      <section class="trust-core-card" aria-label="N-Eye Trust Core Visualization">
+        <div class="trust-core-stage">
+          <div class="core-rings" id="core-visualizer">
+            <svg class="aperture-svg" viewBox="0 0 160 160" width="120" height="120" aria-hidden="true">
+              <defs>
+                <linearGradient id="coreGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="var(--accent-cyan)" />
+                  <stop offset="50%" stop-color="var(--accent-blue)" />
+                  <stop offset="100%" stop-color="var(--accent-purple)" />
+                </linearGradient>
+              </defs>
+              <circle class="ring-outer" cx="80" cy="80" r="70" />
+              <circle class="ring-pulse" cx="80" cy="80" r="60" />
+              <circle class="ring-inner" cx="80" cy="80" r="45" />
+              <path class="aperture-blade blade-1" d="M 80,35 L 105,70 L 80,60 Z" />
+              <path class="aperture-blade blade-2" d="M 125,80 L 90,105 L 100,80 Z" />
+              <path class="aperture-blade blade-3" d="M 80,125 L 55,90 L 80,100 Z" />
+              <path class="aperture-blade blade-4" d="M 35,80 L 70,55 L 60,80 Z" />
+              <circle class="core-center" cx="80" cy="80" r="18" fill="url(#coreGradient)" />
+            </svg>
+            <div class="core-overlay-text">
+              <span id="core-state-label" class="core-state">IDLE</span>
+              <span id="core-epoch-label" class="core-subtext">Epoch 1</span>
+            </div>
+          </div>
         </div>
-        <p class="protection-desc">
-          Zero data sent to cloud. Generic form values excluded from page observation.
-        </p>
-        <div id="privacy-summary" class="privacy-summary-box">
-          <span class="muted">No sensitive inputs detected on this page.</span>
-        </div>
-      </section>
-
-      <!-- Understanding (Safe Local Controls) -->
-      <section class="card controls-card" aria-labelledby="heading-controls">
-        <div class="card-header">
-          <h2 id="heading-controls" class="card-title">Observed Controls (Opaque IDs)</h2>
-        </div>
-        <div id="controls-container" class="controls-list" role="list" aria-label="Observed interactive controls">
-          <div class="empty-state">Observing active page...</div>
+        <div class="core-tagline">
+          <span class="tagline-highlight">AI needs context.</span> Not your identity.
         </div>
       </section>
 
-      <!-- System Trust Loop -->
+      <!-- Task Execution Input -->
+      <section class="card task-card" aria-label="Task Goal">
+        <div class="task-input-group">
+          <input
+            type="text"
+            id="task-goal-input"
+            class="task-input"
+            placeholder="Enter goal e.g. Enter my email and continue..."
+            value="Enter my email and continue"
+            aria-label="Agent Task Goal"
+          />
+          <button id="btn-run-loop" class="btn btn-primary" title="Execute closed trust loop">Run Loop</button>
+        </div>
+      </section>
+
+      <!-- Trust Loop Pipeline Track -->
       <section class="card pipeline-card" aria-labelledby="heading-pipeline">
-        <h2 id="heading-pipeline" class="card-title">Trust Loop Status</h2>
+        <h2 id="heading-pipeline" class="card-title">Trust Loop Pipeline</h2>
         <div class="pipeline-track">
-          <div class="pipeline-step step-active" title="Local DOM observation">
+          <div id="step-see" class="pipeline-step step-active" title="Local Page Observation">
             <span class="step-num">1</span>
             <span class="step-name">SEE</span>
             <span class="step-status">ACTIVE</span>
           </div>
-          <div class="pipeline-step step-ready" title="PII Detection & Sanitization">
+          <div id="step-protect" class="pipeline-step step-ready" title="PII Detection & Tokenization">
             <span class="step-num">2</span>
             <span class="step-name">PROTECT</span>
             <span class="step-status">LOCAL</span>
           </div>
-          <div class="pipeline-step step-idle" title="Remote Planner Reasoning">
+          <div id="step-think" class="pipeline-step step-idle" title="Deterministic Action Reasoning">
             <span class="step-num">3</span>
             <span class="step-name">THINK</span>
-            <span class="step-status">OFFLINE</span>
+            <span class="step-status">PLANNER</span>
           </div>
-          <div class="pipeline-step step-idle" title="Local Action Validation">
+          <div id="step-validate" class="pipeline-step step-idle" title="Local Action & Target Authority">
             <span class="step-num">4</span>
             <span class="step-name">VALIDATE</span>
             <span class="step-status">LOCAL</span>
           </div>
-          <div class="pipeline-step step-idle" title="Browser Action Execution">
+          <div id="step-act" class="pipeline-step step-idle" title="Local Action Execution">
             <span class="step-num">5</span>
             <span class="step-name">ACT</span>
             <span class="step-status">LOCAL</span>
           </div>
-          <div class="pipeline-step step-idle" title="State-Change Verification">
+          <div id="step-verify" class="pipeline-step step-idle" title="State-Change Verification">
             <span class="step-num">6</span>
             <span class="step-name">VERIFY</span>
             <span class="step-status">LOCAL</span>
@@ -123,35 +124,163 @@
         </div>
       </section>
 
-      <!-- Developer / Forensic Evidence Drawer -->
-      <details class="evidence-drawer">
-        <summary class="evidence-summary">
-          <span>🔍 Developer & Forensic Evidence</span>
-        </summary>
-        <div class="evidence-body">
-          <div class="evidence-item">
-            <strong>Network Egress:</strong> <span class="badge-evidence">0 BYTES (OFFLINE)</span>
+      <!-- SafeContext Transformation Visualizer -->
+      <section class="card visualizer-card" aria-labelledby="heading-visualizer">
+        <h2 id="heading-visualizer" class="card-title">Privacy Transformation Visualizer</h2>
+        <div class="transform-grid">
+          <div class="transform-column col-local">
+            <div class="col-header">Local Page Data</div>
+            <div id="transform-local-items" class="col-content">
+              <div class="transform-item">
+                <span class="item-tag">EMAIL</span>
+                <span class="item-val">user@example.com</span>
+              </div>
+              <div class="transform-item">
+                <span class="item-tag">PASS</span>
+                <span class="item-val">••••••••••••</span>
+              </div>
+            </div>
           </div>
-          <div class="evidence-item">
-            <strong>Local Registry Size:</strong> <span id="evidence-registry-size">0</span>
+
+          <div class="transform-arrow-col" aria-hidden="true">
+            <span class="arrow-core">⚡</span>
           </div>
-          <div class="evidence-item">
-            <strong>Fingerprints Computed:</strong> <span id="evidence-fp-count">0</span>
+
+          <div class="transform-column col-safe">
+            <div class="col-header">SafeContext Egress</div>
+            <div id="transform-safe-items" class="col-content">
+              <div class="transform-item tokenized">
+                <span class="item-tag token-tag">[EMAIL_1]</span>
+                <span class="item-desc">Scoped Token</span>
+              </div>
+              <div class="transform-item blocked">
+                <span class="item-tag blocked-tag">PASSWORD</span>
+                <span class="item-desc">NEVER_SEND</span>
+              </div>
+            </div>
           </div>
-          <div class="evidence-item">
-            <strong>Active Viewport:</strong> <span id="evidence-viewport">—</span>
-          </div>
-          <pre id="evidence-raw" class="evidence-pre">{}</pre>
         </div>
-      </details>
+      </section>
+
+      <!-- Action & Verification Card -->
+      <section id="action-verification-card" class="card action-card hidden" aria-labelledby="heading-action">
+        <h2 id="heading-action" class="card-title">Action & Verification Authority</h2>
+        <div class="action-flow">
+          <div class="action-row">
+            <span class="action-label">Proposal:</span>
+            <span id="action-proposal-text" class="action-value">—</span>
+          </div>
+          <div class="action-row">
+            <span class="action-label">Risk Level:</span>
+            <span id="action-risk-badge" class="risk-badge risk-low">LOW</span>
+          </div>
+          <div class="action-row">
+            <span class="action-label">Verification:</span>
+            <span id="verification-status-badge" class="verify-badge verify-pending">PENDING</span>
+          </div>
+          <div id="verification-delta-text" class="verification-delta-box">Awaiting execution...</div>
+        </div>
+      </section>
+
+      <!-- Stage Latency Timeline -->
+      <section class="card latency-card" aria-labelledby="heading-latency">
+        <h2 id="heading-latency" class="card-title">Stage Latency Timeline</h2>
+        <div id="latency-timeline" class="latency-grid">
+          <div class="latency-row">
+            <span class="lat-stage">SEE</span>
+            <span id="lat-see" class="lat-val">0.0 ms</span>
+          </div>
+          <div class="latency-row">
+            <span class="lat-stage">PROTECT</span>
+            <span id="lat-protect" class="lat-val">0.0 ms</span>
+          </div>
+          <div class="latency-row">
+            <span class="lat-stage">PLAN (MOCK)</span>
+            <span id="lat-plan" class="lat-val">0.0 ms</span>
+          </div>
+          <div class="latency-row">
+            <span class="lat-stage">VALIDATE</span>
+            <span id="lat-validate" class="lat-val">0.0 ms</span>
+          </div>
+          <div class="latency-row">
+            <span class="lat-stage">ACT</span>
+            <span id="lat-act" class="lat-val">0.0 ms</span>
+          </div>
+          <div class="latency-row">
+            <span class="lat-stage">VERIFY</span>
+            <span id="lat-verify" class="lat-val">0.0 ms</span>
+          </div>
+          <div class="latency-total-row">
+            <span class="lat-stage-bold">TOTAL LOCAL TIME</span>
+            <span id="lat-total" class="lat-val-bold">0.0 ms</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Collapsible Forensic Drawer -->
+      <section class="card evidence-card" aria-label="Technical Evidence Drawer">
+        <button id="btn-toggle-evidence" class="evidence-toggle" aria-expanded="false" aria-controls="evidence-drawer">
+          <span>Forensic Evidence & Contracts</span>
+          <span id="evidence-chevron" class="chevron">▼</span>
+        </button>
+        <div id="evidence-drawer" class="evidence-drawer hidden">
+          <div class="evidence-stats-grid">
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-elements-count">0</div>
+              <div class="stat-lbl">Observed Controls</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-findings-count">0</div>
+              <div class="stat-lbl">Privacy Findings</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-tokens-count">0</div>
+              <div class="stat-lbl">Active Vault Tokens</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-epoch">1</div>
+              <div class="stat-lbl">Page Epoch</div>
+            </div>
+          </div>
+          <div class="evidence-code-box">
+            <div class="code-title">SafeContext Outbound Payload:</div>
+            <pre><code id="evidence-safecontext-dump">{}</code></pre>
+          </div>
+        </div>
+      </section>
     </main>
 
+    <!-- High-Risk Confirmation Modal Dialog -->
+    <dialog id="confirmation-dialog" class="confirm-modal" aria-labelledby="modal-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <span class="modal-warning-icon">🛡️</span>
+          <h3 id="modal-title" class="modal-title">High-Risk Action Confirmation</h3>
+        </div>
+        <div class="modal-body">
+          <p id="modal-desc">N-Eye wants to perform an action on the active webpage:</p>
+          <div id="modal-action-summary" class="modal-action-box">
+            <strong>Action:</strong> <span id="modal-action-name">Submit Form</span><br>
+            <strong>Target:</strong> <span id="modal-action-target">Submit Application Button</span>
+          </div>
+          <p class="modal-footnote">Zero raw passwords or credentials will be sent to the remote planner.</p>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-modal-cancel" class="btn btn-secondary">Cancel</button>
+          <button id="btn-modal-confirm" class="btn btn-primary">Authorize Action</button>
+        </div>
+      </div>
+    </dialog>
+
     <!-- Footer -->
-    <footer class="app-footer" role="contentinfo">
-      <span>N-Eye v0.1.0 &bull; SIH 2026</span>
-      <span>Invariants: <strong style="color: var(--accent-green);">15/15 Active</strong></span>
+    <footer class="panel-footer">
+      <div class="footer-guarantee">
+        <span class="shield-icon">🛡️</span>
+        <span>Local Privacy Trust Layer &bull; Zero Network Egress</span>
+      </div>
     </footer>
   </div>
+
   <script type="module" src="./sidepanel.ts"></script>
 </body>
 </html>

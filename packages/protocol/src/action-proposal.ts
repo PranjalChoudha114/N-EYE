@@ -1,4 +1,4 @@
-import type { ActionId, ElementId, TokenId } from './identifiers.js';
+import type { ActionId, ElementId, PageEpoch, TokenId } from './identifiers.js';
 
 export type ActionType =
   | 'CLICK'
@@ -10,7 +10,7 @@ export type ActionType =
   | 'ASK_USER'
   | 'COMPLETE';
 
-export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
+export type RiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
 
 /**
  * ActionProposal: Untrusted advice returned by the remote planner.
@@ -21,6 +21,7 @@ export interface ActionProposal {
   type: ActionType;
   targetId?: ElementId;
   tokenId?: TokenId;
+  tokenSymbol?: string; // e.g. "[EMAIL_1]"
   textValue?: string; // Only for harmless non-sensitive text
   scrollDelta?: { x: number; y: number };
   reasoning: string;
@@ -39,5 +40,16 @@ export interface ValidatedAction {
   targetElementId?: ElementId;
   resolvedTokenValue?: string; // Injected purely at execution time if TYPE_TOKEN
   approvedRiskLevel: RiskLevel;
+  timestamp: number;
+}
+
+export type VerificationStatus = 'VERIFIED_SUCCESS' | 'VERIFIED_FAILURE' | 'AMBIGUOUS';
+
+export interface VerificationResult {
+  actionId: ActionId;
+  status: VerificationStatus;
+  observedDelta: string;
+  preEpoch: PageEpoch;
+  postEpoch: PageEpoch;
   timestamp: number;
 }
