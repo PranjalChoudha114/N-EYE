@@ -4,6 +4,11 @@ import type {
   VerificationResult,
 } from '@n-eye/protocol';
 
+/**
+ * ActionVerifier (Zone 3 - Trusted Verification)
+ * OWNS: Empirical post-execution state-delta analysis.
+ * INVARIANT: Never assumes success. Success requires measurable PageEpoch progression, URL transition, or DOM mutation.
+ */
 export function verifyActionExecution(
   action: ValidatedAction,
   preScene: RawScene,

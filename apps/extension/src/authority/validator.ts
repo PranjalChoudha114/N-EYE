@@ -13,6 +13,12 @@ export class ActionValidationError extends Error {
   }
 }
 
+/**
+ * LocalValidator (Zone 3 - Local Action Authority)
+ * OWNS: Local evaluation of untrusted ActionProposals against the live RawScene and PrivateTokenVault.
+ * INVARIANT: Remote planner is advisory only. Actions CANNOT execute without producing a ValidatedAction.
+ * ENFORCES: Target existence, enabled state, target semantic validation, and origin isolation.
+ */
 export function validateActionProposal(
   proposal: ActionProposal,
   scene: RawScene,

@@ -6,6 +6,12 @@ import {
   createTaskId,
 } from '@n-eye/protocol';
 
+/**
+ * N-Eye Service Worker (Zone 2 - Extension Core)
+ * OWNS: MV3 lifecycle coordination, active tab tracking, and programmatic injection fallback.
+ * TRUST BOUNDARY: Privileged extension background context. Never accesses raw DOM directly.
+ * SELF-HEALING: Executes content.js dynamically via chrome.scripting when tabs pre-exist before extension reload.
+ */
 let currentTaskState: TaskState = {
   taskId: createTaskId('task-active'),
   goal: '',

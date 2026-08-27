@@ -217,7 +217,8 @@ async function executeClosedTrustLoop(): Promise<void> {
   // Register detected tokenizable values into PrivateTokenVault
   for (const d of decisions) {
     if (d.decision === 'TOKENIZE' && d.tokenRole) {
-      const realVal = d.privacyClass === 'PII_EMAIL' ? 'alice.applicant@example.com' : '+1-555-0199';
+      const matchedFinding = combinedFindings.find((f) => f.findingId === d.findingId);
+      const realVal = matchedFinding?.textSpan || (d.privacyClass === 'PII_EMAIL' ? 'alice.applicant@example.com' : '+1-555-0199');
       vault.registerToken(
         d.tokenRole,
         d.privacyClass,
@@ -266,7 +267,7 @@ async function executeClosedTrustLoop(): Promise<void> {
 
   let validatedAction: ValidatedAction;
   try {
-    validatedAction = validateActionProposal(proposal, preScene, vault, taskId, activeTab.origin);
+    validatedAction = validateActionProposal(proposal, preScene, vault, taskId, origin);
   } catch (err) {
     actionProposalText.textContent = `Rejected: ${(err as Error).message}`;
     updatePipelineStep(stepValidate, 'idle');

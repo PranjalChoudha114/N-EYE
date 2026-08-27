@@ -21,6 +21,12 @@ const FORBIDDEN_CANARY_PATTERNS = [
 
 const MAX_SAFE_CONTEXT_BYTES = 256 * 1024; // 256 KB bound
 
+/**
+ * EgressGuard (Zone 4 - Network Boundary)
+ * OWNS: Final local security checkpoint before any planner request candidate is serialized.
+ * TRUST BOUNDARY: Enforces strict allowlist schema validation and byte-level scanning for forbidden canary secrets.
+ * MUST NOT: Permit raw DOM scenes, unsanitized goals, or plain passwords to reach transport.
+ */
 export function validateSafeContextEgress(context: SafeContext): string {
   if (!context) {
     throw new EgressViolationError('Egress payload cannot be null or undefined.');

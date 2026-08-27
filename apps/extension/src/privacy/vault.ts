@@ -14,6 +14,12 @@ export class TokenResolutionError extends Error {
   }
 }
 
+/**
+ * PrivateTokenVault (Zone 3 - Trusted Local Memory)
+ * OWNS: Ephemeral, in-memory mapping between scoped token symbols (e.g. [EMAIL_1]) and real secrets.
+ * TRUST BOUNDARY: Strictly memory-local. Never writes to disk, cookies, or extension storage.
+ * GUARANTEE: Real secret values are NEVER serialized into outbound SafeContext or network payloads.
+ */
 export class PrivateTokenVault {
   private bindings = new Map<string, TokenBinding>();
 

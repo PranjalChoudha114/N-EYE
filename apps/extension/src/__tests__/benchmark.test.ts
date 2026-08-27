@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { describe, it } from 'vitest';
 import { ElementRegistry } from '../content/registry.js';
 import { observePage } from '../content/observer.js';

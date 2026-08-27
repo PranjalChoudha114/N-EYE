@@ -28,6 +28,11 @@ export function generateTokenSymbol(privacyClass: PrivacyClass): string {
   return `[${prefix}_${count}]`;
 }
 
+/**
+ * Privacy Policy Engine (Zone 3 - Local Sensitive Processing)
+ * OWNS: Mapping PrivacyFinding instances to deterministic policy decisions (ALLOW, NEVER_SEND, TOKENIZE, MASK).
+ * SPECIAL SECRETS INVARIANT: Passwords, OTPs, and API credentials ALWAYS map to NEVER_SEND.
+ */
 export function evaluatePrivacyPolicy(findings: PrivacyFinding[]): PrivacyDecision[] {
   const decisions: PrivacyDecision[] = [];
 

@@ -29,6 +29,12 @@ function sanitizeGoal(goal: string, decisions: PrivacyDecision[]): string {
   return cleanGoal.trim().slice(0, 300);
 }
 
+/**
+ * SafeContextBuilder (Zone 3 - Local Sensitive Processing)
+ * OWNS: Field-by-field allowlist construction of the outbound SafeContext payload.
+ * TRUST BOUNDARY: Reconstructs a clean representation from RawScene without spreading or exposing raw DOM nodes.
+ * MUST NOT: Include raw form values, unsanitized task goals, or internal XPath / local identifiers.
+ */
 export function buildSafeContext(
   rawScene: RawScene,
   rawGoal: string,

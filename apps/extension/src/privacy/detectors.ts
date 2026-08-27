@@ -22,6 +22,11 @@ function createFindingId(): string {
   return `find_${Date.now()}_${findingCounter}`;
 }
 
+/**
+ * Privacy Detectors (Zone 3 - Local Sensitive Processing)
+ * OWNS: Deterministic regex and semantic classification of DOM elements and user task goals.
+ * GUARANTEE: Runs strictly locally. Never sends text to external classification APIs.
+ */
 export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
   const findings: PrivacyFinding[] = [];
   const textCandidates = [

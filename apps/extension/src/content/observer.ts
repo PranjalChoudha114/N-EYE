@@ -9,6 +9,12 @@ import {
 import type { ElementRegistry } from './registry.js';
 import { detectElementPrivacy } from '../privacy/detectors.js';
 
+/**
+ * PageObserver (Zone 1 - Content Script Execution)
+ * OWNS: Local DOM traversal, interactable element extraction, visibility filtering, and TargetFingerprint computation.
+ * TRUST BOUNDARY: Executes in untrusted webpage context.
+ * INVARIANT: NEVER reads raw passwords or input values. Output is marked `_isLocalOnly: true`.
+ */
 const MAX_LABEL_LENGTH = 120;
 
 export function sanitizeText(text: string | null | undefined, maxLength = MAX_LABEL_LENGTH): string {

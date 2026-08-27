@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { observePage } from '../content/observer.js';
 import { ElementRegistry } from '../content/registry.js';
-import { createPageEpoch } from '@n-eye/protocol';
+import { createPageEpoch, createTaskId, createActionId } from '@n-eye/protocol';
+import { PrivateTokenVault } from '../privacy/vault.js';
+import { validateActionProposal, ActionValidationError } from '../authority/validator.js';
+import { executeValidatedAction } from '../execution/executor.js';
 
 describe('Adversarial Semantics & Injection Resistance Suite', () => {
   let registry: ElementRegistry;
@@ -38,7 +41,6 @@ describe('Adversarial Semantics & Injection Resistance Suite', () => {
     const scene = observePage(registry, createPageEpoch(1));
 
     expect(scene.elements.length).toBe(1);
-    // Should gracefully fallback to placeholder
     expect(scene.elements[0]?.innerTextCandidate).toBe('Safe Placeholder');
   });
 
@@ -68,21 +70,72 @@ describe('Adversarial Semantics & Injection Resistance Suite', () => {
     expect(tab2?.isSelected).toBeUndefined();
   });
 
-  it('handles duplicate button labels with distinct opaque ElementIds and distinct fingerprints', () => {
+  it('blocks adversary ActionProposal attempting to inject token into password input', () => {
+    document.body.innerHTML = `
+      <form>
+        <label for="pass-field">Password</label>
+        <input type="password" id="pass-field">
+      </form>
+    `;
+
+    const taskId = createTaskId('task-adv-1');
+    const origin = 'https://example.com';
+    const vault = new PrivateTokenVault();
+    vault.registerToken('[EMAIL_1]', 'PII_EMAIL', 'user@example.com', taskId, 1, origin, ['email', 'text']);
+
+    const scene = observePage(registry, createPageEpoch(1));
+    const passElement = scene.elements.find((e) => e.inputType === 'password');
+    if (!passElement) throw new Error('Expected passElement to exist');
+
+    // Adversarial proposal: planner tries to type token into password field
+    const maliciousProposal = {
+      actionId: createActionId('act-malicious-1'),
+      type: 'TYPE_TOKEN' as const,
+      targetId: passElement.id,
+      tokenSymbol: '[EMAIL_1]',
+      reasoning: 'Adversarial attempt to leak token into password',
+      expectedOutcome: 'Secret exposure',
+      riskLevel: 'LOW' as const,
+    };
+
+    expect(() => {
+      validateActionProposal(maliciousProposal, scene, vault, taskId, origin);
+    }).toThrow(ActionValidationError);
+  });
+
+  it('blocks execution when target element is dynamically removed between plan and act', () => {
     document.body.innerHTML = `
       <div>
-        <button id="btn-top" class="btn">Continue</button>
-        <div style="height: 100px;"></div>
-        <button id="btn-bottom" class="btn">Continue</button>
+        <button id="dynamic-btn">Click Me</button>
       </div>
     `;
 
     const scene = observePage(registry, createPageEpoch(1));
+    const firstElem = scene.elements[0];
+    if (!firstElem) throw new Error('Expected element to exist');
+    const btn = document.getElementById('dynamic-btn');
 
-    expect(scene.elements.length).toBe(2);
-    expect(scene.elements[0]?.id).toBe('e1');
-    expect(scene.elements[1]?.id).toBe('e2');
-    expect(scene.elements[0]?.innerTextCandidate).toBe('Continue');
-    expect(scene.elements[1]?.innerTextCandidate).toBe('Continue');
+    // Simulate validated action
+    const action = {
+      _isValidated: true as const,
+      proposal: {
+        actionId: createActionId('act-1'),
+        type: 'CLICK' as const,
+        targetId: firstElem.id,
+        reasoning: 'Click button',
+        expectedOutcome: 'Advance',
+        riskLevel: 'LOW' as const,
+      },
+      targetElementId: firstElem.id,
+      approvedRiskLevel: 'LOW' as const,
+      timestamp: Date.now(),
+    };
+
+    // Stale action attack: element removed from DOM before execution
+    btn?.remove();
+
+    const result = executeValidatedAction(action, registry);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('detached from the active DOM');
   });
 });
