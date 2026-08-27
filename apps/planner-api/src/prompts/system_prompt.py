@@ -62,7 +62,6 @@ def get_action_proposal_json_schema() -> Dict[str, Any]:
             },
         },
         "required": ["actionId", "type", "reasoning", "expectedOutcome", "riskLevel"],
-        "additionalProperties": False,
     }
 
 

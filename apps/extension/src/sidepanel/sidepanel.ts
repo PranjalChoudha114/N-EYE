@@ -128,7 +128,7 @@ async function refreshGatewayStatus(): Promise<void> {
     stepThinkStatus.textContent = 'MOCK';
     latPlanLabel.textContent = 'PLAN (MOCK)';
     proofPlannerMode.textContent = 'MOCK (Deterministic)';
-    proofProviderModel.textContent = 'Local Harness';
+    proofProviderModel.textContent = 'mock (local-deterministic)';
     return;
   }
 
@@ -136,12 +136,21 @@ async function refreshGatewayStatus(): Promise<void> {
   const health = await plannerManager.checkGatewayHealth();
 
   if (health.healthy) {
-    gatewayStatusPill.className = 'gateway-pill gateway-online';
-    gatewayStatusText.textContent = `Gateway: Online (${health.model || health.provider})`;
-    stepThinkStatus.textContent = 'REMOTE';
-    latPlanLabel.textContent = `PLAN (REMOTE: ${health.provider || 'AI'})`;
-    proofPlannerMode.textContent = 'REMOTE (Real AI)';
-    proofProviderModel.textContent = `${health.provider || 'AI'} (${health.model || 'model'})`;
+    if (health.provider === 'mock') {
+      gatewayStatusPill.className = 'gateway-pill gateway-online';
+      gatewayStatusText.textContent = `Gateway: Mock Mode (${health.model})`;
+      stepThinkStatus.textContent = 'MOCK';
+      latPlanLabel.textContent = 'PLAN (SERVER MOCK)';
+      proofPlannerMode.textContent = 'REMOTE (Server Mock)';
+      proofProviderModel.textContent = `mock (${health.model})`;
+    } else {
+      gatewayStatusPill.className = 'gateway-pill gateway-online';
+      gatewayStatusText.textContent = `Gateway: Online (${health.provider}: ${health.model})`;
+      stepThinkStatus.textContent = 'REMOTE';
+      latPlanLabel.textContent = `PLAN (REMOTE: ${health.provider})`;
+      proofPlannerMode.textContent = 'REMOTE (Real AI)';
+      proofProviderModel.textContent = `${health.provider} (${health.model})`;
+    }
   } else {
     gatewayStatusPill.className = 'gateway-pill gateway-offline';
     gatewayStatusText.textContent = 'Gateway: Offline (Run FastAPI)';

@@ -8,10 +8,15 @@ bundles never expose API secrets to hostile web pages or client-side inspection.
 from dataclasses import dataclass, field
 import os
 from typing import List
-from dotenv import load_dotenv
+from pathlib import Path
+from dotenv import load_dotenv, find_dotenv
 
-# Load local environment variables from .env if present
-load_dotenv()
+# Load local environment variables from package .env or project root .env
+package_env = Path(__file__).resolve().parent.parent / ".env"
+if package_env.exists():
+    load_dotenv(dotenv_path=package_env)
+else:
+    load_dotenv(find_dotenv(usecwd=True))
 
 
 @dataclass(frozen=True)
