@@ -4,19 +4,20 @@
 
 **Privacy-preserving visual perception for lightweight browser agents.**
 
-N-Eye is a Chrome MV3 browser extension that acts as a trust layer between the user's
+N-Eye is a Chrome MV3 browser extension that acts as an immutable trust layer between the user's
 private browser environment and remote AI reasoning. It observes pages locally, detects
 and protects private data, sends only sanitized context to a remote planner, locally
-validates every proposed action, and verifies results.
+validates every proposed action, resolves private tokens locally, executes permitted actions,
+and verifies results.
 
 ## Project Status
 
-**Genesis** — Repository foundation, engineering constitution, and first MV3 shell established.
+**Gate 005/006 Complete** — Remote AI Planner Integration (FastAPI Gateway + Google Gemini / Mock Provider Adapters + SafeContext-Only Network Boundary + Local Authority Preservation + Network Proof UI).
 
 ## Architecture Overview
 
 ```
-SEE locally → PROTECT locally → THINK remotely → VALIDATE locally → ACT locally → VERIFY locally
+SEE locally → PROTECT locally → THINK remotely (SafeContext) → VALIDATE locally → ACT locally → VERIFY locally
 ```
 
 The browser keeps sensitive context and execution authority local. Remote reasoning
@@ -24,36 +25,44 @@ receives only the information it needs via the `SafeContext` contract.
 
 ## Quick Start
 
+See the [Operational Runbook](docs/RUNBOOK.md) for full instructions.
+
 ### Prerequisites
 
-- Node.js ≥ 22 (tested with v26.7.0)
+- Node.js ≥ 22
 - pnpm ≥ 11
-- Chrome browser
+- Python ≥ 3.11 with `.venv`
+- Google Chrome browser
 
-### Install
+### Install & Build
 
 ```bash
+# Install Node dependencies
 pnpm install
-```
 
-### Build
-
-```bash
 # Build all packages and the extension
 pnpm build
 ```
 
-### Test
+### Run Tests
 
 ```bash
-# Run all tests
-pnpm test
+# Run TypeScript test suites across protocol & extension (57 tests)
+pnpm -r run test
 
-# Type-check all packages
-pnpm typecheck
+# Run Python test suites on Planner Gateway (16 tests)
+PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests
 
-# Lint all packages
+# Static lint and typecheck
 pnpm lint
+pnpm typecheck
+```
+
+### Start Planner API Gateway
+
+```bash
+# Start FastAPI gateway on port 8000
+PYTHONPATH=apps/planner-api .venv/bin/uvicorn src.main:app --port 8000 --host 127.0.0.1 --reload
 ```
 
 ### Load Extension in Chrome
@@ -63,12 +72,7 @@ pnpm lint
 3. Enable "Developer mode" (top right)
 4. Click "Load unpacked"
 5. Select the `apps/extension/dist/` directory
-6. The N-Eye icon should appear in the toolbar
-
-### Test Portal
-
-Open `apps/test-portal/index.html` in Chrome to test the extension against
-controlled pages with synthetic canary data.
+6. The N-Eye icon will appear in the toolbar. Open the side panel to interact.
 
 ## Repository Structure
 
@@ -80,42 +84,32 @@ N-Eye/
 ├── tsconfig.base.json           # Shared TypeScript config
 ├── eslint.config.js             # ESLint config
 ├── docs/                        # Architecture & governance docs
-│   ├── UNDERSTANDING.md
-│   ├── CONTEXT.md
-│   ├── ARCHITECTURE.md
-│   ├── TRUST-MODEL.md
-│   ├── PRIVACY-BOUNDARY.md
-│   ├── PROTOCOLS.md
-│   ├── TEST-STRATEGY.md
-│   ├── RECOMMENDATIONS.md
-│   └── decisions/               # Architecture Decision Records
+│   ├── CONTEXT.md               # Operational memory
+│   ├── ARCHITECTURE.md          # Architecture overview
+│   ├── TRUST-MODEL.md           # Trust zones & boundary definitions
+│   ├── PRIVACY-BOUNDARY.md      # Privacy boundary & allowlists
+│   ├── PROTOCOLS.md             # Protocol schema contracts
+│   ├── TEST-STRATEGY.md         # Test strategy & canary proofs
+│   ├── RUNBOOK.md               # Developer operational runbook
+│   └── decisions/               # Architecture Decision Records (ADR 0001 - 0006)
 ├── packages/
-│   └── protocol/                # Shared type definitions
-│       └── src/
-│           ├── identifiers.ts   # Branded types (TaskId, ElementId, etc.)
-│           ├── raw-scene.ts     # Local-only observation types
-│           ├── safe-context.ts  # Outbound contract types
-│           ├── action-proposal.ts # Constrained action types
-│           ├── messages.ts      # Internal messaging contracts
-│           └── errors.ts        # Typed error taxonomy
+│   └── protocol/                # Shared protocol contracts & branded identifiers
 ├── apps/
-│   ├── extension/               # Chrome MV3 extension
-│   │   ├── manifest.json
-│   │   └── src/
-│   │       ├── background/      # Service worker
-│   │       ├── content/         # Content script
-│   │       └── sidepanel/       # Side panel UI
-│   └── test-portal/             # Controlled test pages
-└── evidence/                    # (Future) Measurement artifacts
+│   ├── extension/               # Chrome MV3 extension (Content Script, Service Worker, Side Panel)
+│   ├── planner-api/             # FastAPI Remote Planner Gateway & Provider Adapters
+│   └── test-portal/             # Controlled test scenarios (01 to 06)
 ```
 
 ## Key Documents
 
 - [AGENTS.md](AGENTS.md) — Engineering constitution for AI agents
+- [Runbook](docs/RUNBOOK.md) — Setup and execution guide
+- [Context](docs/CONTEXT.md) — Operational memory and system state
 - [Architecture](docs/ARCHITECTURE.md) — System architecture overview
 - [Trust Model](docs/TRUST-MODEL.md) — Trust zones and boundaries
 - [Privacy Boundary](docs/PRIVACY-BOUNDARY.md) — Privacy invariants
 - [Protocols](docs/PROTOCOLS.md) — Data contract definitions
+- [ADR-0006](docs/decisions/ADR-0006-remote-planner-boundary.md) — Remote Planner Reasoning Boundary
 
 ## SIH 2026 — Problem Statement 26171
 

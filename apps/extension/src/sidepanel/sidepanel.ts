@@ -1,3 +1,13 @@
+/**
+ * N-Eye Side Panel Runtime & Trust Loop Coordinator (Zone 2 Privileged Core)
+ *
+ * OWNS: Product UI V2, Trust Core visualizer, SafeContext inspection drawer,
+ * mode switching (Mock vs Remote AI), and multi-step closed-loop task execution.
+ * TRUST BOUNDARY: Coordinates local observation, privacy policy, egress guarding,
+ * untrusted remote proposal validation, live re-grounding, and verification.
+ * MUST NOT: Send raw secrets across the network or allow remote planners to bypass local authority.
+ */
+
 import {
   type ExtensionMessage,
   type ExtensionResponse,
@@ -6,7 +16,6 @@ import {
   type SafeContext,
   type TabInfo,
   type ValidatedAction,
-  type ActionProposal,
   type VerificationResult,
   createTaskId,
 } from '@n-eye/protocol';
@@ -15,11 +24,11 @@ import { evaluatePrivacyPolicy, resetTokenCounters } from '../privacy/policy.js'
 import { PrivateTokenVault } from '../privacy/vault.js';
 import { buildSafeContext } from '../privacy/safe-context-builder.js';
 import { validateSafeContextEgress } from '../privacy/egress-guard.js';
-import { DeterministicPlanner } from '../planner/deterministic-planner.js';
+import { PlannerManager } from '../planner/planner-manager.js';
 import { validateActionProposal } from '../authority/validator.js';
 import { verifyActionExecution } from '../verification/verifier.js';
 
-// Elements
+// DOM Element References
 const connectionPill = document.getElementById('connection-pill') as HTMLDivElement;
 const connectionText = document.getElementById('connection-text') as HTMLSpanElement;
 const targetOrigin = document.getElementById('target-origin') as HTMLDivElement;
@@ -27,15 +36,25 @@ const targetTitle = document.getElementById('target-title') as HTMLDivElement;
 const unsupportedBanner = document.getElementById('unsupported-banner') as HTMLDivElement;
 const unsupportedReason = document.getElementById('unsupported-reason') as HTMLDivElement;
 
+const btnModeMock = document.getElementById('btn-mode-mock') as HTMLButtonElement;
+const btnModeRemote = document.getElementById('btn-mode-remote') as HTMLButtonElement;
+const gatewayStatusPill = document.getElementById('gateway-status-pill') as HTMLDivElement;
+const gatewayStatusText = document.getElementById('gateway-status-text') as HTMLSpanElement;
+
 const coreStateLabel = document.getElementById('core-state-label') as HTMLSpanElement;
 const coreEpochLabel = document.getElementById('core-epoch-label') as HTMLSpanElement;
 
 const taskGoalInput = document.getElementById('task-goal-input') as HTMLInputElement;
 const btnRunLoop = document.getElementById('btn-run-loop') as HTMLButtonElement;
+const btnCancelLoop = document.getElementById('btn-cancel-loop') as HTMLButtonElement;
+const taskStepIndicator = document.getElementById('task-step-indicator') as HTMLDivElement;
+const stepBadgeText = document.getElementById('step-badge-text') as HTMLSpanElement;
+const stepSummaryText = document.getElementById('step-summary-text') as HTMLSpanElement;
 
 const stepSee = document.getElementById('step-see') as HTMLDivElement;
 const stepProtect = document.getElementById('step-protect') as HTMLDivElement;
 const stepThink = document.getElementById('step-think') as HTMLDivElement;
+const stepThinkStatus = document.getElementById('step-think-status') as HTMLSpanElement;
 const stepValidate = document.getElementById('step-validate') as HTMLDivElement;
 const stepAct = document.getElementById('step-act') as HTMLDivElement;
 const stepVerify = document.getElementById('step-verify') as HTMLDivElement;
@@ -51,6 +70,7 @@ const verificationDeltaText = document.getElementById('verification-delta-text')
 
 const latSee = document.getElementById('lat-see') as HTMLSpanElement;
 const latProtect = document.getElementById('lat-protect') as HTMLSpanElement;
+const latPlanLabel = document.getElementById('lat-plan-label') as HTMLSpanElement;
 const latPlan = document.getElementById('lat-plan') as HTMLSpanElement;
 const latValidate = document.getElementById('lat-validate') as HTMLSpanElement;
 const latAct = document.getElementById('lat-act') as HTMLSpanElement;
@@ -64,6 +84,12 @@ const statElementsCount = document.getElementById('stat-elements-count') as HTML
 const statFindingsCount = document.getElementById('stat-findings-count') as HTMLDivElement;
 const statTokensCount = document.getElementById('stat-tokens-count') as HTMLDivElement;
 const statEpoch = document.getElementById('stat-epoch') as HTMLDivElement;
+
+const proofRequestId = document.getElementById('proof-request-id') as HTMLSpanElement;
+const proofPlannerMode = document.getElementById('proof-planner-mode') as HTMLSpanElement;
+const proofProviderModel = document.getElementById('proof-provider-model') as HTMLSpanElement;
+const proofPayloadSize = document.getElementById('proof-payload-size') as HTMLSpanElement;
+const proofCanaryStatus = document.getElementById('proof-canary-status') as HTMLSpanElement;
 const evidenceSafeContextDump = document.getElementById('evidence-safecontext-dump') as HTMLElement;
 
 const confirmModal = document.getElementById('confirmation-dialog') as HTMLDialogElement;
@@ -75,12 +101,16 @@ const btnModalCancel = document.getElementById('btn-modal-cancel') as HTMLButton
 // Runtime state
 let activeTab: TabInfo | null = null;
 let _lastRawScene: RawScene | null = null;
-let _lastSafeContext: SafeContext | null = null;
-let _lastFindings: PrivacyFinding[] = [];
+let currentTaskAbortController: AbortController | null = null;
 const vault = new PrivateTokenVault();
-const planner = new DeterministicPlanner();
+const plannerManager = new PlannerManager('MOCK', 'http://localhost:8000');
 
-function setConnectionStatus(status: 'IDLE' | 'CONNECTING' | 'OBSERVING' | 'READY' | 'EXECUTING' | 'UNSUPPORTED' | 'FAILED', labelText?: string): void {
+const MAX_STEPS = 8;
+
+function setConnectionStatus(
+  status: 'IDLE' | 'CONNECTING' | 'OBSERVING' | 'READY' | 'EXECUTING' | 'UNSUPPORTED' | 'FAILED' | 'CANCELLED',
+  labelText?: string
+): void {
   connectionPill.className = `status-pill status-${status.toLowerCase()}`;
   connectionText.textContent = labelText || status;
   coreStateLabel.textContent = status;
@@ -89,6 +119,37 @@ function setConnectionStatus(status: 'IDLE' | 'CONNECTING' | 'OBSERVING' | 'READ
 function updatePipelineStep(stepEl: HTMLDivElement, state: 'idle' | 'active' | 'done'): void {
   stepEl.classList.remove('step-idle', 'step-active', 'step-done');
   stepEl.classList.add(`step-${state}`);
+}
+
+async function refreshGatewayStatus(): Promise<void> {
+  if (plannerManager.getMode() === 'MOCK') {
+    gatewayStatusPill.className = 'gateway-pill gateway-offline';
+    gatewayStatusText.textContent = 'Gateway: Standby (Mock Mode)';
+    stepThinkStatus.textContent = 'MOCK';
+    latPlanLabel.textContent = 'PLAN (MOCK)';
+    proofPlannerMode.textContent = 'MOCK (Deterministic)';
+    proofProviderModel.textContent = 'Local Harness';
+    return;
+  }
+
+  gatewayStatusText.textContent = 'Gateway: Connecting...';
+  const health = await plannerManager.checkGatewayHealth();
+
+  if (health.healthy) {
+    gatewayStatusPill.className = 'gateway-pill gateway-online';
+    gatewayStatusText.textContent = `Gateway: Online (${health.model || health.provider})`;
+    stepThinkStatus.textContent = 'REMOTE';
+    latPlanLabel.textContent = `PLAN (REMOTE: ${health.provider || 'AI'})`;
+    proofPlannerMode.textContent = 'REMOTE (Real AI)';
+    proofProviderModel.textContent = `${health.provider || 'AI'} (${health.model || 'model'})`;
+  } else {
+    gatewayStatusPill.className = 'gateway-pill gateway-offline';
+    gatewayStatusText.textContent = 'Gateway: Offline (Run FastAPI)';
+    stepThinkStatus.textContent = 'OFFLINE';
+    latPlanLabel.textContent = 'PLAN (REMOTE: OFFLINE)';
+    proofPlannerMode.textContent = 'REMOTE (Offline)';
+    proofProviderModel.textContent = 'Unreachable Gateway';
+  }
 }
 
 async function requestObservation(tabId: number, retry = true): Promise<RawScene | null> {
@@ -102,11 +163,9 @@ async function requestObservation(tabId: number, retry = true): Promise<RawScene
       async (response: ExtensionResponse<RawScene>) => {
         if (chrome.runtime.lastError) {
           if (retry) {
-            // Attempt automatic programmatic content script injection
             try {
               const injectRes = await chrome.runtime.sendMessage({ type: 'INJECT_CONTENT_SCRIPT', tabId });
               if (injectRes && injectRes.success) {
-                // Retry observation once after injection
                 setTimeout(() => {
                   requestObservation(tabId, false).then(resolve);
                 }, 100);
@@ -176,6 +235,18 @@ function renderVisualizer(findings: PrivacyFinding[], safeContext: SafeContext):
   }
 }
 
+/**
+ * Multi-Step Closed-Loop Task Execution
+ *
+ * Enforces:
+ * 1. SEE locally
+ * 2. PROTECT locally & Egress Guard byte scan
+ * 3. THINK via PlannerManager (Mock or Remote AI)
+ * 4. VALIDATE locally against live DOM & Token Vault
+ * 5. HIGH-RISK Confirmation Gate
+ * 6. ACT locally on live node
+ * 7. VERIFY state delta & feed priorOutcome into next step
+ */
 async function executeClosedTrustLoop(): Promise<void> {
   if (!activeTab || !activeTab.isSupported) return;
   const currentTab = activeTab;
@@ -186,179 +257,256 @@ async function executeClosedTrustLoop(): Promise<void> {
   const rawGoal = taskGoalInput.value.trim() || 'Enter my email and continue';
   resetTokenCounters();
   vault.clear();
-  btnRunLoop.disabled = true;
+  plannerManager.reset();
 
-  const startTime = performance.now();
+  currentTaskAbortController = new AbortController();
+  const signal = currentTaskAbortController.signal;
 
-  // 1. SEE LOCALLY
-  updatePipelineStep(stepSee, 'active');
-  const preScene = await requestObservation(tabId);
-  const seeDuration = performance.now() - startTime;
-  latSee.textContent = `${seeDuration.toFixed(1)} ms`;
-  updatePipelineStep(stepSee, 'done');
+  btnRunLoop.classList.add('hidden');
+  btnCancelLoop.classList.remove('hidden');
+  taskStepIndicator.classList.remove('hidden');
 
-  if (!preScene) {
-    btnRunLoop.disabled = false;
-    return;
-  }
+  let priorOutcome: SafeContext['priorOutcome'] | undefined = undefined;
+  const executedProposals: string[] = [];
+  const loopStartTime = performance.now();
 
-  // 2. PROTECT LOCALLY
-  const protectStart = performance.now();
-  updatePipelineStep(stepProtect, 'active');
-  coreStateLabel.textContent = 'PROTECT';
-
-  const goalFindings = detectGoalPrivacy(rawGoal);
-  const combinedFindings = [...preScene.privacyFindings, ...goalFindings];
-  _lastFindings = combinedFindings;
-  statFindingsCount.textContent = String(combinedFindings.length);
-
-  const decisions = evaluatePrivacyPolicy(combinedFindings);
-
-  // Register detected tokenizable values into PrivateTokenVault
-  for (const d of decisions) {
-    if (d.decision === 'TOKENIZE' && d.tokenRole) {
-      const matchedFinding = combinedFindings.find((f) => f.findingId === d.findingId);
-      const realVal = matchedFinding?.textSpan || (d.privacyClass === 'PII_EMAIL' ? 'alice.applicant@example.com' : '+1-555-0199');
-      vault.registerToken(
-        d.tokenRole,
-        d.privacyClass,
-        realVal,
-        taskId,
-        tabId,
-        origin,
-        ['text', 'textbox', 'email', 'tel']
-      );
-    }
-  }
-
-  statTokensCount.textContent = String(vault.size());
-
-  const safeContext = buildSafeContext(preScene, rawGoal, decisions, vault, taskId);
-  _lastSafeContext = safeContext;
-
-  // Egress Guard validation
-  const serializedBytes = validateSafeContextEgress(safeContext);
-  evidenceSafeContextDump.textContent = JSON.stringify(JSON.parse(serializedBytes), null, 2);
-
-  const protectDuration = performance.now() - protectStart;
-  latProtect.textContent = `${protectDuration.toFixed(1)} ms`;
-  updatePipelineStep(stepProtect, 'done');
-  renderVisualizer(combinedFindings, safeContext);
-
-  // 3. THINK (DETERMINISTIC PLANNER)
-  const planStart = performance.now();
-  updatePipelineStep(stepThink, 'active');
-  coreStateLabel.textContent = 'PLAN';
-
-  const proposal: ActionProposal = planner.proposeAction(safeContext);
-  const planDuration = performance.now() - planStart;
-  latPlan.textContent = `${planDuration.toFixed(1)} ms`;
-  updatePipelineStep(stepThink, 'done');
-
-  actionVerificationCard.classList.remove('hidden');
-  actionProposalText.textContent = `${proposal.type} ${proposal.targetId ? `(target: ${proposal.targetId})` : ''}`;
-  actionRiskBadge.textContent = proposal.riskLevel;
-  actionRiskBadge.className = `risk-badge risk-${proposal.riskLevel.toLowerCase()}`;
-
-  // 4. VALIDATE LOCALLY
-  const validateStart = performance.now();
-  updatePipelineStep(stepValidate, 'active');
-  coreStateLabel.textContent = 'VALIDATE';
-
-  let validatedAction: ValidatedAction;
   try {
-    validatedAction = validateActionProposal(proposal, preScene, vault, taskId, origin);
-  } catch (err) {
-    actionProposalText.textContent = `Rejected: ${(err as Error).message}`;
-    updatePipelineStep(stepValidate, 'idle');
-    btnRunLoop.disabled = false;
-    return;
-  }
+    for (let step = 1; step <= MAX_STEPS; step++) {
+      if (signal.aborted) {
+        throw new DOMException('Task cancelled by user.', 'AbortError');
+      }
 
-  const validateDuration = performance.now() - validateStart;
-  latValidate.textContent = `${validateDuration.toFixed(1)} ms`;
-  updatePipelineStep(stepValidate, 'done');
+      stepBadgeText.textContent = `Step ${step} of ${MAX_STEPS}`;
+      stepSummaryText.textContent = `Executing step ${step}...`;
 
-  // Confirmation gate for high-risk actions
-  if (proposal.riskLevel === 'HIGH') {
-    modalActionName.textContent = proposal.type;
-    modalActionTarget.textContent = proposal.targetId || 'Form Submit';
-    confirmModal.showModal();
+      // 1. SEE LOCALLY
+      const seeStart = performance.now();
+      updatePipelineStep(stepSee, 'active');
+      const preScene = await requestObservation(tabId);
+      const seeDuration = performance.now() - seeStart;
+      latSee.textContent = `${seeDuration.toFixed(1)} ms`;
+      updatePipelineStep(stepSee, 'done');
 
-    const confirmed = await new Promise<boolean>((resolve) => {
-      btnModalConfirm.onclick = () => {
-        confirmModal.close();
-        resolve(true);
-      };
-      btnModalCancel.onclick = () => {
-        confirmModal.close();
-        resolve(false);
-      };
-    });
+      if (!preScene) {
+        throw new Error('Failed to observe active page state.');
+      }
 
-    if (!confirmed) {
-      actionProposalText.textContent = 'Action cancelled by user';
-      btnRunLoop.disabled = false;
-      return;
-    }
-  }
+      // 2. PROTECT LOCALLY
+      const protectStart = performance.now();
+      updatePipelineStep(stepProtect, 'active');
+      coreStateLabel.textContent = 'PROTECT';
 
-  // 5. ACT LOCALLY
-  const actStart = performance.now();
-  updatePipelineStep(stepAct, 'active');
-  coreStateLabel.textContent = 'ACT';
+      const goalFindings = detectGoalPrivacy(rawGoal);
+      const combinedFindings = [...preScene.privacyFindings, ...goalFindings];
+      statFindingsCount.textContent = String(combinedFindings.length);
 
-  const execResult = await new Promise<{ success: boolean; error?: string }>((resolve) => {
-    chrome.tabs.sendMessage(
-      tabId,
-      { type: 'EXECUTE_ACTION_REQUEST', action: validatedAction },
-      (response: ExtensionResponse<{ success: boolean; error?: string }>) => {
-        if (chrome.runtime.lastError || !response || !response.success) {
-          resolve({ success: false, error: response?.error || chrome.runtime.lastError?.message });
-        } else {
-          resolve({ success: true });
+      const decisions = evaluatePrivacyPolicy(combinedFindings);
+
+      // Register tokenizable findings into in-memory vault
+      for (const d of decisions) {
+        if (d.decision === 'TOKENIZE' && d.tokenRole) {
+          const matchedFinding = combinedFindings.find((f) => f.findingId === d.findingId);
+          const realVal =
+            matchedFinding?.textSpan ||
+            (d.privacyClass === 'PII_EMAIL' ? 'alice.applicant@example.com' : '+1-555-0199');
+          vault.registerToken(
+            d.tokenRole,
+            d.privacyClass,
+            realVal,
+            taskId,
+            tabId,
+            origin,
+            ['text', 'textbox', 'email', 'tel']
+          );
         }
       }
-    );
-  });
 
-  const actDuration = performance.now() - actStart;
-  latAct.textContent = `${actDuration.toFixed(1)} ms`;
-  updatePipelineStep(stepAct, 'done');
+      statTokensCount.textContent = String(vault.size());
 
-  if (!execResult.success) {
-    verificationStatusBadge.textContent = 'FAILED';
-    verificationStatusBadge.className = 'verify-badge verify-failure';
-    verificationDeltaText.textContent = `Execution failed: ${execResult.error}`;
-    btnRunLoop.disabled = false;
-    return;
+      const safeContext = buildSafeContext(preScene, rawGoal, decisions, vault, taskId);
+      if (priorOutcome) {
+        safeContext.priorOutcome = priorOutcome;
+      }
+
+      // Egress Guard validation & byte scanning
+      let serializedBytes: string;
+      try {
+        serializedBytes = validateSafeContextEgress(safeContext);
+        proofCanaryStatus.textContent = 'PASS (0 Secrets Detected)';
+        proofCanaryStatus.className = 'proof-val proof-pass';
+      } catch (egressErr) {
+        proofCanaryStatus.textContent = `BLOCKED: ${(egressErr as Error).message}`;
+        proofCanaryStatus.className = 'proof-val proof-fail';
+        throw egressErr;
+      }
+
+      evidenceSafeContextDump.textContent = JSON.stringify(JSON.parse(serializedBytes), null, 2);
+      proofPayloadSize.textContent = `${serializedBytes.length} bytes`;
+
+      const protectDuration = performance.now() - protectStart;
+      latProtect.textContent = `${protectDuration.toFixed(1)} ms`;
+      updatePipelineStep(stepProtect, 'done');
+      renderVisualizer(combinedFindings, safeContext);
+
+      // 3. THINK (MOCK OR REMOTE AI PLANNER)
+      const planStart = performance.now();
+      updatePipelineStep(stepThink, 'active');
+      coreStateLabel.textContent = 'PLAN';
+
+      const planResult = await plannerManager.propose(safeContext, { signal });
+      const proposal = planResult.proposal;
+      const metadata = planResult.metadata;
+
+      const planDuration = performance.now() - planStart;
+      latPlan.textContent = `${(metadata.planningLatencyMs || planDuration).toFixed(1)} ms`;
+      proofRequestId.textContent = metadata.requestId;
+      proofProviderModel.textContent = `${metadata.provider} (${metadata.model})`;
+      updatePipelineStep(stepThink, 'done');
+
+      actionVerificationCard.classList.remove('hidden');
+      actionProposalText.textContent = `${proposal.type} ${proposal.targetId ? `(target: ${proposal.targetId})` : ''}`;
+      actionRiskBadge.textContent = proposal.riskLevel;
+      actionRiskBadge.className = `risk-badge risk-${proposal.riskLevel.toLowerCase()}`;
+
+      // Check if task goal is complete
+      if (proposal.type === 'COMPLETE') {
+        verificationStatusBadge.textContent = 'COMPLETED';
+        verificationStatusBadge.className = 'verify-badge verify-success';
+        verificationDeltaText.textContent = proposal.reasoning || 'Goal fully achieved on active page.';
+        stepSummaryText.textContent = 'Task completed successfully.';
+        break;
+      }
+
+      // Check if model requested user clarification
+      if (proposal.type === 'ASK_USER') {
+        verificationStatusBadge.textContent = 'NEEDS INPUT';
+        verificationStatusBadge.className = 'verify-badge verify-pending';
+        verificationDeltaText.textContent = proposal.reasoning || 'Planner requires user input to proceed.';
+        stepSummaryText.textContent = 'Awaiting user input.';
+        break;
+      }
+
+      // Cycle detection loop safety
+      const proposalSignature = `${proposal.type}:${proposal.targetId || ''}:${proposal.tokenId || ''}`;
+      if (executedProposals.filter((p) => p === proposalSignature).length >= 2) {
+        throw new Error(`Loop safety triggered: Action ${proposalSignature} was proposed repeatedly without progress.`);
+      }
+      executedProposals.push(proposalSignature);
+
+      // 4. VALIDATE LOCALLY
+      const validateStart = performance.now();
+      updatePipelineStep(stepValidate, 'active');
+      coreStateLabel.textContent = 'VALIDATE';
+
+      let validatedAction: ValidatedAction;
+      try {
+        validatedAction = validateActionProposal(proposal, preScene, vault, taskId, origin);
+      } catch (err) {
+        actionProposalText.textContent = `Rejected: ${(err as Error).message}`;
+        updatePipelineStep(stepValidate, 'idle');
+        throw err;
+      }
+
+      const validateDuration = performance.now() - validateStart;
+      latValidate.textContent = `${validateDuration.toFixed(1)} ms`;
+      updatePipelineStep(stepValidate, 'done');
+
+      // 5. HIGH-RISK CONFIRMATION GATE
+      if (proposal.riskLevel === 'HIGH') {
+        modalActionName.textContent = proposal.type;
+        modalActionTarget.textContent = proposal.targetId || 'Interactive Action';
+        confirmModal.showModal();
+
+        const confirmed = await new Promise<boolean>((resolve) => {
+          btnModalConfirm.onclick = () => {
+            confirmModal.close();
+            resolve(true);
+          };
+          btnModalCancel.onclick = () => {
+            confirmModal.close();
+            resolve(false);
+          };
+        });
+
+        if (!confirmed || signal.aborted) {
+          actionProposalText.textContent = 'Action cancelled by user';
+          throw new DOMException('Action cancelled by user.', 'AbortError');
+        }
+      }
+
+      // 6. ACT LOCALLY
+      const actStart = performance.now();
+      updatePipelineStep(stepAct, 'active');
+      coreStateLabel.textContent = 'ACT';
+
+      const execResult = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+        chrome.tabs.sendMessage(
+          tabId,
+          { type: 'EXECUTE_ACTION_REQUEST', action: validatedAction },
+          (response: ExtensionResponse<{ success: boolean; error?: string }>) => {
+            if (chrome.runtime.lastError || !response || !response.success) {
+              resolve({ success: false, error: response?.error || chrome.runtime.lastError?.message });
+            } else {
+              resolve({ success: true });
+            }
+          }
+        );
+      });
+
+      const actDuration = performance.now() - actStart;
+      latAct.textContent = `${actDuration.toFixed(1)} ms`;
+      updatePipelineStep(stepAct, 'done');
+
+      if (!execResult.success) {
+        verificationStatusBadge.textContent = 'FAILED';
+        verificationStatusBadge.className = 'verify-badge verify-failure';
+        verificationDeltaText.textContent = `Execution failed: ${execResult.error}`;
+        throw new Error(`Action execution failed: ${execResult.error}`);
+      }
+
+      // 7. VERIFY LOCALLY
+      const verifyStart = performance.now();
+      updatePipelineStep(stepVerify, 'active');
+      coreStateLabel.textContent = 'VERIFY';
+
+      // Wait 120ms for DOM mutation to settle and re-observe
+      await new Promise((r) => setTimeout(r, 120));
+      const postScene = await requestObservation(tabId, false);
+
+      if (postScene) {
+        const verification: VerificationResult = verifyActionExecution(validatedAction, preScene, postScene);
+        verificationStatusBadge.textContent = verification.status === 'VERIFIED_SUCCESS' ? 'VERIFIED' : 'FAILED';
+        verificationStatusBadge.className = `verify-badge verify-${verification.status === 'VERIFIED_SUCCESS' ? 'success' : 'failure'}`;
+        verificationDeltaText.textContent = verification.observedDelta;
+
+        priorOutcome = {
+          actionId: proposal.actionId,
+          status: verification.status === 'VERIFIED_SUCCESS' ? 'VERIFIED' : 'FAILURE',
+          summary: verification.observedDelta,
+        };
+      }
+
+      const verifyDuration = performance.now() - verifyStart;
+      latVerify.textContent = `${verifyDuration.toFixed(1)} ms`;
+      updatePipelineStep(stepVerify, 'done');
+    }
+
+    const totalDuration = performance.now() - loopStartTime;
+    latTotal.textContent = `${totalDuration.toFixed(1)} ms`;
+    setConnectionStatus('READY', 'LOOP COMPLETE');
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') {
+      setConnectionStatus('CANCELLED', 'TASK CANCELLED');
+      stepSummaryText.textContent = 'Task cancelled by user.';
+    } else {
+      setConnectionStatus('FAILED', 'TASK FAILED');
+      stepSummaryText.textContent = `Error: ${(err as Error).message}`;
+    }
+  } finally {
+    btnRunLoop.classList.remove('hidden');
+    btnCancelLoop.classList.add('hidden');
+    currentTaskAbortController = null;
   }
-
-  // 6. VERIFY LOCALLY
-  const verifyStart = performance.now();
-  updatePipelineStep(stepVerify, 'active');
-  coreStateLabel.textContent = 'VERIFY';
-
-  // Wait 100ms for DOM mutation to settle and re-observe
-  await new Promise((r) => setTimeout(r, 100));
-  const postScene = await requestObservation(tabId, false);
-
-  if (postScene) {
-    const verification: VerificationResult = verifyActionExecution(validatedAction, preScene, postScene);
-    verificationStatusBadge.textContent = verification.status === 'VERIFIED_SUCCESS' ? 'VERIFIED' : 'FAILED';
-    verificationStatusBadge.className = `verify-badge verify-${verification.status === 'VERIFIED_SUCCESS' ? 'success' : 'failure'}`;
-    verificationDeltaText.textContent = verification.observedDelta;
-  }
-
-  const verifyDuration = performance.now() - verifyStart;
-  latVerify.textContent = `${verifyDuration.toFixed(1)} ms`;
-  updatePipelineStep(stepVerify, 'done');
-
-  const totalDuration = performance.now() - startTime;
-  latTotal.textContent = `${totalDuration.toFixed(1)} ms`;
-
-  setConnectionStatus('READY', 'LOOP COMPLETE');
-  btnRunLoop.disabled = false;
 }
 
 async function initializeActiveTab(): Promise<void> {
@@ -385,6 +533,7 @@ async function initializeActiveTab(): Promise<void> {
 
     unsupportedBanner.classList.add('hidden');
     await requestObservation(activeTab.tabId);
+    await refreshGatewayStatus();
   } catch {
     setConnectionStatus('FAILED', 'CONNECTION ERROR');
   }
@@ -393,6 +542,26 @@ async function initializeActiveTab(): Promise<void> {
 // Event Listeners
 btnRunLoop.addEventListener('click', () => {
   executeClosedTrustLoop();
+});
+
+btnCancelLoop.addEventListener('click', () => {
+  if (currentTaskAbortController) {
+    currentTaskAbortController.abort();
+  }
+});
+
+btnModeMock.addEventListener('click', () => {
+  plannerManager.setMode('MOCK');
+  btnModeMock.classList.add('active');
+  btnModeRemote.classList.remove('active');
+  refreshGatewayStatus();
+});
+
+btnModeRemote.addEventListener('click', () => {
+  plannerManager.setMode('REMOTE');
+  btnModeRemote.classList.add('active');
+  btnModeMock.classList.remove('active');
+  refreshGatewayStatus();
 });
 
 btnToggleEvidence.addEventListener('click', () => {

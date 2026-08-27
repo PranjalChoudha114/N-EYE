@@ -8,7 +8,8 @@
     "build": "pnpm -r --filter './apps/**' run build",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
-    "test": "pnpm -r run test",
+    "test": "pnpm -r run test && PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests",
+    "test:api": "PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests",
     "clean": "pnpm -r run clean"
   },
   "engines": {

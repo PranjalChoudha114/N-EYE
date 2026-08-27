@@ -12,7 +12,7 @@
     <header class="panel-header">
       <div class="brand-group">
         <div class="brand-badge">N-EYE</div>
-        <div class="brand-title">Trust Layer <span class="version-tag">v2.0</span></div>
+        <div class="brand-title">Trust Layer <span class="version-tag">v2.5</span></div>
       </div>
       <div id="connection-pill" class="status-pill status-idle" aria-live="polite">
         <span class="status-dot"></span>
@@ -26,6 +26,18 @@
       <div class="target-details">
         <div id="target-origin" class="target-origin">Connecting to browser...</div>
         <div id="target-title" class="target-title">Awaiting active tab</div>
+      </div>
+    </section>
+
+    <!-- Planner Mode & Gateway Bar -->
+    <section class="planner-mode-bar" aria-label="Planner Configuration">
+      <div class="planner-mode-toggle" role="group" aria-label="Planner Mode">
+        <button id="btn-mode-mock" class="mode-btn active" title="Use deterministic offline planner">MOCK (Offline)</button>
+        <button id="btn-mode-remote" class="mode-btn" title="Use remote AI reasoning gateway">REMOTE (Real AI)</button>
+      </div>
+      <div id="gateway-status-pill" class="gateway-pill gateway-offline" title="Planner Gateway Status">
+        <span class="gateway-dot"></span>
+        <span id="gateway-status-text">Gateway: Standby</span>
       </div>
     </section>
 
@@ -84,6 +96,11 @@
             aria-label="Agent Task Goal"
           />
           <button id="btn-run-loop" class="btn btn-primary" title="Execute closed trust loop">Run Loop</button>
+          <button id="btn-cancel-loop" class="btn btn-danger hidden" title="Cancel running task">Stop</button>
+        </div>
+        <div id="task-step-indicator" class="task-step-indicator hidden">
+          <span class="step-badge" id="step-badge-text">Step 1 of 8</span>
+          <span class="step-summary" id="step-summary-text">Executing initial step...</span>
         </div>
       </section>
 
@@ -101,10 +118,10 @@
             <span class="step-name">PROTECT</span>
             <span class="step-status">LOCAL</span>
           </div>
-          <div id="step-think" class="pipeline-step step-idle" title="Deterministic Action Reasoning">
+          <div id="step-think" class="pipeline-step step-idle" title="Remote AI / Mock Reasoning">
             <span class="step-num">3</span>
-            <span class="step-name">THINK</span>
-            <span class="step-status">PLANNER</span>
+            <span class="step-name" id="step-think-name">THINK</span>
+            <span class="step-status" id="step-think-status">MOCK</span>
           </div>
           <div id="step-validate" class="pipeline-step step-idle" title="Local Action & Target Authority">
             <span class="step-num">4</span>
@@ -187,40 +204,40 @@
         <h2 id="heading-latency" class="card-title">Stage Latency Timeline</h2>
         <div id="latency-timeline" class="latency-grid">
           <div class="latency-row">
-            <span class="lat-stage">SEE</span>
+            <span class="lat-stage">SEE (Local DOM)</span>
             <span id="lat-see" class="lat-val">0.0 ms</span>
           </div>
           <div class="latency-row">
-            <span class="lat-stage">PROTECT</span>
+            <span class="lat-stage">PROTECT (Local Tokenize)</span>
             <span id="lat-protect" class="lat-val">0.0 ms</span>
           </div>
           <div class="latency-row">
-            <span class="lat-stage">PLAN (MOCK)</span>
+            <span id="lat-plan-label" class="lat-stage">PLAN (MOCK)</span>
             <span id="lat-plan" class="lat-val">0.0 ms</span>
           </div>
           <div class="latency-row">
-            <span class="lat-stage">VALIDATE</span>
+            <span class="lat-stage">VALIDATE (Local Authority)</span>
             <span id="lat-validate" class="lat-val">0.0 ms</span>
           </div>
           <div class="latency-row">
-            <span class="lat-stage">ACT</span>
+            <span class="lat-stage">ACT (Live Node Dispatch)</span>
             <span id="lat-act" class="lat-val">0.0 ms</span>
           </div>
           <div class="latency-row">
-            <span class="lat-stage">VERIFY</span>
+            <span class="lat-stage">VERIFY (State-Delta)</span>
             <span id="lat-verify" class="lat-val">0.0 ms</span>
           </div>
           <div class="latency-total-row">
-            <span class="lat-stage-bold">TOTAL LOCAL TIME</span>
+            <span class="lat-stage-bold">TOTAL TRUST LOOP TIME</span>
             <span id="lat-total" class="lat-val-bold">0.0 ms</span>
           </div>
         </div>
       </section>
 
-      <!-- Collapsible Forensic Drawer -->
+      <!-- Collapsible Forensic Evidence & Network Proof Drawer -->
       <section class="card evidence-card" aria-label="Technical Evidence Drawer">
         <button id="btn-toggle-evidence" class="evidence-toggle" aria-expanded="false" aria-controls="evidence-drawer">
-          <span>Forensic Evidence & Contracts</span>
+          <span>Forensic Evidence & Network Proof</span>
           <span id="evidence-chevron" class="chevron">▼</span>
         </button>
         <div id="evidence-drawer" class="evidence-drawer hidden">
@@ -242,6 +259,31 @@
               <div class="stat-lbl">Page Epoch</div>
             </div>
           </div>
+
+          <!-- Network Telemetry Proof Box -->
+          <div class="network-proof-box">
+            <div class="proof-row">
+              <span class="proof-label">Request ID:</span>
+              <span id="proof-request-id" class="proof-val">—</span>
+            </div>
+            <div class="proof-row">
+              <span class="proof-label">Planner Mode:</span>
+              <span id="proof-planner-mode" class="proof-val">MOCK (Deterministic)</span>
+            </div>
+            <div class="proof-row">
+              <span class="proof-label">Provider / Model:</span>
+              <span id="proof-provider-model" class="proof-val">Local Harness</span>
+            </div>
+            <div class="proof-row">
+              <span class="proof-label">Payload Size:</span>
+              <span id="proof-payload-size" class="proof-val">0 bytes</span>
+            </div>
+            <div class="proof-row">
+              <span class="proof-label">Egress Canary Scan:</span>
+              <span id="proof-canary-status" class="proof-val proof-pass">PASS (0 Secrets Detected)</span>
+            </div>
+          </div>
+
           <div class="evidence-code-box">
             <div class="code-title">SafeContext Outbound Payload:</div>
             <pre><code id="evidence-safecontext-dump">{}</code></pre>
@@ -276,7 +318,7 @@
     <footer class="panel-footer">
       <div class="footer-guarantee">
         <span class="shield-icon">🛡️</span>
-        <span>Local Privacy Trust Layer &bull; Zero Network Egress</span>
+        <span>Local Privacy Trust Layer &bull; SafeContext Only</span>
       </div>
     </footer>
   </div>
