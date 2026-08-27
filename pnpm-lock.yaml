@@ -30,15 +30,21 @@ importers:
       '@types/chrome':
         specifier: ^0.0.318
         version: 0.0.318
+      happy-dom:
+        specifier: ^17.4.5
+        version: 17.6.3
       vite:
         specifier: ^6.3.5
         version: 6.4.3
+      vitest:
+        specifier: ^3.2.3
+        version: 3.2.7(happy-dom@17.6.3)(supports-color@7.2.0)
 
   packages/protocol:
     devDependencies:
       vitest:
         specifier: ^3.2.3
-        version: 3.2.7(supports-color@7.2.0)
+        version: 3.2.7(happy-dom@17.6.3)(supports-color@7.2.0)
 
 packages:
 
@@ -716,6 +722,10 @@ packages:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
     engines: {node: '>=18'}
 
+  happy-dom@17.6.3:
+    resolution: {integrity: sha512-UVIHeVhxmxedbWPCfgS55Jg2rDfwf2BCKeylcPSqazLz5w3Kri7Q4xdBJubsr/+VUzFLh0VjIvh13RaDA2/Xug==}
+    engines: {node: '>=20.0.0'}
+
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
     engines: {node: '>=8'}
@@ -1016,6 +1026,14 @@ packages:
         optional: true
       jsdom:
         optional: true
+
+  webidl-conversions@7.0.0:
+    resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
+    engines: {node: '>=12'}
+
+  whatwg-mimetype@3.0.0:
+    resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
+    engines: {node: '>=12'}
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -1633,6 +1651,11 @@ snapshots:
 
   globals@14.0.0: {}
 
+  happy-dom@17.6.3:
+    dependencies:
+      webidl-conversions: 7.0.0
+      whatwg-mimetype: 3.0.0
+
   has-flag@4.0.0: {}
 
   ignore@5.3.2: {}
@@ -1876,7 +1899,7 @@ snapshots:
     optionalDependencies:
       fsevents: 2.3.3
 
-  vitest@3.2.7(supports-color@7.2.0):
+  vitest@3.2.7(happy-dom@17.6.3)(supports-color@7.2.0):
     dependencies:
       '@types/chai': 5.2.3
       '@vitest/expect': 3.2.7
@@ -1901,6 +1924,8 @@ snapshots:
       vite: 6.4.3
       vite-node: 3.2.4(supports-color@7.2.0)
       why-is-node-running: 2.3.0
+    optionalDependencies:
+      happy-dom: 17.6.3
     transitivePeerDependencies:
       - jiti
       - less
@@ -1914,6 +1939,10 @@ snapshots:
       - terser
       - tsx
       - yaml
+
+  webidl-conversions@7.0.0: {}
+
+  whatwg-mimetype@3.0.0: {}
 
   which@2.0.2:
     dependencies:

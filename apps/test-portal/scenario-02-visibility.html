@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 02: Visibility & Hidden Elements</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="badge">N-EYE LABORATORY SCENARIO 02</div>
+      <h1>Visibility & Hidden Elements Suite</h1>
+      <p class="subtitle">Verifies that hidden, offscreen, or disabled controls are handled strictly.</p>
+    </header>
+
+    <main class="card">
+      <h2>Interactive & Visibility Test Matrix</h2>
+
+      <div class="form-row">
+        <label for="visible-input">1. Normal Visible Input (Should be observed)</label>
+        <input type="text" id="visible-input" placeholder="Visible input field" value="Visible value">
+      </div>
+
+      <div class="form-row" style="display: none;">
+        <label for="display-none-input">2. Display None Input (Must NOT be observed)</label>
+        <input type="text" id="display-none-input" placeholder="Display None Field">
+      </div>
+
+      <div class="form-row" style="visibility: hidden;">
+        <label for="visibility-hidden-input">3. Visibility Hidden Input (Must NOT be observed)</label>
+        <input type="text" id="visibility-hidden-input" placeholder="Visibility Hidden Field">
+      </div>
+
+      <div class="form-row" hidden>
+        <label for="hidden-attr-input">4. Hidden Attribute Input (Must NOT be observed)</label>
+        <input type="text" id="hidden-attr-input" placeholder="Hidden Attribute Field">
+      </div>
+
+      <div class="form-row" aria-hidden="true">
+        <label for="aria-hidden-input">5. ARIA Hidden Input (Must NOT be observed)</label>
+        <input type="text" id="aria-hidden-input" placeholder="ARIA Hidden Field">
+      </div>
+
+      <!-- Hidden form input -->
+      <input type="hidden" id="raw-hidden-input" name="csrfToken" value="CANARY_CSRF_SECRET_NEVER_EXTRACT">
+
+      <div class="form-row">
+        <label for="disabled-button">6. Disabled Button (Should be observed as isEnabled=false)</label>
+        <button id="disabled-button" class="btn btn-secondary" disabled>Disabled Action</button>
+      </div>
+
+      <div class="form-actions">
+        <button id="btn-visible-action" class="btn btn-primary">Standard Visible Button</button>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p><a href="./index.html" style="color: var(--primary);">← Back to Scenario 01</a></p>
+    </footer>
+  </div>
+</body>
+</html>

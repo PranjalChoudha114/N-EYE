@@ -5,9 +5,9 @@
 
 ## Current State
 
-**Phase**: Genesis complete
+**Phase**: Task 002 Complete (Active-Web Foundation + Observation Hardening + Target Identity + Product Side Panel)
 **Last updated**: 2026-08-28
-**Build status**: Repository bootstrapped, protocol types defined, MV3 shell created
+**Build status**: Repository bootstrapped, Protocol package with TargetFingerprint, MV3 runtime connected to active tabs, Element Registry, Debounced PageEpoch, Value Exclusion, Product Side Panel, 4 Controlled Scenarios, 29 Automated Tests passing.
 
 ## What Exists
 
@@ -15,11 +15,15 @@
 |-----------|--------|-------|
 | Repository foundation | ✅ Done | git, pnpm monorepo, TypeScript strict, ESLint, Vitest |
 | Engineering constitution | ✅ Done | AGENTS.md, architecture docs, ADR-0001 |
-| Protocol package | ✅ Done | Branded identifiers, RawScene, SafeContext, ActionProposal, Messages, Errors |
-| Chrome MV3 shell | ✅ Done | Service worker, content script, side panel, typed messaging |
-| Test portal | ✅ Done | Basic form with synthetic canary data |
-| Observer | 🔲 Not started | Safe visible-element collector |
-| Privacy engine | 🔲 Not started | Detection, classification, sanitization |
+| Protocol package | ✅ Done | Branded identifiers, RawScene, SafeContext, ActionProposal, TargetFingerprint, Messages, Errors |
+| Chrome MV3 runtime | ✅ Done | Service worker (active-tab tracking), Content Script (Observer + Registry + Epoch), Product Side Panel UI |
+| Page Observer | ✅ Done | Strict visibility check, label precedence & sanitization, 0 generic value collection |
+| Element Registry | ✅ Done | Opaque IDs (`e1`, `e2`), live node resolution, detached cleanup |
+| PageEpoch Manager | ✅ Done | Debounced MutationObserver tracking meaningful interactive DOM mutations |
+| Target Fingerprinting | ✅ Done | Role, tag, type, relative bbox, sanitized label, deterministic djb2 digest |
+| Product Side Panel | ✅ Done | Dark theme, active-tab auto connect, trust loop status, forensic evidence drawer |
+| Controlled Test Portal | ✅ Done | Scenarios 01 (Form Canaries), 02 (Visibility), 03 (Dynamic Rerender), 04 (Adversarial) |
+| Privacy engine | 🔲 Next Gate | Detection taxonomy, classification rules, tokenization |
 | Token vault | 🔲 Not started | Memory-local private token capability |
 | SafeContext builder | 🔲 Not started | RawScene → SafeContext transformation |
 | Egress guard | 🔲 Not started | Network boundary enforcement |
@@ -33,11 +37,11 @@
 
 ## Key Decisions Made
 
-1. **Node 26** used (available on system, ahead of recommended Node 24 LTS)
-2. **Transparent Chrome MV3** — no WXT framework
-3. **Vite** for extension build
-4. **React deferred** — side panel uses vanilla HTML/TS for Genesis
-5. **pnpm monorepo** with workspace references
+1. **Active Tab Discovery via Service Worker**: `tabs.onActivated` and `tabs.onUpdated` automatically broadcast `TAB_CHANGED` to side panel.
+2. **Strict Value Exclusion**: Form input `.value`, `textarea.value`, and hidden inputs are strictly excluded from `RawElement`.
+3. **Deterministic Label Precedence**: Associated label > aria-label > aria-labelledby > innerText > placeholder > title, bounded to max 120 chars.
+4. **TargetFingerprint**: Structural signature based on role, tag, inputType, sanitizedLabel, relative geometry, and djb2 digest.
+5. **Debounced PageEpoch**: MutationObserver uses 60ms debounce and filters for meaningful interactive mutations (`hidden`, `disabled`, `childList`, `class`, `style`).
 
 ## Dependency Direction
 
@@ -46,13 +50,6 @@ protocol ← observer ← perception ← privacy ← vault ← policy ← execut
 ```
 
 Privacy/vault MUST NEVER import from planner/network packages.
-
-## Next Tasks (Day 02 per masterbook)
-
-1. **Visible-element observer** — Collect visible/interactable controls with opaque IDs
-2. **Page epoch** — Track meaningful page mutations
-3. **MutationObserver** — Invalidate on significant DOM changes
-4. Safe observation boundary tests
 
 ## Source Material
 

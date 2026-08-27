@@ -1,4 +1,5 @@
 import type { ElementId, PageEpoch } from './identifiers.js';
+import type { TargetFingerprint } from './fingerprint.js';
 
 export interface BoundingBox {
   x: number;
@@ -29,6 +30,7 @@ export interface RawElement {
   isEnabled: boolean;
   isSelected?: boolean;
   bbox: BoundingBox;
+  fingerprint?: TargetFingerprint;
   xpath?: string; // Local-only for DOM re-grounding
 }
 
@@ -62,4 +64,5 @@ export interface RawScene {
   elements: RawElement[];
   privacyFindings: PrivacyFinding[];
   timestamp: number;
+  observationDurationMs?: number;
 }

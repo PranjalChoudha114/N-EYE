@@ -5,7 +5,9 @@ import type { SafeContext } from './safe-context.js';
 
 export type TaskStatus =
   | 'IDLE'
+  | 'CONNECTING'
   | 'OBSERVING'
+  | 'READY'
   | 'PROTECTING'
   | 'PLANNING'
   | 'VALIDATING'
@@ -14,12 +16,24 @@ export type TaskStatus =
   | 'VERIFYING'
   | 'COMPLETED'
   | 'FAILED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'UNSUPPORTED_PAGE';
+
+export interface TabInfo {
+  tabId: number;
+  url: string;
+  title: string;
+  origin: string;
+  isSupported: boolean;
+  unsupportedReason?: string;
+}
 
 export interface TaskState {
   taskId: TaskId;
   goal: string;
   status: TaskStatus;
+  activeTab?: TabInfo;
+  lastRawScene?: RawScene;
   lastSafeContext?: SafeContext;
   lastProposal?: ActionProposal;
   error?: string;
@@ -32,6 +46,8 @@ export type ExtensionMessage =
   | { type: 'START_TASK'; goal: string }
   | { type: 'CANCEL_TASK'; taskId: TaskId }
   | { type: 'GET_STATE' }
+  | { type: 'GET_ACTIVE_TAB_INFO' }
+  | { type: 'TAB_CHANGED'; tabInfo: TabInfo }
   | { type: 'STATE_UPDATED'; state: TaskState }
   | { type: 'OBSERVE_REQUEST' }
   | { type: 'OBSERVE_RESPONSE'; scene: RawScene }

@@ -7,57 +7,149 @@
   <link rel="stylesheet" href="./sidepanel.css" />
 </head>
 <body>
-  <div id="app">
-    <header class="header">
-      <div class="logo-group">
-        <span class="logo-badge">N-Eye</span>
-        <span class="logo-sub">Trust Layer</span>
+  <div id="app" class="app-container">
+    <!-- Header -->
+    <header class="app-header" role="banner">
+      <div class="brand-row">
+        <div class="brand-badge">
+          <span class="brand-name">N-Eye</span>
+          <span class="brand-tag">TRUST LAYER</span>
+        </div>
+        <div id="status-pill" class="status-pill status-connecting" role="status" aria-live="polite">
+          <span class="status-dot"></span>
+          <span id="status-text">CONNECTING</span>
+        </div>
       </div>
-      <div id="status-indicator" class="status-badge status-idle">IDLE</div>
+      <div class="site-row">
+        <span class="site-icon" aria-hidden="true">🌐</span>
+        <span id="site-origin" class="site-origin truncate">Detecting active tab...</span>
+      </div>
     </header>
 
-    <main class="main-content">
-      <section class="card task-section">
-        <h3>Task Control</h3>
-        <div class="form-group">
-          <input
-            id="goal-input"
-            type="text"
-            placeholder="e.g. Fill form and submit"
-            autocomplete="off"
-          />
-          <button id="btn-start" class="btn btn-primary">Start Task</button>
+    <!-- Main Content -->
+    <main class="app-main" role="main">
+      <!-- Unsupported Page Alert (hidden by default) -->
+      <section id="unsupported-banner" class="alert-banner" style="display: none;" role="alert">
+        <div class="alert-title">⚠️ Unsupported Browser Context</div>
+        <div id="unsupported-reason" class="alert-msg">N-Eye cannot inspect this browser page.</div>
+      </section>
+
+      <!-- Active Page Status Card -->
+      <section class="card page-card" aria-labelledby="heading-page">
+        <div class="card-header">
+          <h2 id="heading-page" class="card-title">Active Webpage</h2>
+          <button id="btn-reobserve" class="btn btn-secondary btn-icon" title="Refresh local observation" aria-label="Refresh observation">
+            <span aria-hidden="true">↻</span> Refresh
+          </button>
+        </div>
+        <div class="page-meta-grid">
+          <div class="meta-item">
+            <span class="meta-label">Title</span>
+            <span id="page-title" class="meta-value truncate">—</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Page Freshness</span>
+            <span id="page-epoch" class="meta-value highlight">Epoch 1</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Interactable Controls</span>
+            <span id="controls-count" class="meta-value highlight">0</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">Observation Latency</span>
+            <span id="latency-val" class="meta-value">—</span>
+          </div>
         </div>
       </section>
 
-      <section class="card">
-        <div class="section-header">
-          <h3>Local Observation</h3>
-          <button id="btn-observe" class="btn btn-secondary btn-sm">Observe Page</button>
+      <!-- Protection Status Card -->
+      <section class="card protection-card" aria-labelledby="heading-protection">
+        <div class="card-header">
+          <h2 id="heading-protection" class="card-title">Privacy & Protection</h2>
+          <span class="shield-badge">🛡️ LOCAL SHIELD</span>
         </div>
-        <div id="observation-summary" class="summary-box">
-          <span class="muted">No observation recorded yet. Click "Observe Page".</span>
-        </div>
-      </section>
-
-      <section class="card">
-        <h3>Privacy Findings</h3>
-        <div id="privacy-list" class="privacy-box">
-          <span class="muted">No sensitive elements detected.</span>
+        <p class="protection-desc">
+          Zero data sent to cloud. Generic form values excluded from page observation.
+        </p>
+        <div id="privacy-summary" class="privacy-summary-box">
+          <span class="muted">No sensitive inputs detected on this page.</span>
         </div>
       </section>
 
-      <section class="card">
-        <h3>Safe Elements (Opaque IDs)</h3>
-        <div id="elements-list" class="elements-scroll">
-          <span class="muted">Waiting for page observation...</span>
+      <!-- Understanding (Safe Local Controls) -->
+      <section class="card controls-card" aria-labelledby="heading-controls">
+        <div class="card-header">
+          <h2 id="heading-controls" class="card-title">Observed Controls (Opaque IDs)</h2>
+        </div>
+        <div id="controls-container" class="controls-list" role="list" aria-label="Observed interactive controls">
+          <div class="empty-state">Observing active page...</div>
         </div>
       </section>
+
+      <!-- System Trust Loop -->
+      <section class="card pipeline-card" aria-labelledby="heading-pipeline">
+        <h2 id="heading-pipeline" class="card-title">Trust Loop Status</h2>
+        <div class="pipeline-track">
+          <div class="pipeline-step step-active" title="Local DOM observation">
+            <span class="step-num">1</span>
+            <span class="step-name">SEE</span>
+            <span class="step-status">ACTIVE</span>
+          </div>
+          <div class="pipeline-step step-ready" title="PII Detection & Sanitization">
+            <span class="step-num">2</span>
+            <span class="step-name">PROTECT</span>
+            <span class="step-status">LOCAL</span>
+          </div>
+          <div class="pipeline-step step-idle" title="Remote Planner Reasoning">
+            <span class="step-num">3</span>
+            <span class="step-name">THINK</span>
+            <span class="step-status">OFFLINE</span>
+          </div>
+          <div class="pipeline-step step-idle" title="Local Action Validation">
+            <span class="step-num">4</span>
+            <span class="step-name">VALIDATE</span>
+            <span class="step-status">LOCAL</span>
+          </div>
+          <div class="pipeline-step step-idle" title="Browser Action Execution">
+            <span class="step-num">5</span>
+            <span class="step-name">ACT</span>
+            <span class="step-status">LOCAL</span>
+          </div>
+          <div class="pipeline-step step-idle" title="State-Change Verification">
+            <span class="step-num">6</span>
+            <span class="step-name">VERIFY</span>
+            <span class="step-status">LOCAL</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Developer / Forensic Evidence Drawer -->
+      <details class="evidence-drawer">
+        <summary class="evidence-summary">
+          <span>🔍 Developer & Forensic Evidence</span>
+        </summary>
+        <div class="evidence-body">
+          <div class="evidence-item">
+            <strong>Network Egress:</strong> <span class="badge-evidence">0 BYTES (OFFLINE)</span>
+          </div>
+          <div class="evidence-item">
+            <strong>Local Registry Size:</strong> <span id="evidence-registry-size">0</span>
+          </div>
+          <div class="evidence-item">
+            <strong>Fingerprints Computed:</strong> <span id="evidence-fp-count">0</span>
+          </div>
+          <div class="evidence-item">
+            <strong>Active Viewport:</strong> <span id="evidence-viewport">—</span>
+          </div>
+          <pre id="evidence-raw" class="evidence-pre">{}</pre>
+        </div>
+      </details>
     </main>
 
-    <footer class="footer">
-      <span>Zone: <strong>Local (Zone 2)</strong></span>
-      <span>Invariants: <strong>Active (15/15)</strong></span>
+    <!-- Footer -->
+    <footer class="app-footer" role="contentinfo">
+      <span>N-Eye v0.1.0 &bull; SIH 2026</span>
+      <span>Invariants: <strong style="color: var(--accent-green);">15/15 Active</strong></span>
     </footer>
   </div>
   <script type="module" src="./sidepanel.ts"></script>

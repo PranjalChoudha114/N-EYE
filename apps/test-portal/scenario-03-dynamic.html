@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 03: Dynamic Page & Stale Target</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="badge">N-EYE LABORATORY SCENARIO 03</div>
+      <h1>Dynamic Rerender & Stale Target Suite</h1>
+      <p class="subtitle">Verifies that DOM mutations change PageEpoch and invalidate stale live nodes.</p>
+    </header>
+
+    <main class="card">
+      <h2>Interactive Dynamic Target Area</h2>
+      <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+        Clicking the button below replaces the dynamic target container with a newly instantiated DOM node, testing epoch progression.
+      </p>
+
+      <div id="target-container" style="padding: 16px; background: #0b1120; border-radius: 8px; margin-bottom: 16px; border: 1px dashed #334155;">
+        <button id="dynamic-target-btn" class="btn btn-primary">Initial Dynamic Target (v1)</button>
+      </div>
+
+      <div class="form-actions">
+        <button id="btn-trigger-rerender" class="btn btn-secondary" onclick="rerenderTarget()">
+          ⚡ Replace / Rerender Target (Trigger Mutation)
+        </button>
+      </div>
+
+      <div id="mutation-log" style="margin-top: 16px; font-family: monospace; font-size: 11px; color: #38bdf8;">
+        Mutations triggered: 0
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p><a href="./index.html" style="color: var(--primary);">← Back to Scenario 01</a> &bull; <a href="./scenario-02-visibility.html" style="color: var(--primary);">Scenario 02</a></p>
+    </footer>
+  </div>
+
+  <script>
+    let mutationCount = 0;
+    function rerenderTarget() {
+      mutationCount++;
+      const container = document.getElementById('target-container');
+      const newBtn = document.createElement('button');
+      newBtn.id = 'dynamic-target-btn-v' + mutationCount;
+      newBtn.className = 'btn btn-primary';
+      newBtn.textContent = 'Replaced Target (v' + (mutationCount + 1) + ')';
+      newBtn.onclick = () => alert('Clicked target v' + (mutationCount + 1));
+
+      container.innerHTML = '';
+      container.appendChild(newBtn);
+      document.getElementById('mutation-log').textContent = 'Mutations triggered: ' + mutationCount + ' (Target DOM node replaced)';
+    }
+  </script>
+</body>
+</html>
