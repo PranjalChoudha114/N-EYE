@@ -1,0 +1,26 @@
+{
+  "name": "@n-eye/protocol",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared type definitions and data contracts for N-Eye",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.3"
+  }
+}

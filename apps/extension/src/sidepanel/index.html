@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>N-Eye Trust Layer</title>
+  <link rel="stylesheet" href="./sidepanel.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <div class="logo-group">
+        <span class="logo-badge">N-Eye</span>
+        <span class="logo-sub">Trust Layer</span>
+      </div>
+      <div id="status-indicator" class="status-badge status-idle">IDLE</div>
+    </header>
+
+    <main class="main-content">
+      <section class="card task-section">
+        <h3>Task Control</h3>
+        <div class="form-group">
+          <input
+            id="goal-input"
+            type="text"
+            placeholder="e.g. Fill form and submit"
+            autocomplete="off"
+          />
+          <button id="btn-start" class="btn btn-primary">Start Task</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-header">
+          <h3>Local Observation</h3>
+          <button id="btn-observe" class="btn btn-secondary btn-sm">Observe Page</button>
+        </div>
+        <div id="observation-summary" class="summary-box">
+          <span class="muted">No observation recorded yet. Click "Observe Page".</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Privacy Findings</h3>
+        <div id="privacy-list" class="privacy-box">
+          <span class="muted">No sensitive elements detected.</span>
+        </div>
+      </section>
+
+      <section class="card">
+        <h3>Safe Elements (Opaque IDs)</h3>
+        <div id="elements-list" class="elements-scroll">
+          <span class="muted">Waiting for page observation...</span>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>Zone: <strong>Local (Zone 2)</strong></span>
+      <span>Invariants: <strong>Active (15/15)</strong></span>
+    </footer>
+  </div>
+  <script type="module" src="./sidepanel.ts"></script>
+</body>
+</html>

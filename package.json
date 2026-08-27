@@ -1,0 +1,25 @@
+{
+  "name": "n-eye",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Privacy-preserving visual perception for lightweight browser agents",
+  "scripts": {
+    "build": "pnpm -r --filter './apps/**' run build",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "clean": "pnpm -r run clean"
+  },
+  "engines": {
+    "node": ">=22",
+    "pnpm": ">=11"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "eslint": "^9.28.0",
+    "@eslint/js": "^9.28.0",
+    "typescript-eslint": "^8.33.1"
+  }
+}

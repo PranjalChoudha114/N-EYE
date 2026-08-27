@@ -1,0 +1,22 @@
+{
+  "name": "@n-eye/extension",
+  "version": "0.0.0",
+  "private": true,
+  "description": "N-Eye Chrome MV3 browser extension",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "test": "echo 'No extension unit tests yet'",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@n-eye/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5",
+    "@types/chrome": "^0.0.318"
+  }
+}

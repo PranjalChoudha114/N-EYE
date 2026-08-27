@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Controlled Scenario 01</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="badge">N-EYE CONTROLLED TEST BENCH</div>
+      <h1>Applicant Portal — Scenario 01</h1>
+      <p class="subtitle">Controlled evaluation environment for privacy-preserving browser perception.</p>
+    </header>
+
+    <main class="card form-card">
+      <h2>Candidate Profile Application</h2>
+      <form id="applicant-form" onsubmit="event.preventDefault(); document.getElementById('result-message').style.display='block';">
+        <div class="form-row">
+          <label for="full-name">Full Name (Public Context)</label>
+          <input type="text" id="full-name" name="fullName" placeholder="Jane Doe" value="Jane Doe" required>
+        </div>
+
+        <div class="form-row">
+          <label for="applicant-email">Email Address (PII_DIRECT Canary)</label>
+          <input type="email" id="applicant-email" name="email" placeholder="canary.applicant@example.com" value="canary.applicant@example.com" required>
+        </div>
+
+        <div class="form-row">
+          <label for="applicant-phone">Phone Number (PII_DIRECT Canary)</label>
+          <input type="tel" id="applicant-phone" name="phone" placeholder="+1-555-0199" value="+1-555-0199">
+        </div>
+
+        <div class="form-row">
+          <label for="account-password">Account Password (SECRET_AUTH Canary)</label>
+          <input type="password" id="account-password" name="password" placeholder="••••••••••••" value="SuperSecretPasswordCanary_99!" required>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="btn-submit" class="btn btn-primary">Submit Application</button>
+          <button type="button" id="btn-cancel" class="btn btn-secondary">Cancel</button>
+        </div>
+      </form>
+
+      <!-- HIDDEN CANARY: Must NEVER be extracted by visible observer -->
+      <div id="hidden-admin-secret" style="display: none;">
+        ADMIN_TOKEN=CANARY_SECRET_NEVER_EXTRACT_ME_12345
+      </div>
+
+      <div id="result-message" class="alert-success" style="display: none;">
+        ✅ Application Submitted Successfully (State Delta Verified).
+      </div>
+    </main>
+
+    <footer class="footer">
+      <p>N-Eye Test Portal &bull; Smart India Hackathon 2026 &bull; Problem 26171</p>
+    </footer>
+  </div>
+</body>
+</html>
