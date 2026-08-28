@@ -1,60 +1,120 @@
-# N-Eye — Project Understanding
+# N-Eye — Canonical Product & Architecture Understanding
 
-## What Is N-Eye?
+> **Mission**: AI needs context. Not your identity.
+> **Tagline**: Privacy-preserving visual perception trust layer for lightweight browser agents.
+> **Problem Statement**: ISRO / Smart India Hackathon 2026 • PS 26171
 
-N-Eye is a **privacy-preserving browser agent trust layer** built as a Chrome MV3
-extension for ISRO's SIH 2026 Problem Statement 26171: "On-device Visual Perception
-for Lightweight Browser Agents."
+---
 
-Think of N-Eye as a **security guard** between the user's private browser and AI.
-It shares only what is needed for reasoning and checks every suggested action before
-allowing it.
+## 1. What Is N-Eye?
 
-## The Core Problem
+N-Eye is an **on-device visual perception and action trust layer** that sits between a user's private browser session and remote AI reasoning models. 
 
-Normal cloud-first browser agents send screenshots, DOM dumps, and form values
-directly to remote AI services. This is fast but **dangerous** — it exposes passwords,
-emails, financial data, and personal information to third parties.
+Standard cloud-first browser agents (such as OpenAI Operator, Anthropic Computer Use, or raw Playwright LLM scrapers) operate by capturing continuous full-resolution screenshots, raw DOM trees, and unredacted form values, streaming them directly over the network to cloud vision-language models (VLMs). This exposes passwords, OTPs, session cookies, financial numbers, personal identifiers, and private page contents to third-party AI APIs. Furthermore, these agents grant remote models unconstrained authority to execute arbitrary JavaScript, XPath selectors, or uncontrolled clicks directly on the user's live browser.
 
-N-Eye solves this by keeping sensitive data local and sending only a minimized,
-sanitized representation to the AI planner.
+**N-Eye fundamentally reverses this paradigm:**
+- The browser stays in control of the private environment and retains final execution authority.
+- The remote AI receives only an abstract, sanitized, and tokenized **`SafeContext`** needed for planning.
+- The remote model's output is treated strictly as **untrusted advisory proposals** (`ActionProposal`).
+- The local browser validates the proposal against current DOM state, resolves private tokens in local memory, prompts for human confirmation on high-risk actions, executes native events on live nodes, and verifies the resulting state-change delta.
 
-## The Canonical Loop
+---
+
+## 2. The Canonical Trust Loop
+
+Every N-Eye task step executes through an immutable 6-stage lifecycle:
 
 ```
-1. SEE LOCALLY     — Observe visible page structure (DOM, ARIA, geometry)
-2. PERCEIVE        — If pixels contain info structure missed, OCR/CV locally
-3. PROTECT LOCALLY — Detect PII, tokenize or remove before network
-4. THINK REMOTELY  — Send SafeContext to remote planner, receive ActionProposal
-5. VALIDATE LOCALLY — Check proposal against current page, policy, risk
-6. ACT LOCALLY     — Execute one validated action through content script
-7. VERIFY LOCALLY  — Confirm the page state actually changed
+[ Active Webpage (Zone 0: Hostile DOM / Pixels) ]
+                     │
+                     ▼
+1. SEE LOCALLY       — Observe visible interactable DOM structure & compute TargetFingerprints.
+                     │
+                     ▼
+2. PERCEIVE LOCALLY  — Escalate perception (OCR / ROI crop) ONLY when DOM structure is insufficient.
+                     │
+                     ▼
+3. PROTECT LOCALLY   — Detect PII/secrets; tokenize into scoped capabilities (PrivateTokenVault).
+                     │
+                     ▼
+4. EGRESS GUARD      — Build SafeContext allowlist; byte-level canary scan; enforce 256KB bound.
+                     │
+     ════════════════╪════════════════ NETWORK BOUNDARY ════════════════
+                     │
+5. THINK REMOTELY    — Remote Planner Gateway (FastAPI) + Model Adapter (Gemini / Mock)
+                     │ produces structured ActionProposal (untrusted advice).
+                     │
+     ════════════════╪════════════════ NETWORK BOUNDARY ════════════════
+                     │
+6. VALIDATE LOCALLY  — Validate element existence, epoch freshness, target semantics & token scope.
+                     │
+                     ▼
+7. RESOLVE & ACT     — Resolve token value in local memory; prompt on HIGH risk; dispatch native events.
+                     │
+                     ▼
+8. VERIFY LOCALLY    — Observe post-state; prove genuine delta (epoch progression / DOM mutation).
 ```
 
-## What Makes N-Eye Different
+---
 
-1. **Adaptive perception**: Structure first, pixels only when needed
-2. **Privacy-minimized context**: Scoped private tokens, not raw values
-3. **SafeContext-only egress**: Strict allowlisted outbound schema
-4. **Local authority**: Remote planner cannot execute directly
-5. **Measurable evidence**: Canary tests, not claims
+## 3. Trust Model & Boundary Rules
 
-## Success Criterion
+N-Eye enforces a strict 6-zone security model:
 
-> On a normal laptop, a Chrome N-Eye extension can open a realistic controlled
-> private webpage; observe task-relevant structure and pixels locally; detect
-> several privacy classes; keep passwords, OTPs and equivalent secrets local;
-> construct an inspectable SafeContext; prove through the actual network request
-> that forbidden raw values did not leave; obtain a constrained structured proposal
-> from a remote planner; locally validate and execute; verify the resulting state
-> change; and report measured evidence.
+| Zone | Name | Location | Trust Level | Responsibility & Authority |
+|---|---|---|---|---|
+| **0** | Webpage | Live Browser Tab | **Hostile** | Untrusted third-party DOM, canvas, scripts, and adversarial injections. |
+| **1** | Content Script | Isolated Webpage Context | **Hostile-Adjacent** | Observes DOM, maintains live node references, executes validated actions. |
+| **2** | Privileged Core | Background Service Worker | **Trusted Coordinator** | Task lifecycle, tab tracking, inter-module messaging, permissions. |
+| **3** | Local Processing | Extension In-Memory Runtime | **Trusted Authority** | Privacy detectors, token vault, action validator, re-grounding, verifier. |
+| **4** | Network Boundary | Extension Egress Client | **Controlled Gateway** | Egress Guard validation, byte scanning, schema enforcement, timeout/abort. |
+| **5** | Remote Planner | Cloud / Planner Gateway | **Untrusted Advisory** | High-level reasoning over SafeContext; **zero browser execution authority**. |
 
-## Scoring Dimensions (SIH 2026)
+### Immutable Boundary Invariants
+1. **Secrets NEVER cross the network**: Passwords, OTPs, API keys, session tokens, and raw PII remain local.
+2. **RawScene is Local-Only**: `RawScene`, live DOM references, unredacted text, and full screenshots never leave Zone 3.
+3. **SafeContext is the Sole Egress Contract**: Outbound payloads are strictly allowlisted JSON schemas.
+4. **Remote AI is Untrusted Advice**: The planner cannot run scripts, invent element IDs, or bypass local validation.
+5. **Private Token Mappings Remain Local**: `[EMAIL_1]` is mapped to `user@example.com` exclusively in local volatile memory.
+6. **Actions Require Live Re-grounding**: Proposals must match live element fingerprints before execution.
+7. **High-Risk Actions Require Explicit User Confirmation**: Actions with `riskLevel: HIGH` pause for human authorization.
+8. **Verification is Empirical**: Success requires observed post-execution state deltas, not model assertions.
 
-| Dimension | Weight |
-|-----------|--------|
-| Visual-context accuracy | 25% |
-| Sensitive/PII precision-recall | 20% |
-| Redaction precision | 20% |
-| Client resource utilization | 20% |
-| End-to-end latency | 15% |
+---
+
+## 4. What N-Eye Is NOT (Anti-Drift Guardrails)
+
+To prevent architecture drift, N-Eye explicitly rejects the following patterns:
+- **NOT a generic DOM scraper**: Does not dump raw HTML or arbitrary text to remote servers.
+- **NOT a remote screenshot agent**: Does not stream full-page desktop/browser screenshots to cloud VLMs.
+- **NOT a chatbot with browser access**: Does not allow an LLM to hallucinate free-form JavaScript or bash commands.
+- **NOT an API-key-bearing extension**: Extension client contains zero provider secrets; credentials stay server-side.
+- **NOT a client-side database**: Does not persist passwords or private token mappings to disk or `chrome.storage`.
+- **NOT a test-portal-only prototype**: Core logic operates across any real webpage via standard DOM and MV3 APIs.
+
+---
+
+## 5. Scope: SIH Prototype vs. Future Company Scale
+
+| Capability | SIH Prototype Scope (Current Baseline) | Future Company Scale |
+|---|---|---|
+| **Browser Support** | Google Chrome (Manifest V3) | Cross-browser (Chromium, Firefox, Safari, Edge) |
+| **Observation** | DOM semantics, ARIA, geometry, visibility, epoch | Multi-tab tracking, iframe sandboxes, deep shadow DOM |
+| **Perception** | Structure-first; on-demand local OCR (Tesseract WASM) | WebGPU-accelerated local VLM / visual grounding |
+| **Privacy Engine** | Deterministic regex + heuristics + in-memory vault | Local ML-based PII classifiers + hardware enclave vault |
+| **Egress Guard** | Byte-level canary scan + 256KB size bounds | Cryptographic zero-knowledge egress proofs |
+| **Planner Gateway** | Localhost FastAPI + Gemini / Mock adapters | Enterprise multi-tenant gateway with policy routing |
+| **Persistence** | In-memory ephemeral (10-minute TTL) | Encrypted enterprise audit vault + compliance logging |
+| **Evaluation** | Synthetic test portal (Scenarios 01–06) + test suites | Large-scale WebArena / VisualWebArena benchmark harness |
+
+---
+
+## 6. Current Implementation State (Gate 005/006 Verified)
+
+- **Protocol Layer (`packages/protocol`)**: Complete branded types, schema contracts, and typed error hierarchy.
+- **Chrome MV3 Shell (`apps/extension`)**: Content script observer, element registry, epoch manager, background service worker, and side panel UI V2.5.
+- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors (emails, phones, API keys, passwords, OTPs, JWTs), token vault, SafeContext builder, and byte-level Egress Guard.
+- **Planner Gateway (`apps/planner-api`)**: FastAPI backend with Google Gemini (`gemini-2.5-flash`), OpenAI-compatible, and deterministic Mock adapters. Server-side API key isolation.
+- **Local Action Authority (`apps/extension/src/authority`, `execution`, `verification`)**: Proposal validator, target re-grounding, local token resolution, native event executor, and state-delta verifier.
+- **Automated Test Matrix**: 75 tests passing (9 protocol, 49 extension, 17 planner API).
+- **Next Eligible Milestone**: Gate 007/008 (On-Device OCR + Local Visual Perception + Adaptive Perception Controller).
