@@ -1,4 +1,4 @@
-import type { ActionId, ElementId, PageEpoch, TokenId } from './identifiers.js';
+import type { ActionId, ElementId, FrameId, PageEpoch, TokenId } from './identifiers.js';
 import type { TargetFingerprint } from './fingerprint.js';
 
 export type ActionType =
@@ -35,12 +35,20 @@ export interface ActionProposal {
  * pageEpoch freshness checks, token scope checks, and user risk confirmations.
  * Executor only accepts this type.
  */
+export type StaleActionOutcome = 'SAFE_REGROUND' | 'REOBSERVE' | 'REPLAN' | 'ASK_USER' | 'BLOCK';
+
 export interface ValidatedAction {
   readonly _isValidated: true;
   proposal: ActionProposal;
   targetElementId?: ElementId;
   resolvedTokenValue?: string; // Injected purely at execution time if TYPE_TOKEN
   expectedFingerprint?: TargetFingerprint; // Observation-time identity for live re-grounding
+  /** Local frame token the target was observed in. Authority must match at execute time. */
+  expectedFrameId?: FrameId;
+  /** Scene epoch at validation. Hint for re-grounding; not planner authority. */
+  observedEpoch?: PageEpoch;
+  /** Observation-time page URL. Used to invalidate SPA route changes. Never sent to the planner. */
+  observedUrl?: string;
   approvedRiskLevel: RiskLevel;
   timestamp: number;
 }

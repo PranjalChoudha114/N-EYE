@@ -6,8 +6,8 @@ import type {
 
 /**
  * ActionVerifier (Zone 3 - Trusted Verification)
- * OWNS: Empirical post-execution state-delta analysis.
- * INVARIANT: Never assumes success. Success requires measurable PageEpoch progression, URL transition, or DOM mutation.
+ * OWNS: Empirical post-execution state-delta analysis against a fresh observation.
+ * INVARIANT: Native click() returning is not success. Success requires measured evidence.
  */
 export function verifyActionExecution(
   action: ValidatedAction,
@@ -18,7 +18,6 @@ export function verifyActionExecution(
   const preEpoch = preScene.pageEpoch;
   const postEpoch = postScene.pageEpoch;
 
-  // 1. Check if complete
   if (action.proposal.type === 'COMPLETE') {
     return {
       actionId,
@@ -30,7 +29,17 @@ export function verifyActionExecution(
     };
   }
 
-  // 2. Check URL / Navigation delta
+  if (preScene.origin !== postScene.origin) {
+    return {
+      actionId,
+      status: 'VERIFIED_SUCCESS',
+      observedDelta: `Origin transitioned to ${postScene.origin}`,
+      preEpoch,
+      postEpoch,
+      timestamp: Date.now(),
+    };
+  }
+
   if (preScene.url !== postScene.url) {
     return {
       actionId,
@@ -42,19 +51,6 @@ export function verifyActionExecution(
     };
   }
 
-  // 3. Check PageEpoch delta
-  if (postEpoch > preEpoch) {
-    return {
-      actionId,
-      status: 'VERIFIED_SUCCESS',
-      observedDelta: `DOM state delta observed: Epoch progressed from ${preEpoch} to ${postEpoch}`,
-      preEpoch,
-      postEpoch,
-      timestamp: Date.now(),
-    };
-  }
-
-  // 4. Check element count or target disappearance delta
   const preTarget = preScene.elements.find((e) => e.id === action.targetElementId);
   const postTarget = postScene.elements.find((e) => e.id === action.targetElementId);
 
@@ -69,24 +65,60 @@ export function verifyActionExecution(
     };
   }
 
-  if (action.proposal.type === 'TYPE_TOKEN') {
+  if (action.proposal.type === 'TYPE_TOKEN' || action.proposal.type === 'TYPE_TEXT') {
     return {
       actionId,
       status: 'VERIFIED_SUCCESS',
-      observedDelta: `Token injected into target ${action.targetElementId} with event dispatch.`,
+      observedDelta: `Text dispatched into target ${action.targetElementId} with event dispatch.`,
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
     };
   }
 
-  // 5. If nothing changed, fail verification
+  if (preTarget && postTarget && semanticShift(preTarget.innerTextCandidate, postTarget.innerTextCandidate)) {
+    return {
+      actionId,
+      status: 'VERIFIED_SUCCESS',
+      observedDelta: `Target ${action.targetElementId} semantic state changed after action.`,
+      preEpoch,
+      postEpoch,
+      timestamp: Date.now(),
+    };
+  }
+
+  if (postScene.elements.length !== preScene.elements.length) {
+    return {
+      actionId,
+      status: 'VERIFIED_SUCCESS',
+      observedDelta: `Interactive control set changed (${preScene.elements.length} → ${postScene.elements.length}).`,
+      preEpoch,
+      postEpoch,
+      timestamp: Date.now(),
+    };
+  }
+
+  if (postEpoch > preEpoch) {
+    return {
+      actionId,
+      status: 'AMBIGUOUS',
+      observedDelta: `PageEpoch progressed (${preEpoch} → ${postEpoch}) without a target-correlated effect. Not claimed as success.`,
+      preEpoch,
+      postEpoch,
+      timestamp: Date.now(),
+    };
+  }
+
   return {
     actionId,
     status: 'VERIFIED_FAILURE',
-    observedDelta: 'No DOM mutation, epoch transition, or navigation detected after action execution.',
+    observedDelta: 'No navigation, target consumption, or action-correlated state change detected after execution.',
     preEpoch,
     postEpoch,
     timestamp: Date.now(),
   };
+}
+
+function semanticShift(before: string | null | undefined, after: string | null | undefined): boolean {
+  return (before || '').trim().toLowerCase() !== (after || '').trim().toLowerCase();
 }

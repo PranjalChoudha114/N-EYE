@@ -104,7 +104,7 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 | Capability | SIH Prototype Scope (Current Baseline) | Future Company Scale |
 |---|---|---|
 | **Browser Support** | Google Chrome (Manifest V3) | Cross-browser (Chromium, Firefox, Safari, Edge) |
-| **Observation** | DOM semantics, ARIA, geometry, visibility, epoch | Multi-tab tracking, iframe sandboxes, deep shadow DOM |
+| **Observation** | DOM semantics, ARIA, geometry, visibility, epoch, same-origin frame provenance | Multi-tab tracking, cross-origin iframe DOM, deep shadow DOM |
 | **Perception** | Adaptive on-device OCR (Tesseract.js) when DOM/ARIA is insufficient | WebGPU-accelerated local VLM / visual grounding |
 | **Privacy Engine** | Deterministic regex + heuristics + in-memory vault (DOM + OCR) | Local ML-based PII classifiers + hardware enclave vault |
 | **Egress Guard** | Byte-level canary scan + 256KB size bounds | Cryptographic zero-knowledge egress proofs |
@@ -114,16 +114,13 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 
 ---
 
-## 6. Current Implementation State (Gate T009/T010)
+## 6. Current Implementation State (Gate T011/T012)
 
-- **Protocol Layer (`packages/protocol`)**: Branded types plus perception/assurance contracts and content-script handshake (`CONTENT_SCRIPT_PROTOCOL`).
-- **Chrome MV3 Shell (`apps/extension`)**: Content script is a self-contained IIFE. Bounded PING → inject-once → handshake recovery. Observer, registry, epoch, Side Panel, ROI capture.
-- **Perception (`apps/extension/src/perception`)**: Adaptive controller, CSS↔bitmap coordinate maps, ROI bounds, PixelBuffer lifecycle, Tesseract.js, grounding/fusion with low-confidence and ambiguous abstention.
-- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors (emails, phones, API keys, passwords, OTPs, JWTs, OCR provenance), token vault, SafeContext builder, Egress Guard (visual canaries / screenshot magic).
-- **Human assurance (`apps/extension/src/assurance`)**: Truthful protection states, empty privacy visualizer until a real protect step, site-change events, Privacy Receipts.
-- **SIH visual harness (`bench/visual`)**: Ground truth separated from predictions; development vs held-out splits; reports under `bench/visual/reports/`.
-- **Planner Gateway (`apps/planner-api`)**: FastAPI backend with Google Gemini (`gemini-2.5-flash`), OpenAI-compatible, and deterministic Mock adapters. Server-side API key isolation.
-- **Local Action Authority**: Proposal validator, live semantic re-grounding, local token resolution, native event executor, and state-delta verifier.
-- **Chrome Side Panel E2E**: **UNVERIFIED** after this repair (manual load of `apps/extension/dist/`). Root cause of T007/008 DISCONNECTED is **IMPLEMENTED + TESTED** (ES-module content.js). Real-Chrome confirmation is still MANUAL.
+- **Protocol Layer (`packages/protocol`)**: Branded types plus `FrameId`, `FrameProvenance`, semantic fingerprint helpers, optional SafeElement `frameId`, perception/assurance contracts, and content-script handshake (`CONTENT_SCRIPT_PROTOCOL`).
+- **Chrome MV3 Shell (`apps/extension`)**: Content script remains a self-contained IIFE (top frame only). Observer walks same-origin `iframe.contentDocument`. PageEpoch uses classified mutations (ADR-0009). Bounded PING → inject-once → handshake recovery.
+- **Perception (`apps/extension/src/perception`)**: Adaptive controller, CSS↔bitmap coordinate maps, ROI bounds, PixelBuffer lifecycle, Tesseract.js, grounding/fusion with epoch+frame staleness.
+- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors, token vault, SafeContext builder (opaque `frameId` only), Egress Guard.
+- **Local Action Authority**: Stale-action contract, unique-candidate re-grounding, TOCTOU check immediately before native dispatch, empirical verifier (`AMBIGUOUS` for epoch-only click deltas).
+- **Chrome Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T011-T012-MANUAL-CHECKLIST.md`.
 - **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008.
-- **Next Eligible Milestone**: Gate 011 — Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack (reuse `bench/visual`). Do not start until explicitly approved.
+- **Next Eligible Milestone**: Gate 013 — Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack. Do not start until explicitly approved.

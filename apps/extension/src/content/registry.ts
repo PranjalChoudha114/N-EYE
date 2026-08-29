@@ -1,8 +1,10 @@
 import {
   type ElementId,
+  type FrameId,
   type PageEpoch,
   type TargetFingerprint,
   createElementId,
+  TOP_FRAME_ID,
 } from '@n-eye/protocol';
 
 export interface RegistryEntry {
@@ -11,27 +13,32 @@ export interface RegistryEntry {
   readonly observedEpoch: PageEpoch;
   readonly fingerprint: TargetFingerprint;
   readonly observedAt: number;
+  readonly frameId: FrameId;
 }
 
 /**
- * ElementRegistry maintains session-local mappings between opaque ElementIds (e1, e2, ...)
+ * ElementRegistry maintains session-local mappings between opaque ElementIds (e1, f1e1, ...)
  * and live DOM HTMLElement references.
  *
  * IMMUTABLE PRIVACY INVARIANTS:
  * 1. Live DOM node references NEVER cross the network boundary.
  * 2. ElementIds are opaque session-scoped strings and contain no private data.
- * 3. Detached or mutated elements can be verified using the stored TargetFingerprint.
+ * 3. Frame-prefixed IDs make cross-frame collisions impossible at authority time.
  */
 export class ElementRegistry {
   private entries = new Map<string, RegistryEntry>();
-  private idCounter = 1;
+  private counters = new Map<string, number>();
 
   public register(
     el: HTMLElement,
     epoch: PageEpoch,
-    fingerprint: TargetFingerprint
+    fingerprint: TargetFingerprint,
+    options?: { idPrefix?: string; frameId?: FrameId }
   ): ElementId {
-    const idStr = `e${this.idCounter++}`;
+    const prefix = options?.idPrefix ?? 'e';
+    const next = (this.counters.get(prefix) ?? 0) + 1;
+    this.counters.set(prefix, next);
+    const idStr = `${prefix}${next}`;
     const id = createElementId(idStr);
 
     const entry: RegistryEntry = {
@@ -40,6 +47,7 @@ export class ElementRegistry {
       observedEpoch: epoch,
       fingerprint,
       observedAt: Date.now(),
+      frameId: options?.frameId ?? TOP_FRAME_ID,
     };
 
     this.entries.set(idStr, entry);
@@ -62,6 +70,10 @@ export class ElementRegistry {
     return !!entry && entry.liveNode.isConnected;
   }
 
+  public entriesInFrame(frameId: FrameId): RegistryEntry[] {
+    return Array.from(this.entries.values()).filter((entry) => entry.frameId === frameId);
+  }
+
   /**
    * Cleans up all entries that are no longer connected to the DOM document.
    * Returns count of purged references.
@@ -79,7 +91,7 @@ export class ElementRegistry {
 
   public clear(): void {
     this.entries.clear();
-    this.idCounter = 1;
+    this.counters.clear();
   }
 
   public size(): number {

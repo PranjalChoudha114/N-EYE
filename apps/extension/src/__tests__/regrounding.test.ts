@@ -71,7 +71,8 @@ describe('Live Re-Grounding Authority', () => {
     const elemId = registry.register(btn, epoch, fp);
 
     btn.textContent = 'Delete Account';
-    const result = regroundTarget(elemId, registry, fp);
-    expect(result.isFingerprintMatch).toBe(false);
+    expect(() => {
+      regroundTarget(elemId, registry, fp);
+    }).toThrow(TargetStaleError);
   });
 });

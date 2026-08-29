@@ -3,8 +3,9 @@
 ## 1. Identifiers
 All identifiers are strongly branded in TypeScript to prevent domain confusion:
 - `TaskId`: Unique identifier for an agent execution task.
-- `ElementId`: Ephemeral session-local identifier (e.g. `e1`, `e2`) assigned to interactable controls.
-- `PageEpoch`: Integer incremented whenever the active tab DOM undergoes meaningful mutation or navigation.
+- `ElementId`: Ephemeral session-local identifier (e.g. `e1`, `e2`, `f1e1`) assigned to interactable controls. Frame-prefixed IDs make cross-document collisions impossible.
+- `FrameId`: Opaque local frame token (`top` locally, `f1`/`f2` in SafeContext). Never a URL.
+- `PageEpoch`: Integer incremented whenever the active tab DOM undergoes **semantically relevant** mutation or navigation (ADR-0009).
 - `ActionId`: Unique identifier for a proposed or executed action step.
 - `TokenId`: Opaque token identifier for vaulted private data (e.g. `TOKEN_EMAIL_1`).
 
@@ -20,7 +21,7 @@ Strict allowlisted JSON object sent to remote planner:
 - `taskId`: `TaskId`
 - `pageEpoch`: `PageEpoch`
 - `sanitizedGoal`: string
-- `safeElements`: array of `SafeElement` (id, role, safeLabel, inputType, enabled, bbox)
+- `safeElements`: array of `SafeElement` (id, role, safeLabel, inputType, enabled, bbox, optional opaque `frameId`)
 - `availableTokens`: array of `TokenCapability` (`tokenId`, `tokenSymbol`, `privacyClass`, `descriptionRole`) — never real values
 - `visualHints`: optional sanitized description + geometry (never image bytes). Produced after local OCR/fusion. Remote crop bytes are not sent.
 

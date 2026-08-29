@@ -1,11 +1,12 @@
 import { type PageEpoch, createPageEpoch } from '@n-eye/protocol';
+import { mutationsRequireEpochAdvance } from './mutation-policy.js';
 
 export type EpochChangeCallback = (newEpoch: PageEpoch) => void;
 
 /**
- * PageEpochManager tracks DOM freshness.
- * Meaningful DOM additions, removals, or structural modifications increment the epoch.
- * Mutations are debounced to prevent epoch churn during continuous operations.
+ * PageEpochManager tracks meaningful page-state invalidation.
+ * Cosmetic animation, hidden-subtree churn, and non-interactive text clocks do not advance the epoch.
+ * Security-relevant mutations (actionable tree, labels, interactability) do.
  */
 export class PageEpochManager {
   private currentEpoch: number = 1;
@@ -13,6 +14,9 @@ export class PageEpochManager {
   private debounceTimer: number | null = null;
   private readonly debounceMs: number;
   private onEpochChange?: EpochChangeCallback;
+  private pendingSemantic = false;
+  private stormCount = 0;
+  private stormWindowStarted = 0;
 
   constructor(debounceMs = 60, onEpochChange?: EpochChangeCallback) {
     this.debounceMs = debounceMs;
@@ -38,38 +42,36 @@ export class PageEpochManager {
     return this.getEpoch();
   }
 
+  /** DEVELOPMENT MEASUREMENT helper: mutations coalesced into the current debounce window. */
+  public getStormCount(): number {
+    return this.stormCount;
+  }
+
   private startObserving(): void {
     if (typeof window === 'undefined' || typeof MutationObserver === 'undefined') {
       return;
     }
 
     this.observer = new MutationObserver((mutations) => {
-      // Filter out non-semantic mutations (e.g. extension internal attributes)
-      const hasMeaningfulMutation = mutations.some((m) => {
-        if (m.type === 'childList') {
-          return m.addedNodes.length > 0 || m.removedNodes.length > 0;
-        }
-        if (m.type === 'attributes') {
-          const name = m.attributeName?.toLowerCase();
-          return (
-            name === 'hidden' ||
-            name === 'aria-hidden' ||
-            name === 'disabled' ||
-            name === 'class' ||
-            name === 'style'
-          );
-        }
-        return false;
-      });
+      if (!mutationsRequireEpochAdvance(mutations)) return;
 
-      if (!hasMeaningfulMutation) return;
+      this.pendingSemantic = true;
+      const now = Date.now();
+      if (now - this.stormWindowStarted > 1000) {
+        this.stormWindowStarted = now;
+        this.stormCount = 0;
+      }
+      this.stormCount += 1;
 
       if (this.debounceTimer !== null) {
         window.clearTimeout(this.debounceTimer);
       }
 
       this.debounceTimer = window.setTimeout(() => {
-        this.increment();
+        if (this.pendingSemantic) {
+          this.increment();
+          this.pendingSemantic = false;
+        }
         this.debounceTimer = null;
       }, this.debounceMs);
     });
@@ -79,8 +81,26 @@ export class PageEpochManager {
       this.observer.observe(targetNode, {
         childList: true,
         subtree: true,
+        characterData: true,
         attributes: true,
-        attributeFilter: ['hidden', 'aria-hidden', 'disabled', 'class', 'style'],
+        attributeOldValue: true,
+        attributeFilter: [
+          'hidden',
+          'aria-hidden',
+          'disabled',
+          'aria-disabled',
+          'aria-label',
+          'aria-labelledby',
+          'aria-checked',
+          'aria-selected',
+          'role',
+          'type',
+          'href',
+          'contenteditable',
+          'inert',
+          'class',
+          'style',
+        ],
       });
     }
   }

@@ -1,4 +1,4 @@
-import type { ActionId, ElementId, PageEpoch, TaskId, TokenId } from './identifiers.js';
+import type { ActionId, ElementId, FrameId, PageEpoch, TaskId, TokenId } from './identifiers.js';
 import type { BoundingBox, InputType } from './raw-scene.js';
 import type { PrivacyClass } from './privacy.js';
 import type { PerceptionSource } from './perception.js';
@@ -12,6 +12,11 @@ export interface SafeElement {
   isSelected?: boolean;
   bbox: BoundingBox;
   perceptionSource?: PerceptionSource;
+  /**
+   * Opaque local frame token (`f1`, `f2`). Omitted for the top document.
+   * PRIVACY: Never a URL, hostname, or query string.
+   */
+  frameId?: FrameId;
 }
 
 export interface TokenCapability {

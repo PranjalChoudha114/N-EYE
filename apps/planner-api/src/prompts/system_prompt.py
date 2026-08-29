@@ -73,8 +73,9 @@ def build_planner_prompt(context: SafeContext) -> str:
         status = "enabled" if el.isEnabled else "disabled"
         selected = f", selected={el.isSelected}" if el.isSelected is not None else ""
         role_str = f"role={el.role}" if el.role else f"type={el.inputType or 'generic'}"
+        frame = f" | frame={el.frameId}" if getattr(el, "frameId", None) else ""
         elements_formatted.append(
-            f"- ID: {el.id} | {role_str} | label=\"{el.safeLabel}\" | status={status}{selected} | source={getattr(el, 'perceptionSource', None) or 'DOM'} | bbox=[{el.bbox.x},{el.bbox.y},{el.bbox.width},{el.bbox.height}]"
+            f"- ID: {el.id} | {role_str} | label=\"{el.safeLabel}\" | status={status}{selected}{frame} | source={getattr(el, 'perceptionSource', None) or 'DOM'} | bbox=[{el.bbox.x},{el.bbox.y},{el.bbox.width},{el.bbox.height}]"
         )
     elements_block = "\n".join(elements_formatted) if elements_formatted else "(No interactive elements visible)"
 

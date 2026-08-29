@@ -60,6 +60,21 @@ def test_valid_action_proposal():
     assert proposal.riskLevel == "MEDIUM"
 
 
+def test_reject_raw_frame_url_as_frame_id(sample_safe_context: SafeContext):
+    """Opaque frameId must never be a URL or query string."""
+    data = sample_safe_context.model_dump()
+    data["safeElements"][1]["frameId"] = "https://evil.example/app?session=1"
+    with pytest.raises(ValidationError):
+        SafeContext.model_validate(data)
+
+
+def test_accepts_opaque_frame_id(sample_safe_context: SafeContext):
+    data = sample_safe_context.model_dump()
+    data["safeElements"][1]["frameId"] = "f1"
+    reconstructed = SafeContext.model_validate(data)
+    assert reconstructed.safeElements[1].frameId == "f1"
+
+
 def test_reject_invalid_action_type():
     """Ensure unknown or arbitrary action type is rejected."""
     with pytest.raises(ValidationError):

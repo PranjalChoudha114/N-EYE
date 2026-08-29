@@ -16,7 +16,7 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-009 | Split Side Panel orchestration | **Proposed** | Extension UI | Extract trust-loop orchestration from `sidepanel.ts` into a dedicated coordinator. Not a product feature. |
 | REC-010 | TYPE_TOKEN verifier value check | **Proposed** | Verification | After TYPE_TOKEN, re-read the live control (without sending the value over the network) instead of treating event dispatch as success. |
 | REC-011 | Implement SELECT / SCROLL executor | **Proposed** | Execution | Protocol types exist; executor has no branch. Implement only when a gate needs them. |
-| REC-012 | PageEpoch characterData | **Proposed** | Observation | Current observer omits `characterData`. Text-only mutations may not bump epoch. Decide with ADR if verification depends on it. |
+| REC-012 | PageEpoch characterData | **Adopted** (ADR-0009) | Observation | Classified `characterData` on interactive/label nodes advances epoch; non-interactive clocks do not. |
 | REC-013 | Remove unused `clientCapabilities` Any hole | **Proposed** | Planner API | `PlanRequest.clientCapabilities: Dict[str, Any]` is unused. Prefer deletion or a strict schema before any client sends it. |
 | REC-014 | ADR-0006 wording | **Proposed** | Docs | Replace “cryptographic guarantees” language with byte-level canary / regex scanning. Canary tests are not a crypto proof. |
 | REC-015 | Automatic Chrome extension reload | **Rejected for prototype** | DX | MV3 unpacked extensions do not HMR. A custom Chrome-automation reloader is extra moving parts. Documented Reload click is the supported loop. |

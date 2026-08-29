@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createElementId,
+  createFrameId,
   createPageEpoch,
   type OcrTextBlock,
   type RawElement,
@@ -146,5 +147,8 @@ describe('Visual grounding and DOM/OCR fusion', () => {
   it('treats epoch mismatch as stale visual evidence', () => {
     expect(isVisualEvidenceStale(createPageEpoch(1), createPageEpoch(2))).toBe(true);
     expect(isVisualEvidenceStale(createPageEpoch(4), createPageEpoch(4))).toBe(false);
+    expect(isVisualEvidenceStale(createPageEpoch(1), createPageEpoch(1), createFrameId('f1'), createFrameId('f2'))).toBe(
+      true
+    );
   });
 });

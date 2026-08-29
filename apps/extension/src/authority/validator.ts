@@ -90,6 +90,12 @@ export function validateActionProposal(
     throw new ActionValidationError(`Target element ${proposal.targetId} is disabled.`);
   }
 
+  if (target.frameProvenance?.frameKind === 'inaccessible') {
+    throw new ActionValidationError(
+      `Target element ${proposal.targetId} belongs to an inaccessible frame. Execution blocked.`
+    );
+  }
+
   // SECURITY: untrusted TYPE_TEXT must never write into password fields.
   if ((proposal.type === 'TYPE_TOKEN' || proposal.type === 'TYPE_TEXT') && target.inputType === 'password') {
     throw new ActionValidationError(
@@ -117,6 +123,9 @@ export function validateActionProposal(
     targetElementId: proposal.targetId,
     resolvedTokenValue,
     expectedFingerprint: target.fingerprint,
+    expectedFrameId: target.frameProvenance?.frameId,
+    observedEpoch: scene.pageEpoch,
+    observedUrl: scene.url,
     approvedRiskLevel,
     timestamp: Date.now(),
   };

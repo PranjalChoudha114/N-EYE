@@ -27,8 +27,8 @@ Security authority is structured into 6 distinct zones:
 
 ### Zone 1 — Content Script (Page-Adjacent, Limited)
 - Runs in Chrome's isolated world.
-- Has direct DOM access to observe visible interactable controls and click/type upon instruction.
-- **Rule**: Must NEVER store API keys, persistent vault records, or planner transport logic.
+- Has direct DOM access to observe visible interactable controls in the top document and same-origin frames, and click/type upon instruction.
+- **Rule**: Must NEVER store API keys, persistent vault records, or planner transport logic. Must NEVER tunnel into cross-origin iframe documents or expand host permissions to make a test pass.
 
 ### Zone 2 — Privileged Extension Core (Trusted Coordinator)
 - Service Worker & Side Panel.

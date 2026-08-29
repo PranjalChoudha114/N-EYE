@@ -1,4 +1,4 @@
-# N-Eye Operational Runbook (Gate T009/T010)
+# N-Eye Operational Runbook (Gate T011/T012)
 
 ## 1. Quick Start
 
@@ -92,7 +92,7 @@ T009/T010 notes:
 ```bash
 python3 -m http.server 5173 --directory apps/test-portal
 ```
-Navigate to `http://localhost:5173/scenario-06-trust-loop.html` (DOM), `scenario-07-visual.html` (pixel/OCR), `scenario-08-visual-only.html` (canvas/icon/document), or `scenario-09-held-out.html` (held-out layout).
+Navigate to `http://localhost:5173/scenario-06-trust-loop.html` (DOM), `scenario-03-dynamic.html` (SPA-1..9), `scenario-10-frames.html` (iframes), `scenario-07-visual.html` (pixel/OCR), `scenario-08-visual-only.html` (canvas/icon/document), or `scenario-09-held-out.html` (held-out layout). T011/T012 manual Chrome steps: `docs/evidence/T011-T012-MANUAL-CHECKLIST.md`.
 
 ## 3. Automated Test Execution
 

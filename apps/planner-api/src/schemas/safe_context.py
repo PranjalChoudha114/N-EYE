@@ -33,6 +33,12 @@ class SafeElement(BaseModel):
         default=None,
         description="Local perception provenance. Never includes pixels.",
     )
+    frameId: Optional[str] = Field(
+        default=None,
+        description="Opaque local frame token (e.g. f1). Never a URL or query string. Omitted for top document.",
+        max_length=16,
+        pattern=r"^f[0-9]+$",
+    )
     bbox: BoundingBox
 
 
@@ -104,7 +110,17 @@ class SafeContext(BaseModel):
         """Reject any attempt to leak raw DOM scenes, unredacted findings, or local flags."""
         if not isinstance(data, dict):
             return data
-        forbidden_keys = {"_isLocalOnly", "elements", "privacyFindings", "rawHtml", "xpath", "vault", "ocrBlocks"}
+        forbidden_keys = {
+            "_isLocalOnly",
+            "elements",
+            "privacyFindings",
+            "rawHtml",
+            "xpath",
+            "vault",
+            "ocrBlocks",
+            "inaccessibleFrames",
+            "frameProvenance",
+        }
         leaked = forbidden_keys.intersection(data.keys())
         if leaked:
             raise ValueError(f"RawScene leakage detected in SafeContext. Forbidden local keys present: {leaked}")

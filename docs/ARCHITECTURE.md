@@ -56,4 +56,5 @@ Observation is **structure-first**. Local OCR / ROI capture / adaptive visual pe
 5. All critical actions require post-execution verification against live page deltas.
 6. Remote AI reasoning engines receive intelligence context only; they receive NO direct browser execution authority.
 7. OCR-derived text uses the same privacy engine as DOM text (`source: 'ocr'`). Local OCR is not a bypass.
-8. Visual evidence is bound to `PageEpoch`. Stale evidence fail-closes rather than executing against a changed page.
+8. Visual evidence is bound to `PageEpoch` and frame identity. Stale evidence fail-closes rather than executing against a changed page or a different frame.
+9. Frame provenance is local authority metadata. Same-origin frames may be observed from the top document. Cross-origin frames fail closed. `all_frames` is not enabled.

@@ -1,7 +1,23 @@
-import type { ElementId, PageEpoch } from './identifiers.js';
+import { createFrameId, type ElementId, type FrameId, type PageEpoch } from './identifiers.js';
 import type { TargetFingerprint } from './fingerprint.js';
 import type { PrivacyFinding } from './privacy.js';
 import type { PerceptionSource, VisualRegion } from './perception.js';
+
+export type FrameKind = 'top' | 'same-origin' | 'inaccessible';
+
+/**
+ * Local authority metadata for the document that owns a target.
+ * PRIVACY: Never include raw iframe URLs or query strings. Opaque frameId only.
+ */
+export interface FrameProvenance {
+  frameId: FrameId;
+  frameKind: FrameKind;
+  depth: number;
+  /** True when this document's origin equals the top document origin. */
+  sameOriginAsTop: boolean;
+}
+
+export const TOP_FRAME_ID = createFrameId('top');
 
 export interface BoundingBox {
   x: number;
@@ -39,6 +55,8 @@ export interface RawElement {
   xpath?: string; // Local-only for DOM re-grounding
   /** DOM | OCR | FUSED. Omitted means DOM-only observation. */
   perceptionSource?: PerceptionSource;
+  /** Local frame authority. Required for execution; omitted only on legacy fixtures. */
+  frameProvenance?: FrameProvenance;
 }
 
 /**
@@ -58,4 +76,12 @@ export interface RawScene {
   observationDurationMs?: number;
   /** Visual surfaces that may justify OCR. Geometry only — never pixels. */
   visualRegions?: VisualRegion[];
+  /**
+   * Inaccessible frames discovered during observation.
+   * LOCAL ONLY. Never copied into SafeContext. No fabricated target semantics.
+   */
+  inaccessibleFrames?: Array<{
+    frameId: FrameId;
+    reason: 'cross-origin' | 'sandbox' | 'detached';
+  }>;
 }

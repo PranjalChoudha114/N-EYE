@@ -128,6 +128,10 @@ export function buildSafeContext(
       isEnabled: el.isEnabled,
       isSelected: el.isSelected ? true : undefined,
       perceptionSource: el.perceptionSource,
+      frameId:
+        el.frameProvenance && el.frameProvenance.frameId !== 'top'
+          ? el.frameProvenance.frameId
+          : undefined,
       bbox: {
         x: el.bbox.x,
         y: el.bbox.y,

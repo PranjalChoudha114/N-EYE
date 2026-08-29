@@ -1,4 +1,4 @@
-import type { ElementId, PageEpoch, TaskId } from './identifiers.js';
+import type { ElementId, FrameId, PageEpoch, TaskId } from './identifiers.js';
 import type { BoundingBox } from './raw-scene.js';
 
 /**
@@ -29,7 +29,8 @@ export type PerceptionFallback =
   | 'GROUNDING_AMBIGUOUS'
   | 'OVERSIZED_ROI'
   | 'PAGE_CHANGED'
-  | 'UNSUPPORTED_VISUAL';
+  | 'UNSUPPORTED_VISUAL'
+  | 'FRAME_INACCESSIBLE';
 
 export type VisualRegionKind = 'image' | 'canvas' | 'pdf' | 'icon_control' | 'unlabeled' | 'document';
 
@@ -42,6 +43,7 @@ export interface VisualRegion {
   reason: EscalationReason;
   associatedElementId?: ElementId;
   altText?: string | null;
+  frameId?: FrameId;
 }
 
 export interface RoiSpec {
@@ -66,6 +68,7 @@ export interface OcrTextBlock {
   roiId: string;
   pageEpoch: PageEpoch;
   blockId: string;
+  frameId?: FrameId;
 }
 
 export interface VisualCandidate {
@@ -76,6 +79,7 @@ export interface VisualCandidate {
   source: PerceptionSource;
   confidence: PerceptionConfidence;
   pageEpoch: PageEpoch;
+  frameId?: FrameId;
 }
 
 export interface VisualGrounding {
@@ -85,6 +89,7 @@ export interface VisualGrounding {
   source: PerceptionSource;
   confidence: PerceptionConfidence;
   pageEpoch: PageEpoch;
+  frameId?: FrameId;
 }
 
 export interface PerceptionTimings {

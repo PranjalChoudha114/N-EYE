@@ -21,6 +21,7 @@
 3. Every element identifier is a transient opaque identifier (e.g., `e17`), not a CSS selector or XPath.
 4. Input values of type `password` or sensitive classes are omitted from `SafeContext`.
 5. Private tokens (`[EMAIL_X]`) carry only class and role metadata, never original values.
+6. Optional `frameId` on `SafeElement` is an opaque token (`f1`). It is never a frame URL, hostname path, or query string. `inaccessibleFrames` never leaves the local RawScene.
 
 ## 4. Provenance
 Sensitive values may originate from DOM, ARIA, placeholder, task goal, OCR, visual labels, or document/image text. There is no OCR bypass. The same policy table applies.

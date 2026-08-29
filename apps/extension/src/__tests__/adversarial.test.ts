@@ -136,6 +136,6 @@ describe('Adversarial Semantics & Injection Resistance Suite', () => {
 
     const result = executeValidatedAction(action, registry);
     expect(result.success).toBe(false);
-    expect(result.error).toContain('detached from the active DOM');
+    expect(result.error).toMatch(/gone|detached|re-observation|stale/i);
   });
 });

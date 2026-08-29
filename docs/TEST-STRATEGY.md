@@ -17,7 +17,8 @@ Testing is a parallel engineering track, not an afterthought. Invariants receive
 - Verify that forbidden fields cannot be attached to `SafeContext`.
 
 ### 2.3 Browser Runtime & E2E Tests
-- Controlled test portal (`apps/test-portal`), including Scenarios 07–09 for visual-only pages.
+- Controlled test portal (`apps/test-portal`), including Scenarios 07–09 for visual-only pages, Scenario 03 for SPA-1..9, and Scenario 10 for frames.
+- SPA stale-action, mutation classification, TOCTOU, and frame-collision tests (`spa-dynamic.test.ts`, `frames-provenance.test.ts`).
 - SIH visual harness (`bench/visual/ground-truth` vs `bench/visual/reports`).
 - Content-script recovery state machine (inject bound = 1).
 - Extension loading remains MANUAL for unpacked Chrome.

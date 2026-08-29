@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   createTargetFingerprint,
   computeFingerprintDigest,
+  computeSemanticIdentity,
+  computeNeighborhoodHint,
 } from '../fingerprint.js';
 
 describe('TargetFingerprint & Digest Invariants', () => {
@@ -38,5 +40,20 @@ describe('TargetFingerprint & Digest Invariants', () => {
 
     expect(fp.digest).toBeDefined();
     expect(typeof fp.digest).toBe('string');
+  });
+
+  it('computes semantic identity without geometry so a 20px move remains the same target', () => {
+    const a = computeSemanticIdentity('button', 'button', null, 'Continue');
+    const b = computeSemanticIdentity('button', 'button', null, 'Continue');
+    const swapped = computeSemanticIdentity('button', 'button', null, 'Delete account');
+    expect(a).toBe(b);
+    expect(a).not.toBe(swapped);
+  });
+
+  it('hashes neighborhood without retaining raw sibling labels', () => {
+    const hint = computeNeighborhoodHint('form', ['Cancel', 'Continue']);
+    expect(hint).toMatch(/^nh_[0-9a-f]+$/);
+    expect(hint).not.toContain('Continue');
+    expect(computeNeighborhoodHint('form', ['Continue', 'Cancel'])).toBe(hint);
   });
 });

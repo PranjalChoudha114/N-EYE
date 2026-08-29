@@ -1,6 +1,7 @@
 import type {
   BoundingBox,
   ElementId,
+  FrameId,
   OcrTextBlock,
   PageEpoch,
   PerceptionConfidence,
@@ -135,6 +136,7 @@ export function groundAndFuse(args: {
         source,
         confidence: conf,
         pageEpoch,
+        frameId: el.frameProvenance?.frameId,
       });
       groundings.push({
         candidateId,
@@ -143,6 +145,7 @@ export function groundAndFuse(args: {
         source,
         confidence: conf,
         pageEpoch,
+        frameId: el.frameProvenance?.frameId,
       });
       continue;
     }
@@ -195,6 +198,13 @@ export function applyFusionLabels(elements: RawElement[], candidates: VisualCand
   });
 }
 
-export function isVisualEvidenceStale(evidenceEpoch: PageEpoch, currentEpoch: PageEpoch): boolean {
-  return evidenceEpoch !== currentEpoch;
+export function isVisualEvidenceStale(
+  evidenceEpoch: PageEpoch,
+  currentEpoch: PageEpoch,
+  evidenceFrameId?: FrameId,
+  currentFrameId?: FrameId
+): boolean {
+  if (evidenceEpoch !== currentEpoch) return true;
+  if (evidenceFrameId && currentFrameId && evidenceFrameId !== currentFrameId) return true;
+  return false;
 }

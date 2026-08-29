@@ -5,6 +5,7 @@ import {
   createPageEpoch,
   createActionId,
   createTokenId,
+  createFrameId,
   NEyeError,
   type SafeContext,
   type ActionProposal,
@@ -128,5 +129,12 @@ describe('Protocol Package & Identifier Type Safety', () => {
     expect(proposal.type).toBe('CLICK');
     expect(proposal.riskLevel).toBe('HIGH');
     expect(proposal.targetId).toBe('e1');
+  });
+
+  it('constructs opaque FrameIds that must never look like URLs', () => {
+    const frameId = createFrameId('f1');
+    expect(frameId).toBe('f1');
+    expect(frameId).not.toMatch(/https?:/i);
+    expect(frameId).not.toContain('?');
   });
 });

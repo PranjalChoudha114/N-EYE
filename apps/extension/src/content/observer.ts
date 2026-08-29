@@ -4,11 +4,16 @@ import {
   type PrivacyFinding,
   type InputType,
   type PageEpoch,
+  type BoundingBox,
   createTargetFingerprint,
+  computeNeighborhoodHint,
+  TOP_FRAME_ID,
 } from '@n-eye/protocol';
 import type { ElementRegistry } from './registry.js';
 import { detectElementPrivacy } from '../privacy/detectors.js';
 import { collectVisualRegions, collectClickableVisualSurfaces } from '../perception/visual-regions.js';
+import { INTERACTIVE_SELECTOR } from './selectors.js';
+import { discoverFrames, frameIdPrefix, provenanceOf, shiftBoxToTopViewport } from './frames.js';
 
 /**
  * PageObserver (Zone 1 - Content Script Execution)
@@ -20,7 +25,6 @@ const MAX_LABEL_LENGTH = 120;
 
 export function sanitizeText(text: string | null | undefined, maxLength = MAX_LABEL_LENGTH): string {
   if (!text) return '';
-  // Collapse whitespace, remove control chars, and truncate
   return text
     .replace(/[\r\n\t]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
@@ -32,18 +36,21 @@ export function isElementVisible(el: HTMLElement): boolean {
   if (!el.isConnected) return false;
   if (el.hasAttribute('hidden')) return false;
   if (el.getAttribute('aria-hidden') === 'true') return false;
+  if (el.hasAttribute('inert')) return false;
 
-  // Explicitly ignore hidden inputs
   if (el instanceof HTMLInputElement && el.type.toLowerCase() === 'hidden') {
     return false;
   }
 
-  const style = window.getComputedStyle(el);
+  const view = el.ownerDocument.defaultView || window;
+  const style = view.getComputedStyle(el);
   if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
     return false;
   }
+  if (style.pointerEvents === 'none') {
+    return false;
+  }
 
-  // Check offsetParent (returns null if element or any ancestor is display:none, except for body/fixed)
   if (el.tagName.toLowerCase() !== 'body' && style.position !== 'fixed' && el.offsetParent === null && style.display === 'none') {
     return false;
   }
@@ -52,7 +59,7 @@ export function isElementVisible(el: HTMLElement): boolean {
 }
 
 export function getSanitizedLabelCandidate(el: HTMLElement): string {
-  // 1. Associated <label for="..."> or enclosing <label>
+  const doc = el.ownerDocument;
   if (
     el instanceof HTMLInputElement ||
     el instanceof HTMLTextAreaElement ||
@@ -60,7 +67,7 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
   ) {
     if (el.id) {
       try {
-        const labelElem = document.querySelector(`label[for="${CSS.escape(el.id)}"]`);
+        const labelElem = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
         if (labelElem && labelElem.textContent?.trim()) {
           return sanitizeText(labelElem.textContent);
         }
@@ -74,25 +81,22 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
     }
   }
 
-  // 2. aria-label
   const ariaLabel = el.getAttribute('aria-label');
   if (ariaLabel && ariaLabel.trim()) {
     return sanitizeText(ariaLabel);
   }
 
-  // 3. aria-labelledby
   const labelledBy = el.getAttribute('aria-labelledby');
   if (labelledBy) {
     const ids = labelledBy.split(/\s+/);
     const textParts = ids
-      .map((id) => document.getElementById(id)?.textContent?.trim() || '')
+      .map((id) => doc.getElementById(id)?.textContent?.trim() || '')
       .filter(Boolean);
     if (textParts.length > 0) {
       return sanitizeText(textParts.join(' '));
     }
   }
 
-  // 4. Inner text for buttons, anchors, and interactive roles
   const role = el.getAttribute('role') || el.tagName.toLowerCase();
   if (
     el instanceof HTMLButtonElement ||
@@ -109,18 +113,15 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
     }
   }
 
-  // 5. Placeholder
   if ('placeholder' in el && typeof el.placeholder === 'string' && el.placeholder.trim()) {
     return sanitizeText(el.placeholder, 80);
   }
 
-  // 6. Title attribute
   const title = el.getAttribute('title');
   if (title && title.trim()) {
     return sanitizeText(title, 80);
   }
 
-  // 7. Name attribute
   const name = el.getAttribute('name');
   if (name && name.trim()) {
     return sanitizeText(name, 60);
@@ -161,13 +162,9 @@ export function mapInputType(typeStr: string): InputType {
   }
 }
 
-function collectCandidates(root: Document | ShadowRoot): HTMLElement[] {
-  const selector =
-    'button, input, select, textarea, a[href], [role="button"], [role="link"], [role="checkbox"], [role="tab"], [role="radio"], [role="menuitem"], [role="textbox"], [role="searchbox"], [role="combobox"], [role="switch"], [role="option"], [contenteditable="true"], [contenteditable=""]';
+export function collectCandidates(root: Document | ShadowRoot): HTMLElement[] {
+  const elements: HTMLElement[] = Array.from(root.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR));
 
-  const elements: HTMLElement[] = Array.from(root.querySelectorAll<HTMLElement>(selector));
-
-  // Recursively inspect open shadow roots
   const allNodes = root.querySelectorAll('*');
   for (const node of allNodes) {
     if (node.shadowRoot) {
@@ -178,12 +175,111 @@ function collectCandidates(root: Document | ShadowRoot): HTMLElement[] {
   return elements;
 }
 
+export function isControlEnabled(el: HTMLElement): boolean {
+  if ((el as HTMLButtonElement).disabled) return false;
+  if (el.getAttribute('aria-disabled') === 'true') return false;
+  if (el.closest('fieldset[disabled]')) return false;
+  return true;
+}
+
+export function computeElementNeighborhoodHint(el: HTMLElement): string {
+  const parent = el.parentElement;
+  const parentRole = parent?.getAttribute('role') || parent?.tagName.toLowerCase() || '';
+  const siblingLabels: string[] = [];
+  if (parent) {
+    for (const sibling of parent.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR)) {
+      if (sibling === el) continue;
+      const label = getSanitizedLabelCandidate(sibling);
+      if (label) siblingLabels.push(label);
+      if (siblingLabels.length >= 8) break;
+    }
+  }
+  return computeNeighborhoodHint(parentRole, siblingLabels);
+}
+
+function relativeBbox(
+  rect: BoundingBox,
+  viewWidth: number,
+  viewHeight: number
+): { xPercent: number; yPercent: number; widthPercent: number; heightPercent: number } {
+  return {
+    xPercent: Math.max(0, Math.min(100, (rect.x / viewWidth) * 100)),
+    yPercent: Math.max(0, Math.min(100, (rect.y / viewHeight) * 100)),
+    widthPercent: Math.max(0, Math.min(100, (rect.width / viewWidth) * 100)),
+    heightPercent: Math.max(0, Math.min(100, (rect.height / viewHeight) * 100)),
+  };
+}
+
+function inputTypeOf(el: HTMLElement): InputType | null {
+  if (el instanceof HTMLInputElement) return mapInputType(el.type);
+  if (el instanceof HTMLTextAreaElement) return 'textarea';
+  if (el instanceof HTMLSelectElement) return 'select';
+  if (el.getAttribute('role') === 'textbox') return 'text';
+  return null;
+}
+
+function materializeElement(
+  el: HTMLElement,
+  registry: ElementRegistry,
+  epoch: PageEpoch,
+  viewWidth: number,
+  viewHeight: number,
+  frameOffset: BoundingBox,
+  frameIdPrefixValue: string,
+  frameProvenance: RawElement['frameProvenance']
+): RawElement | null {
+  if (!isElementVisible(el)) return null;
+
+  const rect = el.getBoundingClientRect();
+  const bbox = shiftBoxToTopViewport(
+    { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+    frameOffset
+  );
+  const inputType = inputTypeOf(el);
+  const normalizedLabelCandidate = getSanitizedLabelCandidate(el);
+  const role = el.getAttribute('role') || el.tagName.toLowerCase();
+  const tagName = el.tagName.toLowerCase();
+  const relBbox = relativeBbox(bbox, viewWidth, viewHeight);
+  const fingerprint = createTargetFingerprint(
+    role,
+    tagName,
+    inputType,
+    normalizedLabelCandidate,
+    relBbox,
+    computeElementNeighborhoodHint(el)
+  );
+
+  const elemId = registry.register(el, epoch, fingerprint, {
+    idPrefix: frameIdPrefixValue,
+    frameId: frameProvenance?.frameId ?? TOP_FRAME_ID,
+  });
+
+  const isSelected =
+    (el as HTMLInputElement).checked ||
+    el.getAttribute('aria-selected') === 'true' ||
+    el.getAttribute('aria-checked') === 'true';
+
+  return {
+    id: elemId,
+    tagName,
+    role,
+    ariaLabel: el.getAttribute('aria-label') ? sanitizeText(el.getAttribute('aria-label')) : null,
+    innerTextCandidate: normalizedLabelCandidate || null,
+    inputType,
+    isEnabled: isControlEnabled(el),
+    isSelected: isSelected ? true : undefined,
+    bbox,
+    fingerprint,
+    frameProvenance,
+  };
+}
+
 /**
- * Observes the current DOM and constructs a sanitized local RawScene.
- * Populates the ElementRegistry with opaque IDs and TargetFingerprints.
+ * Observes the current DOM (top document + same-origin frames) and constructs a local RawScene.
+ * Cross-origin frames are recorded as inaccessible — never fabricated into clickable targets.
  *
  * PRIVACY INVARIANT:
- * No generic input values, passwords, OTPs, or cookies are collected.
+ * No generic input values, passwords, OTPs, cookies, or raw iframe URLs are collected.
  */
 export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawScene {
   const startTime = performance.now();
@@ -191,127 +287,65 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
 
   const rawElements: RawElement[] = [];
   const privacyFindings: PrivacyFinding[] = [];
-
-  const candidates = collectCandidates(document);
-
   const viewWidth = Math.max(window.innerWidth || 1, 1);
   const viewHeight = Math.max(window.innerHeight || 1, 1);
+  const frames = discoverFrames(document);
+  const inaccessibleFrames = frames
+    .filter((frame) => frame.frameKind === 'inaccessible')
+    .map((frame) => ({
+      frameId: frame.frameId,
+      reason: (frame.reason || 'cross-origin') as 'cross-origin' | 'sandbox' | 'detached',
+    }));
 
-  for (const el of candidates) {
-    if (!isElementVisible(el)) {
-      continue;
+  for (const frame of frames) {
+    if (!frame.document || frame.frameKind === 'inaccessible') continue;
+    const provenance = provenanceOf(frame);
+    const prefix = frameIdPrefix(frame.frameId);
+    for (const el of collectCandidates(frame.document)) {
+      const rawEl = materializeElement(
+        el,
+        registry,
+        epoch,
+        viewWidth,
+        viewHeight,
+        frame.offset,
+        prefix,
+        provenance
+      );
+      if (!rawEl) continue;
+      rawElements.push(rawEl);
+      privacyFindings.push(...detectElementPrivacy(rawEl));
     }
-
-    const rect = el.getBoundingClientRect();
-    const isInput = el instanceof HTMLInputElement;
-    const inputType = isInput
-      ? mapInputType(el.type)
-      : el instanceof HTMLTextAreaElement
-      ? 'textarea'
-      : el instanceof HTMLSelectElement
-      ? 'select'
-      : el.getAttribute('role') === 'textbox'
-      ? 'text'
-      : null;
-
-    const isEnabled = !(el as HTMLButtonElement).disabled;
-    const isSelected =
-      (el as HTMLInputElement).checked ||
-      el.getAttribute('aria-selected') === 'true' ||
-      el.getAttribute('aria-checked') === 'true';
-
-    const normalizedLabelCandidate = getSanitizedLabelCandidate(el);
-    const role = el.getAttribute('role') || el.tagName.toLowerCase();
-    const tagName = el.tagName.toLowerCase();
-
-    // Relative Bounding Box (0-100 percentage of viewport)
-    const relBbox = {
-      xPercent: Math.max(0, Math.min(100, (rect.x / viewWidth) * 100)),
-      yPercent: Math.max(0, Math.min(100, (rect.y / viewHeight) * 100)),
-      widthPercent: Math.max(0, Math.min(100, (rect.width / viewWidth) * 100)),
-      heightPercent: Math.max(0, Math.min(100, (rect.height / viewHeight) * 100)),
-    };
-
-    const fingerprint = createTargetFingerprint(
-      role,
-      tagName,
-      inputType,
-      normalizedLabelCandidate,
-      relBbox
-    );
-
-    // Register with opaque ID e.g. e1, e2...
-    const elemId = registry.register(el, epoch, fingerprint);
-
-    const rawEl: RawElement = {
-      id: elemId,
-      tagName,
-      role,
-      ariaLabel: el.getAttribute('aria-label') ? sanitizeText(el.getAttribute('aria-label')) : null,
-      innerTextCandidate: normalizedLabelCandidate || null,
-      inputType,
-      isEnabled,
-      isSelected: isSelected ? true : undefined,
-      bbox: {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      },
-      fingerprint,
-    };
-
-    rawElements.push(rawEl);
-
-    // Run deterministic privacy detection
-    const findings = detectElementPrivacy(rawEl);
-    privacyFindings.push(...findings);
   }
 
+  const topFrame = frames[0];
+  if (!topFrame) {
+    throw new Error('Frame discovery must always include the top document.');
+  }
+  const topProvenance = provenanceOf(topFrame);
   for (const surface of collectClickableVisualSurfaces()) {
-    const already = rawElements.some((el) => {
-      const live = registry.get(el.id)?.liveNode;
-      return live === surface;
-    });
+    const already = rawElements.some((el) => registry.get(el.id)?.liveNode === surface);
     if (already) continue;
-    if (!isElementVisible(surface)) continue;
-    const rect = surface.getBoundingClientRect();
-    const tagName = surface.tagName.toLowerCase();
-    const role = surface.getAttribute('role') || tagName;
-    const alt = sanitizeText(surface.getAttribute('alt') || surface.getAttribute('aria-label') || '');
-    const relBbox = {
-      xPercent: Math.max(0, Math.min(100, (rect.x / viewWidth) * 100)),
-      yPercent: Math.max(0, Math.min(100, (rect.y / viewHeight) * 100)),
-      widthPercent: Math.max(0, Math.min(100, (rect.width / viewWidth) * 100)),
-      heightPercent: Math.max(0, Math.min(100, (rect.height / viewHeight) * 100)),
-    };
-    const fingerprint = createTargetFingerprint(role, tagName, null, alt, relBbox);
-    const elemId = registry.register(surface, epoch, fingerprint);
-    rawElements.push({
-      id: elemId,
-      tagName,
-      role,
-      ariaLabel: surface.getAttribute('aria-label') ? sanitizeText(surface.getAttribute('aria-label')) : null,
-      innerTextCandidate: alt || null,
-      inputType: null,
-      isEnabled: true,
-      bbox: {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      },
-      fingerprint,
-      perceptionSource: 'DOM',
-    });
+    const rawEl = materializeElement(
+      surface,
+      registry,
+      epoch,
+      viewWidth,
+      viewHeight,
+      { x: 0, y: 0, width: 0, height: 0 },
+      'e',
+      topProvenance
+    );
+    if (!rawEl) continue;
+    rawEl.perceptionSource = 'DOM';
+    rawElements.push(rawEl);
   }
 
   const visualRegions = collectVisualRegions(epoch);
   for (const region of visualRegions) {
+    region.frameId = TOP_FRAME_ID;
     const associated = rawElements.find(
-      (el) =>
-        Math.abs(el.bbox.x - region.bbox.x) < 4 &&
-        Math.abs(el.bbox.y - region.bbox.y) < 4
+      (el) => Math.abs(el.bbox.x - region.bbox.x) < 4 && Math.abs(el.bbox.y - region.bbox.y) < 4
     );
     if (associated) {
       region.associatedElementId = associated.id;
@@ -320,7 +354,7 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
 
   const durationMs = performance.now() - startTime;
 
-  const rawScene: RawScene = {
+  return {
     _isLocalOnly: true,
     pageEpoch: epoch,
     url: window.location.href,
@@ -335,7 +369,6 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
     timestamp: Date.now(),
     observationDurationMs: Math.round(durationMs * 100) / 100,
     visualRegions,
+    inaccessibleFrames: inaccessibleFrames.length > 0 ? inaccessibleFrames : undefined,
   };
-
-  return rawScene;
 }

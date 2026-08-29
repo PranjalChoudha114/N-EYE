@@ -34,12 +34,12 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T009/T010 Real-Chrome content-script closure + visual-only hardening + SIH visual eval harness — implemented this revision |
+| **Current Phase** | T011/T012 Dynamic-world robustness: SPA stale-action defense + frame provenance — implemented this revision |
 | **Branch** | `main` |
-| **HEAD Commit** | T009/T010 commit on `main` (this revision). Parent T007/008 seal was `ac69e08`. |
-| **Latest Verified Gate** | Gate 009/010: IIFE content script, bounded recovery, truthful visualizer, visual eval harness, MODEL_ADMISSION=REJECTED |
-| **Next Eligible Gate** | Gate 011: Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack (reuse `bench/visual`; do not start until approved) |
-| **SIH Prototype Completion** | ~82% (planning estimate; visual path + eval harness exist; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
+| **HEAD Commit** | T011/T012 commit on `main` (this revision). Parent T009/T010 seal was `27bc77d`. |
+| **Latest Verified Gate** | Gate 011/012: mutation/PageEpoch policy, stale-action contract, local re-grounding, TOCTOU pre-dispatch check, same-origin iframe provenance |
+| **Next Eligible Gate** | Gate 013: Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack (reuse `bench/visual`; do not start until approved) |
+| **SIH Prototype Completion** | ~84% (planning estimate; SPA/frame authority exist; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
 | **Core Architecture Completion** | ~88% (planning estimate; perception layer implemented; SELECT/SCROLL executor still incomplete) |
 | **Company-Product Completion** | ~24% (planning estimate) |
 
@@ -73,13 +73,13 @@ Every N-Eye task step executes through an immutable lifecycle. Each stage has a 
 
 | Stage | Name | Trust Zone | Implementation | What Happens |
 |---|---|---|---|---|
-| 1 | **SEE LOCALLY** | Zone 1 (Content Script) | [`observer.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/observer.ts), [`registry.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/registry.ts), [`epoch.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/epoch.ts) | Traverse visible interactive DOM elements, compute `TargetFingerprint` hashes, assign opaque IDs (`e1`, `e2`), track `PageEpoch` via `MutationObserver`. Output: `RawScene` (local-only) including visual-region geometry (no pixels). |
+| 1 | **SEE LOCALLY** | Zone 1 (Content Script) | [`observer.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/observer.ts), [`registry.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/registry.ts), [`epoch.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/epoch.ts), [`frames.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/frames.ts) | Traverse visible interactive DOM in the top document and same-origin frames, compute `TargetFingerprint` hashes, assign opaque IDs (`e1`, `f1e1`), track `PageEpoch` via classified `MutationObserver`. Output: `RawScene` (local-only) including visual-region geometry (no pixels) and local `inaccessibleFrames`. |
 | 1b | **PERCEIVE LOCALLY** | Zone 3 (Side Panel) | [`apps/extension/src/perception/`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/perception) | Adaptive controller decides if DOM/ARIA is insufficient. If yes: bounded ROI capture, Tesseract.js WASM OCR, grounding/fusion. Raw pixels released before return. OCR text is still untrusted page data. |
 | 2 | **PROTECT LOCALLY** | Zone 3 (Local Processing) | [`detectors.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/detectors.ts), [`policy.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/policy.ts), [`vault.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/vault.ts), [`safe-context-builder.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/safe-context-builder.ts), [`egress-guard.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/egress-guard.ts) | Detect PII/secrets in elements and task goal. Tokenize into scoped capabilities (`[EMAIL_1]`) inside in-memory `PrivateTokenVault`. Build `SafeContext` via field-by-field allowlist. Run byte-level canary scan and enforce 256KB payload bound. |
 | 3 | **THINK REMOTELY** | Zone 4→5 (Network→Planner) | [`remote-planner.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/planner/remote-planner.ts), [`main.py`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/planner-api/src/main.py), [`gemini.py`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/planner-api/src/adapters/gemini.py) | HTTP POST `SafeContext` to FastAPI gateway. Gateway validates schema, builds structured prompt with delimited sections, invokes Gemini 2.5 Flash with `responseSchema`. Returns constrained `ActionProposal`. |
-| 4 | **VALIDATE LOCALLY** | Zone 3 (Local Authority) | [`validator.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/validator.ts), [`regrounding.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/regrounding.ts) | Verify target exists in current `RawScene`, is enabled, and token scope matches. Locally classify risk (`max(planner, local)`). `ActionProposal` has no epoch field; freshness is enforced by live re-grounding at execute time, not by comparing a planner epoch. Produce `ValidatedAction`. |
+| 4 | **VALIDATE LOCALLY** | Zone 3 (Local Authority) | [`validator.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/validator.ts), [`regrounding.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/regrounding.ts), [`stale-action.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/stale-action.ts) | Verify target exists in current `RawScene`, is enabled, frame is accessible, and token scope matches. Locally classify risk (`max(planner, local)`). `ActionProposal` has no epoch field; freshness is enforced by live re-grounding at execute time. Produce `ValidatedAction`. |
 | 5 | **ACT LOCALLY** | Zone 1 (Content Script) | [`executor.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/execution/executor.ts) | Side Panel confirmation runs **before** execute when `approvedRiskLevel === 'HIGH'`. Content script re-grounds live semantics, then dispatches native DOM events. Token values resolve in the Side Panel **before** the execute message (resolved value never returns to the planner). |
-| 6 | **VERIFY LOCALLY** | Zone 3 (Local Processing) | [`verifier.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/verification/verifier.ts) | Re-observe after action. Compare pre vs post: epoch, URL, target consumption. Implemented outcomes: `VERIFIED_SUCCESS`, `VERIFIED_FAILURE`. `AMBIGUOUS` is not currently returned. TYPE_TOKEN may succeed without epoch change. |
+| 6 | **VERIFY LOCALLY** | Zone 3 (Local Processing) | [`verifier.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/verification/verifier.ts) | Re-observe after action. Compare pre vs post: URL, target consumption, control-set change. Epoch-only deltas return `AMBIGUOUS`, not success. TYPE_TOKEN may succeed without epoch change. |
 
 ---
 
@@ -94,7 +94,7 @@ These rules are enforced by code, tested by automated suites, and must never be 
 5. **Provider credentials stay server-side**: `GEMINI_API_KEY` exists in `apps/planner-api/.env` (ignored by `.gitignore`). Zero API keys in extension client code.
 6. **Remote planner is untrusted advisory**: Proposals are suggestions. They cannot execute JavaScript, inject selectors, or bypass local validation.
 7. **Local validation is mandatory**: `validateActionProposal()` must produce a `ValidatedAction` before the executor accepts any action.
-8. **Re-grounding is mandatory**: `regroundTarget()` verifies the target is still `.isConnected` and that live control semantics (role/tag/inputType/label) still match. Bounding-box digest drift from scroll does not fail the action. Executor fail-closes on semantic mismatch.
+8. **Re-grounding is mandatory**: `regroundTarget()` verifies the node remains `.isConnected` **or** finds a unique semantic equivalent in the same frame. Live role/tag/inputType/label must match. Bounding-box digest drift from scroll does not fail the action. Duplicate candidates abstain. Semantic swap fail-closes. Executor re-checks immediately before native dispatch.
 9. **Token resolution is strictly local**: `vault.resolve()` dereferences `[EMAIL_1]` → `user@example.com` in volatile memory at the moment of execution.
 10. **High-risk actions require explicit human confirmation**: A modal dialog (`<dialog>`) blocks execution when local `approvedRiskLevel === 'HIGH'`. Planner-declared `riskLevel` cannot downgrade a locally HIGH click (submit/login/pay/delete).
 11. **Verification is empirical**: Success requires measurable evidence (epoch progression, URL change, target consumption). Not model claims.
@@ -137,7 +137,7 @@ N-Eye/
 │   ├── TEST-STRATEGY.md                  # Testing strategy & canary proof matrix
 │   ├── RUNBOOK.md                        # Developer operational guide
 │   ├── RECOMMENDATIONS.md               # Backlog of proposed improvements outside current scope
-│   └── decisions/                        # Architecture Decision Records (ADR-0001 through ADR-0007)
+│   └── decisions/                        # Architecture Decision Records (ADR-0001 through ADR-0009)
 │
 ├── packages/
 │   └── protocol/                         # Shared contracts. Zone 2/3. NO runtime behavior.
@@ -237,8 +237,9 @@ N-Eye/
 | **Content Script** | `content-script.ts` | Message bridge between service worker/sidepanel and observer/executor | Privacy decisions, planning, validation | `OBSERVE_REQUEST`, `EXECUTE_ACTION_REQUEST` messages | `RawScene`, `ExecutionResult` |
 | **Observer** | `observer.ts` | DOM traversal, visibility filtering, label extraction, `TargetFingerprint` computation | Privacy detection, network egress | Live `document`, `ElementRegistry`, `PageEpoch` | `RawScene` with `RawElement[]` and `PrivacyFinding[]` |
 | **Registry** | `registry.ts` | Opaque ID allocation (`e1`, `e2`), live `HTMLElement` node storage, detached cleanup | Observation logic, action execution | Elements discovered by observer | `ElementId` ↔ live node lookup |
-| **PageEpoch** | `epoch.ts` | Debounced `MutationObserver`, epoch counter, DOM change detection | Observation, element tracking | childList plus attributeFilter `hidden`, `aria-hidden`, `disabled`, `class`, `style` (not characterData) | Monotonically incrementing `PageEpoch` number |
-| **TargetFingerprint** | `fingerprint.ts` | Deterministic djb2 hash over `{role, tagName, inputType, labelCandidate, relativeBbox}` | Element discovery | `RawElement` attributes | 32-bit fingerprint digest string |
+| **PageEpoch** | `epoch.ts` | Classified `MutationObserver`, epoch counter | Observation, element tracking | Semantic childList / characterData / interactability attributes (not cosmetic class/clock noise) | Monotonically incrementing `PageEpoch` number |
+| **TargetFingerprint** | `fingerprint.ts` | Deterministic djb2 hash over `{role, tag, type, label, bbox}` plus local neighborhood hint | Element discovery | `RawElement` attributes | 32-bit fingerprint digest string + optional `nh_` neighborhood |
+| **Frames** | `frames.ts` | Same-origin iframe walk, opaque `frameId`, inaccessible detection | Cross-origin tunneling, permission expansion | Top `document` + `iframe.contentDocument` | `FrameProvenance` local metadata |
 | **Privacy Detectors** | `detectors.ts` | Regex-based PII/secret scanning (emails, phones, API keys, passwords, OTPs, JWTs), goal privacy | Privacy policy decisions, tokenization | `RawElement` labels, `innerTextCandidate`, goal text | `PrivacyFinding[]` |
 | **Privacy Policy** | `policy.ts` | Privacy decision engine: `TOKENIZE`, `REDACT`, `MASK`, `NEVER_SEND` | Token storage, egress validation | `PrivacyFinding[]` | `PrivacyDecision[]` |
 | **Vault** | `vault.ts` | Ephemeral in-memory token bindings, scoped resolution, TTL expiry | Detection, policy decisions | Token registration calls with real values | Scoped `TokenCapability[]` (safe), `resolve()` (local) |
@@ -249,9 +250,9 @@ N-Eye/
 | **FastAPI Gateway** | `main.py` | Request routing (`/v1/health`, `/v1/plan`), payload size enforcement, CORS, error mapping | Browser observation, local validation | HTTP POST with `PlanRequest` body | HTTP response with `PlanResponse` body |
 | **Gemini Adapter** | `gemini.py` | Gemini REST API invocation with structured `responseSchema`, response parsing, error classification | Prompt construction, SafeContext building | `SafeContext`, system prompt text | Parsed `ActionProposal` + token counts |
 | **Validator** | `validator.ts` | Target existence, enabled state, token scope, local risk elevation, password TYPE block | Action execution, re-grounding | `ActionProposal`, `RawScene`, `PrivateTokenVault`, `TaskId`, `origin` | `ValidatedAction` (or throws `ActionValidationError`). Does **not** compare a planner epoch; `ActionProposal` has no epoch field. |
-| **Re-grounding** | `regrounding.ts` | Live DOM node `.isConnected` check, fingerprint digest comparison | Validation logic, execution | `ElementId`, `ElementRegistry`, optional `TargetFingerprint` | `RegroundResult { node, isFingerprintMatch }` |
-| **Executor** | `executor.ts` | Native DOM event dispatching (`focus`, `click`, `input`, `change`, `scrollIntoView`), `_isValidated` guard | Validation, token resolution | `ValidatedAction`, `ElementRegistry` | `ExecutionResult { success, error?, targetTag? }` |
-| **Verifier** | `verifier.ts` | Pre/post `RawScene` comparison: epoch delta, URL navigation, target consumption | Execution, re-observation | `ValidatedAction`, pre-scene, post-scene | `VerificationResult` with status and `observedDelta` |
+| **Re-grounding** | `regrounding.ts` | Live node or unique same-frame semantic candidate, TOCTOU re-check | Validation logic | `ElementId`, `ElementRegistry`, fingerprint, `frameId` | `RegroundResult { node, outcome }` |
+| **Executor** | `executor.ts` | Native DOM event dispatching after live authority check | Validation, token resolution | `ValidatedAction`, `ElementRegistry` | `ExecutionResult { success, error?, outcome? }` |
+| **Verifier** | `verifier.ts` | Pre/post `RawScene` comparison: URL, target consumption, control-set; epoch-only → AMBIGUOUS | Execution, re-observation | `ValidatedAction`, pre-scene, post-scene | `VerificationResult` with status and `observedDelta` |
 | **Side Panel** | `sidepanel.ts`, `index.html`, `sidepanel.css` | Trust loop visualization, task input, mode switching, privacy visualization, SafeContext evidence drawer, latency display, confirmation dialog, cancellation | Privacy detection, planning, validation (delegates to modules) | User goal input, mode selection, Chrome runtime messages | Visual pipeline state, network proof display |
 | **Test Portal** | `apps/test-portal/` | Synthetic controlled scenarios for testing observer, privacy, adversarial, and trust loop | Production page handling | Static HTML served via file:// or local HTTP | Test pages with known elements, PII, and injections |
 
@@ -368,8 +369,10 @@ N-Eye/
 - **Visibility Check**: Element must have non-zero `getBoundingClientRect()` area, non-null `offsetParent` (exceptions for `<body>`, `position: fixed`), and `visibility !== 'hidden'` / `display !== 'none'`.
 - **Label Precedence**: `aria-label` → `textContent` (cleaned, truncated to 120 chars) → `placeholder` → `title` → value (only for non-sensitive input types).
 - **Geometry**: `RawElement.bbox` is viewport pixels. Fingerprints hash relative percent geometry (`relBbox`).
-- **PageEpoch**: Debounced `MutationObserver` on `document.body` with `childList` + `attributeFilter: ['hidden', 'aria-hidden', 'disabled', 'class', 'style']`. Debounce window: 60ms. `characterData` is **not** observed (CONTEXT previously over-claimed this).
-- **TargetFingerprint**: djb2 hash over `role|tagName|inputType|normalizedLabel|relBbox`. Enables deterministic identity matching across observation cycles.
+- **PageEpoch**: Debounced `MutationObserver` on `document.body` with classified mutations (ADR-0009). Semantic: childList touching actionable tree, characterData in interactive/label nodes, interactability attributes including `aria-label`/`role`/`disabled`/`hidden` and hiding `style`/`class`. Ignored: hidden-subtree churn, non-interactive clocks, cosmetic class/color. Debounce window: 60ms.
+- **TargetFingerprint**: djb2 hash over `role|tagName|inputType|normalizedLabel|relBbox`. Re-grounding uses semantic identity (no bbox). Optional local `neighborhoodHint` (`nh_…`) is hashed sibling context — never sent as raw labels.
+- **Frames**: Top-frame content script only (`all_frames` false). Same-origin iframes observed via `contentDocument`. IDs `eN` (top) and `fKeN` (frames). Cross-origin frames listed on `RawScene.inaccessibleFrames` (local-only).
+- **Limitations**: Shadow DOM traversal is attempted but limited to open shadow roots. Cross-origin `<iframe>` content is not observed. Canvas/image text is observed only after adaptive OCR escalation (T007/008).
 - **Visual regions**: Observer records canvas/img/PDF-like/unlabeled geometry in `RawScene.visualRegions` (no pixels). Adaptive perception may later OCR those regions.
 - **RawElement bbox**: Viewport pixels (not 0–1). Fingerprints still hash relative percent geometry.
 - **Limitations**: Shadow DOM traversal is attempted but limited to open shadow roots. Closed shadow roots and cross-origin `<iframe>` content are not observed. Canvas/image text is observed only after adaptive OCR escalation (T007/008).
@@ -413,7 +416,9 @@ OCR-derived text uses `detectOcrTextPrivacy()` with `source: 'ocr'`. Same taxono
 
 **Purpose**: The sole data structure permitted to cross the network boundary (Zone 4). Contains only information the remote planner needs for abstract reasoning.
 
-**Allowed fields**: `protocolVersion`, `taskId`, `pageEpoch`, `sanitizedGoal`, `pageMetadata { origin, sanitizedTitle, viewport }`, `safeElements[] { id, role, safeLabel, inputType, isEnabled, isSelected, bbox, perceptionSource? }`, `availableTokens[] { tokenId, tokenSymbol, privacyClass, descriptionRole }`, `visualHints?[] { hintId, bbox, description }` (sanitized text + geometry only; never image bytes), `priorOutcome?`.
+**Allowed fields**: `protocolVersion`, `taskId`, `pageEpoch`, `sanitizedGoal`, `pageMetadata { origin, sanitizedTitle, viewport }`, `safeElements[] { id, role, safeLabel, inputType, isEnabled, isSelected, bbox, perceptionSource?, frameId? }`, `availableTokens[] { tokenId, tokenSymbol, privacyClass, descriptionRole }`, `visualHints?[] { hintId, bbox, description }` (sanitized text + geometry only; never image bytes), `priorOutcome?`.
+
+`frameId` is an opaque token (`f1`). It is omitted for the top document. It is never a URL or query string.
 
 **Cannot contain**: Raw DOM nodes, `_isLocalOnly` branded objects, real email addresses, real phone numbers, passwords, OTP values, API keys, session tokens, JWT values, `innerHTML`, `innerText` with PII, CSS selectors, XPath expressions, or `document` references.
 
@@ -688,15 +693,23 @@ Recorded from Cursor Genesis verification (2026-08-29, this-run). All figures ar
 
 ## 31. Current Fresh Test Results
 
-Run at T009/T010 (2026-08-29), this revision:
+Run at T011/T012 (2026-08-29), this revision:
 
 ```
-@n-eye/protocol:  12 passed (3 files)
-@n-eye/extension: 103 passed (27 files)
-apps/planner-api: 16 passed, 1 skipped (live Gemini 429 rate limit; prompt canary assertions ran before skip)
+@n-eye/protocol:  15 passed (3 files)
+@n-eye/extension: 129 passed (33 files)
+apps/planner-api: 18 passed, 1 skipped (live Gemini 429 rate limit; prompt canary assertions ran before skip)
 ─────────────────────────────────────
-TOTAL:            131 passed, 0 failed, 1 skipped (environment quota)
+TOTAL:            162 passed, 0 failed, 1 skipped (environment quota)
 ```
+
+T009/T010 baseline of 131 tests did not regress. Live Gemini E2E is UNVERIFIED on this run because the provider returned 429; mock planner path remains TESTED.
+
+- **Lint**: 0 errors, 1 warning (console statement in `real-gemini-integration.test.ts`)
+- **Typecheck**: 0 errors across all packages
+- **Build**: `content.js` is a self-contained IIFE (no `import` of `./assets`). Identity `DEV • <sha>` after commit rebuild.
+- **Chrome unpacked Side Panel E2E**: UNVERIFIED — MANUAL VERIFICATION REQUIRED (`docs/evidence/T011-T012-MANUAL-CHECKLIST.md`)
+- **Test environment**: happy-dom (not jsdom) plus node for Tesseract fixtures
 
 T007/008 baseline of 111 tests did not regress. Live Gemini E2E is UNVERIFIED on this run because the provider returned 429; mock planner path remains TESTED.
 
@@ -716,7 +729,8 @@ Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness, n=7 after warmup):
 |---|---|---|
 | Catalog | `index.html` | Landing page linking to all scenarios |
 | 02: Visibility | `scenario-02-visibility.html` | Tests observer's ability to filter hidden, offscreen, zero-size, and `display:none` elements |
-| 03: Dynamic DOM | `scenario-03-dynamic.html` | Tests PageEpoch tracking across dynamic element insertion, attribute changes, and removal |
+| 03: Dynamic SPA | `scenario-03-dynamic.html` | SPA-1..9 mutation cases: move, replace, semantic swap, duplicate, disable, hide, route, text, noise |
+| 10: Frames | `scenario-10-frames.html` + `frames/` | Same-origin iframe, duplicate labels, inaccessible cross-origin, stale frame removal |
 | 04: Adversarial | `scenario-04-adversarial.html` | Tests resistance to prompt injection text embedded in page labels and hidden elements |
 | 05: Privacy | `scenario-05-privacy.html` | Comprehensive PII/secret forms with canary values for egress testing |
 | 06: Trust Loop | `scenario-06-trust-loop.html` | Interactive full closed-loop benchmark: email input → password field → submit button |
@@ -927,6 +941,7 @@ pnpm test
 | ADR-0006 | Remote Planner Reasoning Boundary & Server Secret Isolation | **ACCEPTED** | FastAPI gateway with server-side credential isolation, Gemini structured outputs, extension contains zero API keys |
 | ADR-0007 | Local Adaptive Visual Perception | **ACCEPTED** | Structure-first OCR via Tesseract.js WASM; ROI-bounded capture; no extra host permission; no remote crops; OCR privacy uses existing engine |
 | ADR-0008 | Content-script IIFE + visual-model non-admission | **ACCEPTED** | `content.js` is IIFE; bounded handshake recovery; MODEL_ADMISSION=REJECTED |
+| ADR-0009 | Dynamic-state authority + frame provenance | **ACCEPTED** | Semantic PageEpoch; stale-action contract; namespaced frame IDs; no `all_frames`; opaque `frameId` only |
 
 ---
 
@@ -951,19 +966,19 @@ pnpm test
 3. **Single-tab scope**: N-Eye observes and acts on the single active browser tab. Multi-tab orchestration is not implemented.
 4. **Deterministic detector limits**: Privacy detection uses regex patterns. Non-standard PII formats (e.g., government ID numbers) may not be detected. False positives are possible on strings resembling email addresses.
 5. **Shadow DOM limits**: Only open shadow roots are traversed. Closed shadow roots are inaccessible.
-6. **Iframe isolation**: Content inside cross-origin `<iframe>` elements is not observed due to Chrome content script isolation.
+6. **Iframe isolation**: Cross-origin `<iframe>` content is not observed. Same-origin frames are observed from the top content script without `all_frames`.
 7. **Service worker lifetime**: Chrome MV3 may terminate the service worker after extended inactivity during long-running tasks.
 8. **CORS in production**: Gateway currently uses `allow_origins=["*"]` which should be tightened for production deployment.
-9. **Sidepanel orchestration coupling**: `sidepanel.ts` (603 lines) combines UI presentation and trust loop orchestration. These could be separated for maintainability, but this is a code organization concern, not a correctness or security issue.
+9. **Sidepanel orchestration coupling**: `sidepanel.ts` combines UI presentation and trust loop orchestration. These could be separated for maintainability, but this is a code organization concern, not a correctness or security issue.
 10. **Verification optimism for TYPE_TOKEN**: The verifier returns `VERIFIED_SUCCESS` after token injection even without epoch change. Event dispatch is treated as success; input `.value` is not re-read.
-11. **`AMBIGUOUS` is unused**: Protocol type includes `AMBIGUOUS`; `verifier.ts` never returns it.
+11. **`AMBIGUOUS` is returned for epoch-only click deltas**: When PageEpoch moved without target-correlated evidence, verification does not claim success.
 12. **SELECT / SCROLL unimplemented in executor**: Protocol allows them; `executeValidatedAction` has no branch.
-13. **Chrome unpacked Side Panel E2E**: UNVERIFIED during Cursor Genesis (no real Chrome profile load). Live Gemini is verified via vitest `RemotePlanner` and pytest adapter, plus `/v1/health`.
+13. **Chrome unpacked Side Panel E2E**: UNVERIFIED for T011/T012 (see `docs/evidence/T011-T012-MANUAL-CHECKLIST.md`).
 14. **`_isValidated` is a TypeScript brand/boolean**, not a cryptographic capability. Production path still requires `validateActionProposal` before execute.
 15. **Gateway CORS**: `allow_origins=["*"]` with `allow_credentials=True` (Starlette permits this combination; still too open for any non-local deployment).
 16. **`config.allowed_origins` unused**: FastAPI CORS is hardcoded, not driven by config.
 17. **`PlanRequest.clientCapabilities`**: Pydantic `Dict[str, Any]` is an unused schema hole (not forwarded to Gemini as page content).
-18. **PageEpoch does not observe `characterData`**: Text-only mutations without attribute/childList may not bump epoch.
+18. **Cross-origin frame pixels**: N-Eye does not click approximate coordinates inside inaccessible iframes. Documented limitation, not a bypass.
 
 ---
 
@@ -993,7 +1008,7 @@ These are **planning estimates**, not scientific metrics:
 
 | Scope | Estimate | Basis |
 |---|---|---|
-| **SIH Prototype** | ~82% | Visual path + eval harness exist. Formal full-weight P/R/F1 and resource benches remain. Real Chrome UI is MANUAL. |
+| **SIH Prototype** | ~84% | SPA/frame authority exist. Formal full-weight P/R/F1 and resource benches remain. Real Chrome UI is MANUAL. |
 | **Core Architecture** | ~88% | Six trust zones + adaptive perception. SELECT/SCROLL executor incomplete. |
 | **Company Product** | ~24% | Prototype vertical slice. No multi-browser, enclaves, multi-tenant gateway, or compliance stack. |
 
@@ -1018,26 +1033,26 @@ COMPLETED (Gates 001-006):
   ✅ Human assurance: site-change, Privacy Receipt, truthful protection states
   ✅ Content-script IIFE + bounded recovery + SIH visual eval harness (T009/T010)
 
-NEXT (Gate 011 — Formal SIH privacy + resource evidence pack):
+NEXT (Gate 013 — Formal SIH privacy + resource evidence pack):
   ⏳ Broader privacy P/R/F1 (DOM+OCR) beyond the visual canary set
   ⏳ Formal client-resource / E2E latency benches (not only OCR-warm n=7)
-  ⏳ Human Chrome verification of T009/T010 recovery on a live https page
+  ⏳ Human Chrome verification of T011/T012 SPA + frame checklist
   ⏳ SELECT/SCROLL executor if a later task requires it (REC-011)
 ```
 
 ---
 
-## 48. NEXT GATE — T011
+## 48. NEXT GATE — T013
 
 **Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack**
 
 Do **not** implement until a human opens that gate.
 
-T009/T010 closed the content-script runtime defect in code, hardened visual grounding, and produced a reusable visual eval harness. Remaining SIH weight is measured privacy/resource/latency on a larger set. Do **not** add ONNX/WebGPU unless T011 evidence re-opens REC-017.
+T011/T012 closed SPA stale-action and frame-provenance contracts in code. Remaining SIH weight is measured privacy/resource/latency on a larger set, plus human Chrome of the T011/T012 checklist. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
 
 ---
 
-## 49. T011 Prerequisites (T009/T010 already implemented)
+## 49. T013 Prerequisites (T011/T012 already implemented)
 
 | Prerequisite | Status |
 |---|---|
@@ -1127,7 +1142,7 @@ Cursor Genesis (2026-08-29) completed the following against HEAD `1fe32f0` plus 
 - [x] Canonical Chrome path documented: `apps/extension/dist/` (watch ≠ hot reload)
 - [ ] Chrome unpacked Side Panel E2E on a live webpage (still required before claiming VERIFIED IN REAL RUNTIME for the extension UI)
 
-T011 remains **locked until a human approves that gate**. Do not start it from this document.
+T013 remains **locked until a human approves that gate**. Do not start it from this document.
 
 ---
 
@@ -1156,7 +1171,7 @@ Primary engineering environment transferred from Antigravity to Cursor after ind
 
 **True hot reload: NO.** Use `pnpm build:extension` or `pnpm dev:extension` (watch rebuilds dist only), then Reload.
 
-**Next gate:** T011 Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack. Do not implement until explicitly approved.
+**Next gate:** T013 Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack. Do not implement until explicitly approved.
 
 ---
 

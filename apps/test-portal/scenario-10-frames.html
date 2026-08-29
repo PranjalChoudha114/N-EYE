@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 10: Frame Provenance</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="badge">N-EYE LABORATORY SCENARIO 10</div>
+      <h1>Iframe / Frame Provenance</h1>
+      <p class="subtitle">Same-origin accessible frames, duplicate labels, stale frames, and inaccessible cross-origin fail-closed behavior. No permission widening.</p>
+    </header>
+
+    <main class="card">
+      <h2>Top document</h2>
+      <button id="top-continue" class="btn btn-primary" type="button">Continue</button>
+      <button id="top-save" class="btn btn-secondary" type="button">Save</button>
+
+      <h2 style="margin-top:24px;">Same-origin iframe</h2>
+      <iframe id="same-origin-frame" title="same-origin lab" src="./frames/same-origin-child.html" style="width:100%;height:90px;border:1px dashed #334155;background:#020617;"></iframe>
+
+      <h2 style="margin-top:24px;">Duplicate-label iframe</h2>
+      <iframe id="dup-frame" title="duplicate label lab" src="./frames/duplicate-child.html" style="width:100%;height:70px;border:1px dashed #334155;background:#020617;"></iframe>
+
+      <h2 style="margin-top:24px;">Inaccessible / cross-origin iframe</h2>
+      <p style="font-size:13px;color:var(--text-muted);">Must fail safely. N-Eye must not click approximate coordinates inside this frame.</p>
+      <iframe id="cross-origin-frame" title="inaccessible lab" src="https://example.com/" sandbox="allow-scripts" style="width:100%;height:80px;border:1px dashed #7f1d1d;background:#1c0b0b;"></iframe>
+
+      <div class="form-actions" style="margin-top:16px;">
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('same-origin-frame').remove(); document.getElementById('spa-log').textContent='Same-origin iframe removed';">Remove same-origin iframe</button>
+        <button type="button" class="btn btn-secondary" onclick="document.getElementById('same-origin-frame').src=document.getElementById('same-origin-frame').src;">Reload same-origin iframe</button>
+      </div>
+      <p id="spa-log" style="font-family:monospace;font-size:11px;color:#38bdf8;margin-top:12px;">Ready</p>
+    </main>
+
+    <footer class="footer">
+      <p><a href="./index.html" style="color: var(--primary);">Catalog</a> · <a href="./scenario-03-dynamic.html" style="color: var(--primary);">Scenario 03 Dynamic</a></p>
+    </footer>
+  </div>
+</body>
+</html>

@@ -3,57 +3,126 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>N-Eye Test Portal — Scenario 03: Dynamic Page & Stale Target</title>
+  <title>N-Eye Test Portal — Scenario 03: Dynamic SPA & Stale Target</title>
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
   <div class="container">
     <header class="header">
       <div class="badge">N-EYE LABORATORY SCENARIO 03</div>
-      <h1>Dynamic Rerender & Stale Target Suite</h1>
-      <p class="subtitle">Verifies that DOM mutations change PageEpoch and invalidate stale live nodes.</p>
+      <h1>Dynamic SPA Mutation Suite</h1>
+      <p class="subtitle">Deterministic cases for PageEpoch, stale authority, re-grounding, and mutation noise.</p>
     </header>
 
     <main class="card">
-      <h2>Interactive Dynamic Target Area</h2>
+      <h2>Live target</h2>
       <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
-        Clicking the button below replaces the dynamic target container with a newly instantiated DOM node, testing epoch progression.
+        Observe first, then apply a case. N-Eye must never click a swapped Delete control.
       </p>
 
-      <div id="target-container" style="padding: 16px; background: #0b1120; border-radius: 8px; margin-bottom: 16px; border: 1px dashed #334155;">
-        <button id="dynamic-target-btn" class="btn btn-primary">Initial Dynamic Target (v1)</button>
+      <div id="spa-slot" style="padding: 16px; background: #0b1120; border-radius: 8px; margin-bottom: 16px; border: 1px dashed #334155;">
+        <button id="spa-target" class="btn btn-primary" type="button">Continue</button>
       </div>
 
-      <div class="form-actions">
-        <button id="btn-trigger-rerender" class="btn btn-secondary" onclick="rerenderTarget()">
-          ⚡ Replace / Rerender Target (Trigger Mutation)
-        </button>
-      </div>
+      <p id="spa-clock" style="font-family: monospace; font-size: 11px; color: #64748b;">clock: 0</p>
+      <p id="spa-log" style="font-family: monospace; font-size: 11px; color: #38bdf8;">Ready</p>
 
-      <div id="mutation-log" style="margin-top: 16px; font-family: monospace; font-size: 11px; color: #38bdf8;">
-        Mutations triggered: 0
+      <div class="form-actions" style="flex-wrap: wrap; gap: 8px;">
+        <button type="button" class="btn btn-secondary" onclick="spaCase('move')">SPA-1 Safe move</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('replace')">SPA-2 Replace equivalent</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('swap')">SPA-3 Semantic swap</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('dup')">SPA-4 Duplicate</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('disable')">SPA-5 Disable</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('hide')">SPA-6 Hide</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('route')">SPA-7 Route</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('text')">SPA-8 Text</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('noise')">SPA-9 Noise</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('storm')">Storm</button>
+        <button type="button" class="btn btn-secondary" onclick="spaCase('reset')">Reset</button>
       </div>
     </main>
 
     <footer class="footer">
-      <p><a href="./index.html" style="color: var(--primary);">← Back to Scenario 01</a> &bull; <a href="./scenario-02-visibility.html" style="color: var(--primary);">Scenario 02</a></p>
+      <p><a href="./index.html" style="color: var(--primary);">Catalog</a> · <a href="./scenario-10-frames.html" style="color: var(--primary);">Scenario 10 Frames</a></p>
     </footer>
   </div>
 
   <script>
-    let mutationCount = 0;
-    function rerenderTarget() {
-      mutationCount++;
-      const container = document.getElementById('target-container');
-      const newBtn = document.createElement('button');
-      newBtn.id = 'dynamic-target-btn-v' + mutationCount;
-      newBtn.className = 'btn btn-primary';
-      newBtn.textContent = 'Replaced Target (v' + (mutationCount + 1) + ')';
-      newBtn.onclick = () => alert('Clicked target v' + (mutationCount + 1));
+    let clockTimer = null;
+    let clockValue = 0;
+    const slot = () => document.getElementById('spa-slot');
+    const log = (msg) => { document.getElementById('spa-log').textContent = msg; };
 
-      container.innerHTML = '';
-      container.appendChild(newBtn);
-      document.getElementById('mutation-log').textContent = 'Mutations triggered: ' + mutationCount + ' (Target DOM node replaced)';
+    function spaCase(name) {
+      if (clockTimer) { clearInterval(clockTimer); clockTimer = null; }
+      if (name === 'reset') {
+        history.replaceState({}, '', location.pathname);
+        slot().innerHTML = '<button id="spa-target" class="btn btn-primary" type="button">Continue</button>';
+        log('Reset to Continue');
+        return;
+      }
+      if (name === 'move') {
+        slot().style.marginTop = '48px';
+        log('SPA-1: same node translated');
+        return;
+      }
+      if (name === 'replace') {
+        slot().innerHTML = '<button id="spa-target" class="btn btn-primary" type="button">Continue</button>';
+        log('SPA-2: equivalent Continue inserted');
+        return;
+      }
+      if (name === 'swap') {
+        const btn = document.getElementById('spa-target');
+        if (btn) btn.textContent = 'Delete account';
+        log('SPA-3: Continue became Delete — must BLOCK');
+        return;
+      }
+      if (name === 'dup') {
+        slot().innerHTML = '<button class="btn btn-primary" type="button">Continue</button><button class="btn btn-secondary" type="button">Continue</button>';
+        log('SPA-4: two Continue buttons — must ABSTAIN');
+        return;
+      }
+      if (name === 'disable') {
+        const btn = document.getElementById('spa-target');
+        if (btn) btn.disabled = true;
+        log('SPA-5: target disabled');
+        return;
+      }
+      if (name === 'hide') {
+        const btn = document.getElementById('spa-target');
+        if (btn) btn.hidden = true;
+        log('SPA-6: target hidden');
+        return;
+      }
+      if (name === 'route') {
+        history.pushState({}, '', location.pathname + '?spa=route-b');
+        log('SPA-7: SPA query/route changed');
+        return;
+      }
+      if (name === 'text') {
+        const btn = document.getElementById('spa-target');
+        if (btn) btn.textContent = 'Review application';
+        log('SPA-8: characterData label change');
+        return;
+      }
+      if (name === 'noise') {
+        clockValue = 0;
+        clockTimer = setInterval(() => {
+          clockValue += 1;
+          document.getElementById('spa-clock').textContent = 'clock: ' + clockValue;
+        }, 200);
+        log('SPA-9: timestamp noise (must remain usable)');
+        return;
+      }
+      if (name === 'storm') {
+        for (let i = 0; i < 30; i++) {
+          const n = document.createElement('span');
+          n.textContent = String(i);
+          slot().appendChild(n);
+          n.remove();
+        }
+        log('Storm: 30 add/remove cycles coalesced');
+      }
     }
   </script>
 </body>
