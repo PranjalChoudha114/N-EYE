@@ -25,7 +25,7 @@ This repository was previously developed primarily through Antigravity (Google D
 6. `docs/UNDERSTANDING.md` (Product understanding)
 7. This file (`docs/CONTEXT.md`)
 
-Before changing architecture: inspect accepted ADRs first. Before starting Gate T007/008: perform the Cursor Handover Verification Checklist (§53). Do not rewrite working modules merely to match Cursor style preferences.
+Before changing architecture: inspect accepted ADRs first. Before starting Gate T011: perform the Cursor Handover Verification Checklist (§53) and confirm T009/T010 HEAD. Do not rewrite working modules merely to match Cursor style preferences.
 
 ---
 
@@ -34,12 +34,12 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T007/008 Local Visual Perception + Human Assurance — implemented this revision |
+| **Current Phase** | T009/T010 Real-Chrome content-script closure + visual-only hardening + SIH visual eval harness — implemented this revision |
 | **Branch** | `main` |
-| **HEAD Commit** | T007/008 commit on `main` (this revision). Parent Genesis seal was `b28bf4a`. |
-| **Latest Verified Gate** | Gate 007/008: Adaptive perception, ROI OCR, OCR privacy, visual grounding, Privacy Receipts |
-| **Next Eligible Gate** | Gate 009: Formal SIH evaluation harness + evidence pack (do not start until approved) |
-| **SIH Prototype Completion** | ~78% (planning estimate; visual path exists; formal P/R/F1 and resource benches remain) |
+| **HEAD Commit** | T009/T010 commit on `main` (this revision). Parent T007/008 seal was `ac69e08`. |
+| **Latest Verified Gate** | Gate 009/010: IIFE content script, bounded recovery, truthful visualizer, visual eval harness, MODEL_ADMISSION=REJECTED |
+| **Next Eligible Gate** | Gate 011: Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack (reuse `bench/visual`; do not start until approved) |
+| **SIH Prototype Completion** | ~82% (planning estimate; visual path + eval harness exist; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
 | **Core Architecture Completion** | ~88% (planning estimate; perception layer implemented; SELECT/SCROLL executor still incomplete) |
 | **Company-Product Completion** | ~24% (planning estimate) |
 
@@ -357,7 +357,7 @@ N-Eye/
 - **Side Panel**: Default path `src/sidepanel/index.html`. Opened via `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })`.
 - **Unsupported Pages**: `chrome://`, `chrome-extension://`, `devtools://`, `about:`, `data:`, `javascript:`, and Chrome Web Store URLs are detected and rejected with user-visible reason.
 - **SPA/Navigation**: `chrome.tabs.onUpdated` fires on URL changes and `status: 'complete'`, triggering re-observation. Within a single-page app, `MutationObserver` (via `PageEpochManager`) detects interactive DOM mutations.
-- **Recovery**: If content script is disconnected (e.g., after extension reload), sidepanel retries once via `chrome.scripting.executeScript()`.
+- **Recovery**: If the content script has no receiver (typical after extension Reload on an already-open tab), Side Panel PINGs, classifies the error, injects `content.js` at most once on supported URLs, waits for handshake (`CONTENT_SCRIPT_PROTOCOL`), then observes once. Failure stays **CONTENT SCRIPT DISCONNECTED** (or STALE / RESTRICTED). Never reports READY without a successful observe. `content.js` is a self-contained IIFE (ADR-0008).
 
 ---
 
@@ -601,7 +601,7 @@ The Side Panel ([`sidepanel.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps
 - **Site-change toast**: Hostname only (query parameters stripped; `file:` → “local file”)
 - **Privacy Receipt**: Human summary + technical evidence; no vault values or raw secrets
 - **Visual evidence stats**: OCR invoked?, ROI count, perception source (DOM/OCR/FUSED), raw screenshot outbound bytes (0)
-- **Privacy transformation view**: Shows local PII detections and their tokenized safe representations
+- **Privacy transformation view**: Empty until a real N-Eye protect/SafeContext step. Must not show demo `user@example.com` / `[EMAIL_1]` as current evidence.
 - **Latency timeline**: Per-stage timing including PERCEIVE when OCR ran
 - **Network Proof drawer** (collapsible): Request ID, planner mode, provider model, payload size, canary scan status, OCR reason, raw SafeContext JSON dump
 - **Step indicator**: "Step N of 8" with summary text
@@ -650,7 +650,7 @@ Recorded from Cursor Genesis verification (2026-08-29, this-run). All figures ar
 
 | Category | Test File(s) | Count | What It Proves |
 |---|---|---|---|
-| **Protocol contracts** | `protocol.test.ts`, `fingerprint.test.ts`, `perception.test.ts` | 11 | Branded ID creation, type exports, djb2 fingerprint, perception/receipt contracts |
+| **Protocol contracts** | `protocol.test.ts`, `fingerprint.test.ts`, `perception.test.ts` | 12 | Branded ID creation, type exports, djb2 fingerprint, perception/receipt contracts, content-script protocol |
 | **DOM observation** | `observer.test.ts` | 5 | Element discovery, visibility filtering, label extraction, privacy detection during observation |
 | **Element registry** | `registry.test.ts` | 5 | Opaque ID assignment, live node storage, detached cleanup, size tracking |
 | **PageEpoch** | `epoch.test.ts` | 4 | MutationObserver-driven epoch incrementing, debouncing |
@@ -667,11 +667,16 @@ Recorded from Cursor Genesis verification (2026-08-29, this-run). All figures ar
 | **Token value selection** | `token-values.test.ts` | 2 | No invented demo identity; TOKENIZE without textSpan is not vaulted |
 | **Local authority policy** | `authority-policy.test.ts` | 6 | Local HIGH elevation, TYPE_TEXT-into-password block, ASK_USER, BLOCKED, goal phone sanitization, fingerprint fail-closed |
 | **Build identity** | `build-identity.test.ts` | 2 | DEV label format; dirty `*`; no path/secret leakage |
-| **Adaptive perception** | `adaptive-perception.test.ts` | 9 | DOM-first skip, canvas/icon escalation, ROI fit/bounds, pixel lifecycle, stale epoch |
-| **Visual grounding** | `visual-grounding.test.ts` | 5 | Fusion, duplicate suppression, low-confidence, OCR-only candidate, stale helper |
+| **Adaptive perception** | `adaptive-perception.test.ts` | 10 | DOM-first skip, canvas/icon/document escalation, ROI fit/bounds, pixel lifecycle, stale epoch |
+| **Visual grounding** | `visual-grounding.test.ts` | 7 | Fusion, duplicate suppression, low-confidence, OCR-only, LOW-bind abstain, ambiguous nearby, stale helper |
 | **OCR privacy / canaries** | `ocr-privacy.test.ts` | 4 | OCR taxonomy, NEVER_SEND secrets, pixel-pipeline egress, prompt injection |
 | **Real OCR fixture** | `ocr-fixture.test.ts` | 1 | Tesseract.js reads `hello-neye.png` (cold/warm DEVELOPMENT MEASUREMENT) |
 | **Human assurance** | `assurance.test.ts` | 4 | Site-change hostname-only, notification dedupe, receipt secret exclusion, LOCAL vs PROTECTED |
+| **Content recovery** | `content-connection.test.ts` | 6 | Receiver classification, inject bound=1, unsupported URL, no fake READY |
+| **Coordinates** | `coordinates.test.ts` | 5 | CSS→bitmap DPR, canvas intrinsic, clip, no extra scroll, oversized fit |
+| **Privacy visualizer** | `privacy-visualizer.test.ts` | 2 | Empty ≠ demo placeholders; live only after protect evidence |
+| **SIH visual eval** | `sih-visual-eval.test.ts` | 1 | Ground-truth JSON vs predictions; writes `bench/visual/reports/` |
+| **Eval metrics** | `eval-metrics.test.ts` | 2 | CER/F1/p95 sample-count rule |
 | **Real Gemini integration** | `real-gemini-integration.test.ts` | 1 | End-to-end trust loop with live Gemini API (skips gracefully if gateway offline) |
 | **Backend: adapters** | `test_adapters.py` | 4 | Mock adapter deterministic output, provider name/model getters |
 | **Backend: API** | `test_api.py` | 4 | Health endpoint, plan endpoint success, payload limit, schema validation |
@@ -683,27 +688,25 @@ Recorded from Cursor Genesis verification (2026-08-29, this-run). All figures ar
 
 ## 31. Current Fresh Test Results
 
-Run at T007/008 (2026-08-29), this revision:
+Run at T009/T010 (2026-08-29), this revision:
 
 ```
-@n-eye/protocol:  11 passed (3 files)
-@n-eye/extension: 83 passed (22 files)
-apps/planner-api: 17 passed (5 files: 16 isolated mock + 1 live Gemini)
+@n-eye/protocol:  12 passed (3 files)
+@n-eye/extension: 103 passed (27 files)
+apps/planner-api: 16 passed, 1 skipped (live Gemini 429 rate limit; prompt canary assertions ran before skip)
 ─────────────────────────────────────
-TOTAL:            111 passed, 0 failed
+TOTAL:            131 passed, 0 failed, 1 skipped (environment quota)
 ```
 
-Genesis baseline of 86 tests did not regress.
-
-Planner HTTP unit tests are isolated from `PLANNER_PROVIDER=gemini` in developer `.env` via `conftest.py` (MockProviderAdapter). `test_gemini_real.py` still uses the real key. Extension `real-gemini-integration.test.ts` completed the closed trust loop with live Gemini this run.
-
-Real OCR DEVELOPMENT MEASUREMENT (this machine, `hello-neye.png`): engine `tesseract.js`, text `HELLO NEYE`, coldInit ~96ms, coldTotal ~132ms, warm ~14ms, ROI 900×140 (126000 px). Not a SIH benchmark.
+T007/008 baseline of 111 tests did not regress. Live Gemini E2E is UNVERIFIED on this run because the provider returned 429; mock planner path remains TESTED.
 
 - **Lint**: 0 errors, 1 warning (console statement in `real-gemini-integration.test.ts`)
 - **Typecheck**: 0 errors across all packages
-- **Build**: See post-commit extension rebuild
-- **Chrome unpacked Side Panel E2E**: UNVERIFIED — MANUAL VERIFICATION REQUIRED (Cursor cannot load unpacked MV3 in the user's Chrome profile)
-- **Test environment**: happy-dom (not jsdom)
+- **Build**: `content.js` is a self-contained IIFE (no `import` of `./assets`). Identity `DEV • <sha>` after commit rebuild.
+- **Chrome unpacked Side Panel E2E**: UNVERIFIED — MANUAL VERIFICATION REQUIRED (content-script ES-module root cause is TESTED; live Chrome profile not operated by this agent)
+- **Test environment**: happy-dom (not jsdom) plus node for Tesseract fixtures
+
+Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness, n=7 after warmup): see `bench/visual/reports/t009-t010-latest.json`. Cold/warm from `ocr-fixture.test.ts` remains a separate development measurement. Not a SIH benchmark.
 
 ---
 
@@ -718,6 +721,8 @@ Real OCR DEVELOPMENT MEASUREMENT (this machine, `hello-neye.png`): engine `tesse
 | 05: Privacy | `scenario-05-privacy.html` | Comprehensive PII/secret forms with canary values for egress testing |
 | 06: Trust Loop | `scenario-06-trust-loop.html` | Interactive full closed-loop benchmark: email input → password field → submit button |
 | 07: Visual Perception | `scenario-07-visual.html` | Pixel email, canvas, visual-only control, fusion, injection, stale page, private image text |
+| 08: Visual-only | `scenario-08-visual-only.html` | Canvas click target, unlabeled hit target, document-like region — no fixture data attributes |
+| 09: Held-out visual | `scenario-09-held-out.html` | Different layout/copy/private canvas text for generalization |
 
 ---
 
@@ -746,7 +751,7 @@ Real OCR DEVELOPMENT MEASUREMENT (this machine, `hello-neye.png`): engine `tesse
 | **Stale DOM** | PageEpoch tracking, re-grounding before execution | Race condition window between observation and execution (~120ms) |
 | **Token replay** | Task binding, origin binding, 10-minute TTL | Theoretical replay within same task/origin within TTL window |
 | **Network failure** | Timeout, abort, error UI | User sees "Gateway: Offline" but task halts |
-| **Extension lifecycle** | Programmatic re-injection fallback | Service worker termination during long tasks (MV3 limitation) |
+| **Content script ES-module failure** | IIFE bundle + handshake recovery (ADR-0008) | Real Chrome still MANUAL; restricted pages remain unobservable |
 | **Privacy detector limitations** | Deterministic regex patterns | Misses PII formats not in pattern list |
 
 ---
@@ -921,6 +926,7 @@ pnpm test
 | ADR-0005 | Local Action Authority & Verification | **ACCEPTED** | Untrusted proposals validated against live DOM, high-risk confirmation gate, empirical state-delta verification |
 | ADR-0006 | Remote Planner Reasoning Boundary & Server Secret Isolation | **ACCEPTED** | FastAPI gateway with server-side credential isolation, Gemini structured outputs, extension contains zero API keys |
 | ADR-0007 | Local Adaptive Visual Perception | **ACCEPTED** | Structure-first OCR via Tesseract.js WASM; ROI-bounded capture; no extra host permission; no remote crops; OCR privacy uses existing engine |
+| ADR-0008 | Content-script IIFE + visual-model non-admission | **ACCEPTED** | `content.js` is IIFE; bounded handshake recovery; MODEL_ADMISSION=REJECTED |
 
 ---
 
@@ -987,7 +993,7 @@ These are **planning estimates**, not scientific metrics:
 
 | Scope | Estimate | Basis |
 |---|---|---|
-| **SIH Prototype** | ~78% | Trust loop + local OCR path exist. Formal P/R/F1 and resource benches remain. |
+| **SIH Prototype** | ~82% | Visual path + eval harness exist. Formal full-weight P/R/F1 and resource benches remain. Real Chrome UI is MANUAL. |
 | **Core Architecture** | ~88% | Six trust zones + adaptive perception. SELECT/SCROLL executor incomplete. |
 | **Company Product** | ~24% | Prototype vertical slice. No multi-browser, enclaves, multi-tenant gateway, or compliance stack. |
 
@@ -1010,28 +1016,28 @@ COMPLETED (Gates 001-006):
   ✅ Controlled test portal (Scenarios 01-07)
   ✅ Adaptive perception + on-device Tesseract OCR + OCR privacy + visual grounding
   ✅ Human assurance: site-change, Privacy Receipt, truthful protection states
+  ✅ Content-script IIFE + bounded recovery + SIH visual eval harness (T009/T010)
 
-NEXT (Gate 009 — Formal SIH evaluation harness):
-  ⏳ Controlled scoring (P/R/F1 on visual+DOM tasks)
-  ⏳ Formal resource / latency benches (not development timings)
-  ⏳ Evidence packaging for SIH submission
-  ⏳ SPA route-change recovery
-  ⏳ Advanced adversarial hardening
+NEXT (Gate 011 — Formal SIH privacy + resource evidence pack):
+  ⏳ Broader privacy P/R/F1 (DOM+OCR) beyond the visual canary set
+  ⏳ Formal client-resource / E2E latency benches (not only OCR-warm n=7)
+  ⏳ Human Chrome verification of T009/T010 recovery on a live https page
+  ⏳ SELECT/SCROLL executor if a later task requires it (REC-011)
 ```
 
 ---
 
-## 48. NEXT GATE — T009
+## 48. NEXT GATE — T011
 
-**Formal SIH Evaluation Harness + Evidence Pack**
+**Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack**
 
 Do **not** implement until a human opens that gate.
 
-T007/008 delivered local visual perception without cloud screenshots. The remaining SIH gap is **measured evaluation**: repeatable task scoring, resource benches, and an evidence pack judges can inspect. SPA recovery and extra adversarial cases can share that harness.
+T009/T010 closed the content-script runtime defect in code, hardened visual grounding, and produced a reusable visual eval harness. Remaining SIH weight is measured privacy/resource/latency on a larger set. Do **not** add ONNX/WebGPU unless T011 evidence re-opens REC-017.
 
 ---
 
-## 49. T009 Prerequisites
+## 49. T011 Prerequisites (T009/T010 already implemented)
 
 | Prerequisite | Status |
 |---|---|
@@ -1115,13 +1121,13 @@ Cursor Genesis (2026-08-29) completed the following against HEAD `1fe32f0` plus 
 - [x] Inspected `apps/extension/manifest.json` for current permissions
 - [x] Inspected `apps/planner-api/.env.example` for environment template
 - [x] Traced the trust loop in source
-- [x] Read accepted ADRs (`docs/decisions/ADR-0001` through `ADR-0007`)
+- [x] Read accepted ADRs (`docs/decisions/ADR-0001` through `ADR-0008`)
 - [x] Verified real/mock planner separation (`planner-manager.ts` + UI health provider)
-- [x] Independently confirmed T007/008 as next gate after Genesis repairs — **opened by human and implemented this revision**
+- [x] Independently confirmed T007/008 then T009/T010 — **opened by human and implemented this revision**
 - [x] Canonical Chrome path documented: `apps/extension/dist/` (watch ≠ hot reload)
 - [ ] Chrome unpacked Side Panel E2E on a live webpage (still required before claiming VERIFIED IN REAL RUNTIME for the extension UI)
 
-T009 remains **locked until a human approves that gate**. Do not start it from this document.
+T011 remains **locked until a human approves that gate**. Do not start it from this document.
 
 ---
 
@@ -1150,7 +1156,7 @@ Primary engineering environment transferred from Antigravity to Cursor after ind
 
 **True hot reload: NO.** Use `pnpm build:extension` or `pnpm dev:extension` (watch rebuilds dist only), then Reload.
 
-**Next gate:** T009 Formal SIH evaluation harness + evidence pack. Do not implement until explicitly approved.
+**Next gate:** T011 Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack. Do not implement until explicitly approved.
 
 ---
 
@@ -1164,7 +1170,7 @@ Primary engineering environment transferred from Antigravity to Cursor after ind
 | Watch (rebuild dist only) | `pnpm dev:extension` (`vite build --watch`) |
 | True hot reload | **NO** |
 | Chrome Reload required | **YES** after every runtime change |
-| Target page refresh after content-script change | **YES** |
+| Target page refresh after content-script change | **Preferred.** T009/T010 tries one programmatic inject; refresh remains the reliable fallback. |
 | Side Panel reopen | **YES** after Reload (or after panel-only HTML/JS change + Reload) |
 | Identity | Manifest `version_name` `DEV • <sha>` |
 
@@ -1189,4 +1195,21 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 **Tracker blocking:** REC-016 only. Not implemented.
 
 **Known P2:** Tesseract UI-font accuracy unbenchmarked; `privacyMs` inside orchestrator is 0 (privacy timed in Side Panel PROTECT); Side Panel still orchestrates the trust loop (REC-009).
+
+---
+
+## 58. T009/T010 Runtime closure + visual eval (2026-08-29)
+
+**Status:** IMPLEMENTED + TESTED. Real Chrome Side Panel: UNVERIFIED (MANUAL VERIFICATION REQUIRED).
+
+**Root cause of CONTENT SCRIPT DISCONNECTED:** T007/008 `dist/content.js` was an ES module importing Vite chunks. Chrome content_scripts never ran, so `sendMessage` had no receiver. The 100ms inject retry re-injected the same broken file. Side Panel defaults (SEE=ACTIVE, static `user@example.com` visualizer, LOCAL_MONITORING copy) made the UI look healthier than observation actually was.
+
+**Repair:** IIFE `content.js` (ADR-0008); PING handshake; inject at most once; no READY without observe; empty privacy visualizer; CSS↔bitmap coordinate maps; grounding abstention on LOW/ambiguous; Scenarios 08/09; `bench/visual` harness.
+
+**MODEL_ADMISSION:** REJECTED. Evidence: `bench/visual/reports/t009-t010-latest.md`.
+
+**SELECT/SCROLL executor:** still NOT_IMPLEMENTED (REC-011). Not required for this visual bench.
+
+**Human login on a website is not an N-Eye planner event.** Idle browsing remains LOCAL_MONITORING. REC-016 still deferred.
+
 

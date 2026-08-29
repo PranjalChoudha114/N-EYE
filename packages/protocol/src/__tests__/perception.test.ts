@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   createPageEpoch,
   createElementId,
+  CONTENT_SCRIPT_PROTOCOL,
   type PerceptionResult,
   type PrivacyReceipt,
 } from '../index.js';
@@ -65,5 +66,9 @@ describe('Perception and assurance contracts', () => {
     expect(receipt.safeCropSent).toBe(false);
     expect('realValue' in receipt).toBe(false);
     expect(createElementId('e1')).toBe('e1');
+  });
+
+  it('exports a content-script handshake protocol version', () => {
+    expect(CONTENT_SCRIPT_PROTOCOL).toBe(1);
   });
 });

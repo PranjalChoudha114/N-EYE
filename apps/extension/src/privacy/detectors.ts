@@ -14,7 +14,8 @@ const API_KEY_PATTERNS = [
   /AIza[0-9A-Za-z-_]{35}/,
   /bearer\s+[a-zA-Z0-9_.-]{20,}/i,
   /CANARY_API_KEY_[a-zA-Z0-9_]+/i,
-  /OCR_API_T007_[A-Z0-9_]+/i,
+  /OCR_API_T00[79]_[A-Z0-9_]+/i,
+  /VISUAL_API_T010_[A-Z0-9_]+/i,
 ];
 const JWT_REGEX = /eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/;
 

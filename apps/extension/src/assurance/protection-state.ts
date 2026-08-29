@@ -66,6 +66,14 @@ export function unsupportedState(reason: string): ProtectionStateView {
   };
 }
 
+export function disconnectedObservationState(): ProtectionStateView {
+  return {
+    state: 'DEGRADED',
+    headline: 'Observation unavailable',
+    detail: 'Content script is disconnected. This page was not observed. No N-Eye AI request occurred.',
+  };
+}
+
 export function humanClassName(privacyClass: string): string {
   if (privacyClass.includes('EMAIL')) return 'Email';
   if (privacyClass.includes('PHONE')) return 'Phone';

@@ -120,6 +120,18 @@ body {
 .status-executing .status-dot { background: var(--accent-purple); animation: pulse 0.8s infinite; }
 .status-unsupported .status-dot { background: var(--accent-amber); }
 .status-failed .status-dot { background: var(--accent-rose); }
+.status-injecting .status-dot { background: var(--accent-amber); animation: pulse 1s infinite; }
+.status-cancelled .status-dot { background: var(--text-muted); }
+
+.visualizer-caption {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0 0 8px;
+}
+
+.visualizer-card[data-evidence="empty"] .transform-item {
+  opacity: 0.85;
+}
 
 /* Active Target Bar */
 .active-target-bar {

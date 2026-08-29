@@ -28,5 +28,9 @@ Sensitive values may originate from DOM, ARIA, placeholder, task goal, OCR, visu
 ## 5. Visual / OCR path
 Pixels → local OCR → raw OCR text (local) → privacy detection → policy → tokenize/remove → SafeContext.
 
-Raw screenshots and raw OCR are not outbound. `visualHints` carry sanitized descriptions and geometry only. Remote privacy-safe crop transmission is deferred (T007/008 outbound screenshot bytes = 0).
+Raw screenshots and raw OCR are not outbound. `visualHints` carry sanitized descriptions and geometry only. Remote privacy-safe crop transmission is deferred (outbound screenshot bytes = 0 on the normal path).
+
+A Privacy Receipt is generated only after an N-Eye protected planner event (egress pass). Idle browsing and website logins are not planner events. The Side Panel privacy visualizer is empty until a real protect/SafeContext step; static `user@example.com` rows are not live evidence.
+
+Synthetic visual canaries used in tests include `OCR_EMAIL_T007@example.com` and T010/held-out values such as `VISUAL_EMAIL_T010@example.com`. They must be absent from serialized SafeContext.
 

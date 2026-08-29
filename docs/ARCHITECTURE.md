@@ -5,6 +5,8 @@ N-Eye is a privacy-preserving visual perception trust layer for browser agents. 
 
 Observation is **structure-first**. Local OCR / ROI capture / adaptive visual perception exist in `apps/extension/src/perception/` and run only when the adaptive controller records a reason. Raw screenshots are not sent to Gemini.
 
+**Content script packaging (ADR-0008):** `content.js` must be a self-contained IIFE. The Side Panel and service worker may use ES modules. A Vite ES `import` graph in the content script does not execute in the page and produces CONTENT SCRIPT DISCONNECTED.
+
 ## 2. Core Execution Loop
 ```
 [ Webpage (DOM / Visual Pixels) ]

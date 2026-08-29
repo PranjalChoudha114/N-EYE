@@ -15,4 +15,4 @@ export {
   MAX_ROI_HEIGHT_PX,
   MIN_ROI_SIDE_PX,
 } from './roi.js';
-export type { OcrEngine } from './ocr-engine.js';
+export { mapCssBoxToBitmap, mapCssBoxToElementBuffer, clipBoxToBounds } from './coordinates.js';

@@ -90,6 +90,24 @@ describe('Adaptive perception controller', () => {
     expect((roi?.widthPx || 0) * (roi?.heightPx || 0)).toBeLessThanOrEqual(MAX_ROI_PIXELS);
   });
 
+  it('escalates for PDF/document preview regions', () => {
+    const decision = decidePerception(
+      scene({
+        visualRegions: [
+          {
+            regionId: 'doc_1',
+            kind: 'document',
+            reason: 'PDF_OR_DOCUMENT_PREVIEW',
+            pageEpoch: createPageEpoch(1),
+            bbox: { x: 20, y: 20, width: 240, height: 80 },
+          },
+        ],
+      })
+    );
+    expect(decision.escalate).toBe(true);
+    expect(decision.reasons).toContain('PDF_OR_DOCUMENT_PREVIEW');
+  });
+
   it('escalates for unlabeled icon-only controls', () => {
     const decision = decidePerception(
       scene({

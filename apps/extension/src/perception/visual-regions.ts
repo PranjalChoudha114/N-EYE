@@ -28,8 +28,8 @@ function isInsideInteractive(el: HTMLElement): boolean {
 
 /**
  * Visual region discovery (Zone 1).
- * OWNS: Geometry of canvas/image/PDF/unlabeled surfaces.
- * MUST NOT: Read pixel values here. Pixels are captured only after adaptive escalation.
+ * OWNS: Geometry of canvas/image/PDF/document surfaces.
+ * MUST NOT: Read pixels. MUST NOT key off fixture-only HTML attributes.
  */
 export function collectVisualRegions(epoch: PageEpoch): VisualRegion[] {
   const regions: VisualRegion[] = [];
@@ -73,8 +73,8 @@ export function collectVisualRegions(epoch: PageEpoch): VisualRegion[] {
     }
   });
 
-  document.querySelectorAll('[data-n-eye-visual], [data-visual-only]').forEach((node) => {
-    pushIfVisible(node, 'unlabeled', 'UNEXPLAINED_VISIBLE_REGION');
+  document.querySelectorAll('[role="document"]').forEach((node) => {
+    pushIfVisible(node, 'document', 'PDF_OR_DOCUMENT_PREVIEW');
   });
 
   return regions.slice(0, 8);

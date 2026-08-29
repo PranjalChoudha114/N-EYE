@@ -1,4 +1,5 @@
 import type { RoiSpec } from '@n-eye/protocol';
+import { mapCssBoxToElementBuffer } from './coordinates.js';
 import { PixelBuffer } from './pixel-buffer.js';
 
 export interface CapturedRoiWire {
@@ -11,6 +12,7 @@ export interface CapturedRoiWire {
 /**
  * Content-script ROI capture (Zone 1).
  * OWNS: Extracting the smallest pixel crop for an escalated ROI.
+ * COORDINATES: ROI boxes are CSS viewport pixels. Canvas/img buffers are intrinsic pixels.
  * LIFECYCLE: Returns PixelBuffer-ready rasters. Caller must release after OCR.
  * Prefer canvas.getImageData / img drawImage over captureVisibleTab when possible.
  */
@@ -29,15 +31,17 @@ function captureLocalRoi(roi: RoiSpec): CapturedRoiWire | null {
   const canvases = Array.from(document.querySelectorAll('canvas'));
   for (const canvas of canvases) {
     const rect = canvas.getBoundingClientRect();
-    if (!overlaps(rect, roi)) continue;
+    if (!overlapsCss(rect, roi)) continue;
     try {
       const ctx = canvas.getContext('2d');
       if (!ctx) continue;
-      const sx = Math.max(0, roi.bbox.x - rect.x);
-      const sy = Math.max(0, roi.bbox.y - rect.y);
-      const sw = Math.min(canvas.width, roi.widthPx);
-      const sh = Math.min(canvas.height, roi.heightPx);
-      const image = ctx.getImageData(Math.floor(sx), Math.floor(sy), Math.max(1, sw), Math.max(1, sh));
+      const mapped = mapCssBoxToElementBuffer(
+        roi.bbox,
+        { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+        { width: canvas.width, height: canvas.height }
+      );
+      if (!mapped) continue;
+      const image = ctx.getImageData(mapped.x, mapped.y, mapped.width, mapped.height);
       return {
         roiId: roi.roiId,
         width: image.width,
@@ -52,14 +56,33 @@ function captureLocalRoi(roi: RoiSpec): CapturedRoiWire | null {
   const images = Array.from(document.querySelectorAll('img'));
   for (const img of images) {
     const rect = img.getBoundingClientRect();
-    if (!overlaps(rect, roi)) continue;
+    if (!overlapsCss(rect, roi)) continue;
+    const naturalW = img.naturalWidth || 0;
+    const naturalH = img.naturalHeight || 0;
+    if (naturalW < 1 || naturalH < 1) continue;
     try {
+      const mapped = mapCssBoxToElementBuffer(
+        roi.bbox,
+        { x: rect.left, y: rect.top, width: rect.width, height: rect.height },
+        { width: naturalW, height: naturalH }
+      );
+      if (!mapped) continue;
       const scratch = document.createElement('canvas');
-      scratch.width = Math.max(1, roi.widthPx);
-      scratch.height = Math.max(1, roi.heightPx);
+      scratch.width = mapped.width;
+      scratch.height = mapped.height;
       const ctx = scratch.getContext('2d');
       if (!ctx) continue;
-      ctx.drawImage(img, 0, 0, scratch.width, scratch.height);
+      ctx.drawImage(
+        img,
+        mapped.x,
+        mapped.y,
+        mapped.width,
+        mapped.height,
+        0,
+        0,
+        mapped.width,
+        mapped.height
+      );
       const image = ctx.getImageData(0, 0, scratch.width, scratch.height);
       return {
         roiId: roi.roiId,
@@ -75,7 +98,7 @@ function captureLocalRoi(roi: RoiSpec): CapturedRoiWire | null {
   return null;
 }
 
-function overlaps(rect: DOMRect, roi: RoiSpec): boolean {
+function overlapsCss(rect: DOMRect, roi: RoiSpec): boolean {
   const x2 = roi.bbox.x + roi.bbox.width;
   const y2 = roi.bbox.y + roi.bbox.height;
   return !(rect.right < roi.bbox.x || rect.left > x2 || rect.bottom < roi.bbox.y || rect.top > y2);

@@ -12,7 +12,7 @@ and verifies results.
 
 ## Project Status
 
-**Gate:** T007/008 Local Visual Perception + Human Assurance. Structure-first DOM path plus on-device OCR when escalated. Chrome Side Panel E2E remains **MANUAL**.
+**Gate:** T009/T010 real-Chrome content-script closure + visual-only hardening + SIH visual eval harness. Chrome Side Panel click-through remains **MANUAL VERIFICATION REQUIRED**. Local visual model / ONNX / WebGPU: **REJECTED** (not currently justified).
 
 ## Architecture Overview
 

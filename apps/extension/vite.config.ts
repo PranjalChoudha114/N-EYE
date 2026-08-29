@@ -28,13 +28,11 @@ export default defineConfig({
     rollupOptions: {
       input: {
         background: resolve(__dirname, 'src/background/service-worker.ts'),
-        content: resolve(__dirname, 'src/content/content-script.ts'),
         sidepanel: resolve(__dirname, 'src/sidepanel/index.html'),
       },
       output: {
         entryFileNames: (chunkInfo) => {
           if (chunkInfo.name === 'background') return 'background.js';
-          if (chunkInfo.name === 'content') return 'content.js';
           return 'assets/[name]-[hash].js';
         },
         chunkFileNames: 'assets/[name]-[hash].js',
@@ -45,7 +43,39 @@ export default defineConfig({
   plugins: [
     {
       name: 'copy-manifest-with-build-identity',
-      closeBundle() {
+      async closeBundle() {
+        // Content scripts are classic scripts. ES `import` of Vite chunks never runs in the page.
+        // TRUST: bundle content.js as a self-contained IIFE so observation has a receiver.
+        const { build } = await import('vite');
+        await build({
+          configFile: false,
+          root: __dirname,
+          publicDir: false,
+          logLevel: 'warn',
+          build: {
+            emptyOutDir: false,
+            sourcemap: true,
+            lib: {
+              entry: resolve(__dirname, 'src/content/content-script.ts'),
+              name: 'NEyeContentScript',
+              formats: ['iife'],
+              fileName: () => 'content.js',
+            },
+            outDir: resolve(__dirname, 'dist'),
+            rollupOptions: {
+              output: {
+                inlineDynamicImports: true,
+              },
+            },
+          },
+        });
+        const contentJs = readFileSync(join('dist', 'content.js'), 'utf8');
+        if (/\bimport\s*\{/.test(contentJs) || /\bfrom\s*['"]\.\//.test(contentJs)) {
+          throw new Error(
+            'N-Eye content.js must be a self-contained IIFE. ES imports cannot run as MV3 content_scripts.'
+          );
+        }
+
         // Recompute on every watch rebuild so dist/manifest.json tracks current HEAD.
         const identity = readGitBuildIdentity();
         if (!existsSync('dist')) {

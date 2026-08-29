@@ -19,3 +19,6 @@ Gate T007/008 must observe visual-only page content (images, canvas, icon-only c
 ## Consequences
 - **Positive:** SIH visual-perception path exists locally; privacy/authority model unchanged; engine can be swapped without redesign.
 - **Negative:** Tesseract English LSTM + WASM adds ~7.7 MB to the unpacked extension. UI-font OCR accuracy is a development measurement, not a SIH benchmark. `file://` tab capture still requires Chrome “Allow access to file URLs”.
+
+## Clarification (T009/T010)
+A lightweight local visual model / ONNX / WebGPU path was evaluated against the required visual-only SIH cases. **MODEL_ADMISSION = REJECTED** for this prototype revision. See ADR-0008. Do not treat this clarification as a rewrite of the original Tesseract decision.

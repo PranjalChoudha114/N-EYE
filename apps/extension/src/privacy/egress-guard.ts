@@ -9,7 +9,8 @@ export class EgressViolationError extends Error {
 
 const FORBIDDEN_CANARY_PATTERNS = [
   /CANARY_[A-Z0-9_]+/i,
-  /OCR_(API|OTP|SESSION|PASSWORD|EMAIL|PHONE)_T007/i,
+  /OCR_(API|OTP|SESSION|PASSWORD|EMAIL|PHONE)_T00[79]/i,
+  /VISUAL_(API|OTP|SESSION|EMAIL|PHONE)_T010/i,
   /sk_live_[0-9a-zA-Z]{16,}/,
   /AKIA[0-9A-Z]{16}/,
   /eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/,

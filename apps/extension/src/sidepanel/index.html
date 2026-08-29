@@ -115,10 +115,10 @@
       <section class="card pipeline-card" aria-labelledby="heading-pipeline">
         <h2 id="heading-pipeline" class="card-title">Trust Loop Pipeline</h2>
         <div class="pipeline-track">
-          <div id="step-see" class="pipeline-step step-active" title="Local Page Observation">
+          <div id="step-see" class="pipeline-step step-idle" title="Local Page Observation">
             <span class="step-num">1</span>
             <span class="step-name">SEE</span>
-            <span class="step-status">ACTIVE</span>
+            <span class="step-status">IDLE</span>
           </div>
           <div id="step-perceive" class="pipeline-step step-idle" title="Local visual perception when DOM is insufficient">
             <span class="step-num">2</span>
@@ -154,19 +154,16 @@
       </section>
 
       <!-- SafeContext Transformation Visualizer -->
-      <section class="card visualizer-card" aria-labelledby="heading-visualizer">
+      <section class="card visualizer-card" aria-labelledby="heading-visualizer" id="visualizer-card" data-evidence="empty">
         <h2 id="heading-visualizer" class="card-title">Privacy Transformation Visualizer</h2>
+        <p id="visualizer-caption" class="visualizer-caption">No N-Eye privacy transformation has occurred for this task.</p>
         <div class="transform-grid">
           <div class="transform-column col-local">
             <div class="col-header">Local Page Data</div>
             <div id="transform-local-items" class="col-content">
               <div class="transform-item">
-                <span class="item-tag">EMAIL</span>
-                <span class="item-val">user@example.com</span>
-              </div>
-              <div class="transform-item">
-                <span class="item-tag">PASS</span>
-                <span class="item-val">••••••••••••</span>
+                <span class="item-tag">NONE</span>
+                <span class="item-val item-desc">No N-Eye privacy transformation has occurred for this task.</span>
               </div>
             </div>
           </div>
@@ -178,13 +175,9 @@
           <div class="transform-column col-safe">
             <div class="col-header">SafeContext Egress</div>
             <div id="transform-safe-items" class="col-content">
-              <div class="transform-item tokenized">
-                <span class="item-tag token-tag">[EMAIL_1]</span>
-                <span class="item-desc">Scoped Token</span>
-              </div>
-              <div class="transform-item blocked">
-                <span class="item-tag blocked-tag">PASSWORD</span>
-                <span class="item-desc">NEVER_SEND</span>
+              <div class="transform-item">
+                <span class="item-tag">NONE</span>
+                <span class="item-desc">No SafeContext was built for a planner request.</span>
               </div>
             </div>
           </div>
@@ -273,6 +266,10 @@
             <div class="stat-cell">
               <div class="stat-num" id="stat-epoch">1</div>
               <div class="stat-lbl">Page Epoch</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-cs-state">UNKNOWN</div>
+              <div class="stat-lbl">Content Script</div>
             </div>
             <div class="stat-cell">
               <div class="stat-num" id="stat-ocr-invoked">NO</div>

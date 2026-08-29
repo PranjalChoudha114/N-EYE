@@ -17,9 +17,10 @@ Testing is a parallel engineering track, not an afterthought. Invariants receive
 - Verify that forbidden fields cannot be attached to `SafeContext`.
 
 ### 2.3 Browser Runtime & E2E Tests
-- Controlled test portal (`apps/test-portal`).
-- Extension loading and service worker communication verification.
-- Content script target grounding and isolation tests.
+- Controlled test portal (`apps/test-portal`), including Scenarios 07–09 for visual-only pages.
+- SIH visual harness (`bench/visual/ground-truth` vs `bench/visual/reports`).
+- Content-script recovery state machine (inject bound = 1).
+- Extension loading remains MANUAL for unpacked Chrome.
 
 ### 2.4 Adversarial & Fault Injection Tests
 - Stale target replacement during plan-to-act transition.

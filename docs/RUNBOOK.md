@@ -1,4 +1,4 @@
-# N-Eye Operational Runbook (Gate T007/008)
+# N-Eye Operational Runbook (Gate T009/T010)
 
 ## 1. Quick Start
 
@@ -76,19 +76,23 @@ Reload the extension. If Chrome disables the extension, review the new permissio
 `chrome://extensions` → **Reload** is mandatory. A page refresh alone will not replace the background worker. Stale workers can keep an old manifest version (e.g. `0.1.0`) while `dist/manifest.json` is already `0.2.0`.
 
 ### After content-script change
-Reload the extension, then **refresh every tab** you care about. Content scripts do not upgrade in already-open pages.
+Reload the extension. T009/T010 recovery will try **one** programmatic inject + handshake on the already-open tab. If the pill still says CONTENT SCRIPT DISCONNECTED, **refresh the page**. Restricted pages (`chrome://`, Web Store) cannot be injected.
+
+`content.js` must remain a self-contained IIFE (no `import "./assets/..."`). The build fails if that invariant breaks.
+
+T009/T010 notes:
+- Manifest `0.3.0` adds `wasm-unsafe-eval` on **extension pages only** (Tesseract WASM). No new host permission.
+- OCR assets live in `apps/extension/dist/ocr/` after `pnpm build:extension` (not loaded from a CDN).
+- `file://` pages still need Chrome “Allow access to file URLs” on the extension card if you open the portal as files instead of `http.server`.
+- After this gate: Reload extension → open Side Panel → confirm `DEV • <short-sha>` matches `git rev-parse --short HEAD`. If the page was open before Reload, the Side Panel should show RECOVERING CONTENT SCRIPT then TRUST LAYER READY, or a truthful DISCONNECTED state — never READY with a dead script.
+- Visualizer must start empty: “No N-Eye privacy transformation has occurred for this task.”
+- Scenarios 08/09: `http://localhost:5173/scenario-08-visual-only.html` and `scenario-09-held-out.html`.
 
 ### Running Test Portal
 ```bash
 python3 -m http.server 5173 --directory apps/test-portal
 ```
-Navigate to `http://localhost:5173/scenario-06-trust-loop.html` (DOM trust loop) or `http://localhost:5173/scenario-07-visual.html` (pixel/OCR laboratory).
-
-T007/008 notes:
-- Manifest `0.3.0` adds `wasm-unsafe-eval` on **extension pages only** (Tesseract WASM). No new host permission.
-- OCR assets live in `apps/extension/dist/ocr/` after `pnpm build:extension` (not loaded from a CDN).
-- `file://` pages still need Chrome “Allow access to file URLs” on the extension card if you open the portal as files instead of `http.server`.
-- After this gate: Reload extension → refresh the page → reopen Side Panel. Confirm `DEV • <short-sha>` matches `git rev-parse --short HEAD`.
+Navigate to `http://localhost:5173/scenario-06-trust-loop.html` (DOM), `scenario-07-visual.html` (pixel/OCR), `scenario-08-visual-only.html` (canvas/icon/document), or `scenario-09-held-out.html` (held-out layout).
 
 ## 3. Automated Test Execution
 

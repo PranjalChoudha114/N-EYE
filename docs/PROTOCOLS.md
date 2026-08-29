@@ -30,7 +30,12 @@ Strict allowlisted JSON object sent to remote planner:
 - `VisualCandidate` / `VisualGrounding`: fused local targets with source `DOM` | `OCR` | `FUSED`
 - `PerceptionResult`: `_isLocalOnly: true`; must never include rasters or data URLs
 
-### 2.4 ActionProposal (Zone 5 -> Zone 4 -> Zone 3: Untrusted Inbound)
+### 2.4 Content-script handshake (Zone 1 ↔ 2)
+- `CONTENT_SCRIPT_PROTOCOL`: integer `1`
+- `PING` to the tab returns `ContentScriptHello` (`ready`, `contentProtocol`, url/origin/epoch)
+- Service-worker `PING` remains a timestamp pong and is not a page handshake
+
+### 2.5 ActionProposal (Zone 5 -> Zone 4 -> Zone 3: Untrusted Inbound)
 Structured next action suggestion returned by planner:
 - `actionId`: `ActionId`
 - `type`: `CLICK` | `TYPE_TOKEN` | `TYPE_TEXT` | `SCROLL` | `SELECT` | `WAIT` | `ASK_USER` | `COMPLETE`
@@ -42,7 +47,7 @@ Structured next action suggestion returned by planner:
 - `expectedOutcome`: string
 - `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `BLOCKED`
 
-### 2.5 Internal Extension Messages
+### 2.6 Internal Extension Messages
 Typed cross-context messaging between Content Script, Service Worker, and Side Panel.
 - `OBSERVE_REQUEST` / `OBSERVE_RESPONSE`
 - `EXECUTE_ACTION_REQUEST` / `EXECUTE_ACTION_RESPONSE`

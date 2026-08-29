@@ -21,6 +21,10 @@ import {
   type TabInfo,
   type ValidatedAction,
   type VerificationResult,
+  type ContentScriptHealth,
+  type ContentScriptHello,
+  type ContentScriptErrorClass,
+  CONTENT_SCRIPT_PROTOCOL,
   createTaskId,
 } from '@n-eye/protocol';
 import { detectGoalPrivacy, detectOcrTextPrivacy } from '../privacy/detectors.js';
@@ -46,6 +50,7 @@ import {
   blockedState,
   buildAdvisoryRecommendations,
   buildPrivacyReceipt,
+  disconnectedObservationState,
   findingsHaveOcrSecrets,
   localMonitoringState,
   maybeSiteChangeEvent,
@@ -54,7 +59,16 @@ import {
   remoteReasoningState,
   siteChangeHostname,
   unsupportedState,
+  visualizerModel,
 } from '../assurance/index.js';
+import {
+  classifySendMessageError,
+  decideRecovery,
+  disconnectedLabel,
+  HANDSHAKE_POLL_MS,
+  HANDSHAKE_TIMEOUT_MS,
+} from '../runtime/content-connection.js';
+import { classifySupportedUrl } from '../runtime/supported-url.js';
 
 // DOM Element References
 const connectionPill = document.getElementById('connection-pill') as HTMLDivElement;
@@ -91,6 +105,8 @@ const stepVerify = document.getElementById('step-verify') as HTMLDivElement;
 
 const transformLocalItems = document.getElementById('transform-local-items') as HTMLDivElement;
 const transformSafeItems = document.getElementById('transform-safe-items') as HTMLDivElement;
+const visualizerCard = document.getElementById('visualizer-card') as HTMLElement;
+const visualizerCaption = document.getElementById('visualizer-caption') as HTMLElement;
 
 const actionVerificationCard = document.getElementById('action-verification-card') as HTMLElement;
 const actionProposalText = document.getElementById('action-proposal-text') as HTMLSpanElement;
@@ -137,6 +153,7 @@ const statPerceptionSource = document.getElementById('stat-perception-source') a
 const statScreenshotOut = document.getElementById('stat-screenshot-out') as HTMLElement;
 const proofOcrReason = document.getElementById('proof-ocr-reason') as HTMLElement;
 const proofCropOut = document.getElementById('proof-crop-out') as HTMLElement;
+const statCsState = document.getElementById('stat-cs-state') as HTMLElement;
 
 const confirmModal = document.getElementById('confirmation-dialog') as HTMLDialogElement;
 const modalActionName = document.getElementById('modal-action-name') as HTMLSpanElement;
@@ -148,6 +165,8 @@ const btnModalCancel = document.getElementById('btn-modal-cancel') as HTMLButton
 let activeTab: TabInfo | null = null;
 let _lastRawScene: RawScene | null = null;
 let currentTaskAbortController: AbortController | null = null;
+let observeGeneration = 0;
+const recoveryExhausted = new Set<string>();
 const vault = new PrivateTokenVault();
 const plannerManager = new PlannerManager('MOCK', 'http://localhost:8000');
 const ocrEngine = new TesseractOcrEngine();
@@ -228,13 +247,22 @@ function applyLocalMonitoring(scene: RawScene | null, supported: boolean, reason
     setProtectionView(view.state, view.headline, view.detail);
     return;
   }
-  const classes = (scene?.privacyFindings || []).map((f) => f.privacyClass);
+  if (!scene) {
+    const view = disconnectedObservationState();
+    setProtectionView(view.state, view.headline, view.detail);
+    return;
+  }
+  const classes = scene.privacyFindings.map((f) => f.privacyClass);
   const view = localMonitoringState(classes);
   setProtectionView(view.state, view.headline, view.detail);
 }
 
+function setContentHealth(health: ContentScriptHealth): void {
+  if (statCsState) statCsState.textContent = health;
+}
+
 function setConnectionStatus(
-  status: 'IDLE' | 'CONNECTING' | 'OBSERVING' | 'READY' | 'EXECUTING' | 'UNSUPPORTED' | 'FAILED' | 'CANCELLED',
+  status: 'IDLE' | 'CONNECTING' | 'OBSERVING' | 'READY' | 'EXECUTING' | 'UNSUPPORTED' | 'FAILED' | 'CANCELLED' | 'INJECTING',
   labelText?: string
 ): void {
   connectionPill.className = `status-pill status-${status.toLowerCase()}`;
@@ -287,54 +315,153 @@ async function refreshGatewayStatus(): Promise<void> {
   }
 }
 
-async function requestObservation(tabId: number, retry = true): Promise<RawScene | null> {
+async function requestObservation(tabId: number, allowRecovery = true): Promise<RawScene | null> {
+  const generation = ++observeGeneration;
   setConnectionStatus('OBSERVING', 'OBSERVING PAGE');
   updatePipelineStep(stepSee, 'active');
 
-  return new Promise((resolve) => {
-    chrome.tabs.sendMessage(
-      tabId,
-      { type: 'OBSERVE_REQUEST' },
-      async (response: ExtensionResponse<RawScene>) => {
-        if (chrome.runtime.lastError) {
-          if (retry) {
-            try {
-              const injectRes = await chrome.runtime.sendMessage({ type: 'INJECT_CONTENT_SCRIPT', tabId });
-              if (injectRes && injectRes.success) {
-                setTimeout(() => {
-                  requestObservation(tabId, false).then(resolve);
-                }, 100);
-                return;
-              }
-            } catch {
-              // Ignore injection error
-            }
-          }
+  const applyScene = (scene: RawScene): RawScene => {
+    _lastRawScene = scene;
+    coreEpochLabel.textContent = `Epoch ${scene.pageEpoch}`;
+    statEpoch.textContent = String(scene.pageEpoch);
+    statElementsCount.textContent = String(scene.elements.length);
+    setContentHealth('READY');
+    setConnectionStatus('READY', 'TRUST LAYER READY');
+    updatePipelineStep(stepSee, 'done');
+    updatePipelineStep(stepProtect, 'idle');
+    const url = activeTab?.url || '';
+    recoveryExhausted.delete(`${tabId}:${url}`);
+    return scene;
+  };
 
-          setConnectionStatus('FAILED', 'CONTENT SCRIPT DISCONNECTED');
-          resolve(null);
-          return;
-        }
-
-        if (!response || !response.success || !response.data) {
-          setConnectionStatus('FAILED', 'OBSERVATION FAILED');
-          resolve(null);
-          return;
-        }
-
-        const scene = response.data;
-        _lastRawScene = scene;
-        coreEpochLabel.textContent = `Epoch ${scene.pageEpoch}`;
-        statEpoch.textContent = String(scene.pageEpoch);
-        statElementsCount.textContent = String(scene.elements.length);
-
-        setConnectionStatus('READY', 'TRUST LAYER READY');
-        updatePipelineStep(stepSee, 'done');
-        updatePipelineStep(stepProtect, 'idle');
-        resolve(scene);
-      }
+  const failDisconnected = (errorClass: ContentScriptErrorClass): null => {
+    setContentHealth(errorClass === 'UNSUPPORTED_URL' ? 'UNSUPPORTED' : 'DISCONNECTED');
+    setConnectionStatus(
+      errorClass === 'UNSUPPORTED_URL' ? 'UNSUPPORTED' : 'FAILED',
+      disconnectedLabel(errorClass)
     );
+    updatePipelineStep(stepSee, 'idle');
+    return null;
+  };
+
+  const ping = await pingContentScript(tabId);
+  if (generation !== observeGeneration) return null;
+
+  if (ping.ok) {
+    if (ping.hello.contentProtocol !== CONTENT_SCRIPT_PROTOCOL) {
+      return failDisconnected('VERSION_MISMATCH');
+    }
+    const observed = await tabSendMessage<RawScene>(tabId, { type: 'OBSERVE_REQUEST' });
+    if (generation !== observeGeneration) return null;
+    if (observed.ok) return applyScene(observed.data);
+    setConnectionStatus('FAILED', 'OBSERVATION FAILED');
+    setContentHealth('DISCONNECTED');
+    return null;
+  }
+
+  if (!allowRecovery) {
+    return failDisconnected(classifySendMessageError(ping.lastError));
+  }
+
+  const url = activeTab?.url || '';
+  const exhaustedKey = `${tabId}:${url}`;
+  if (recoveryExhausted.has(exhaustedKey)) {
+    return failDisconnected('INJECTION_FAILED');
+  }
+
+  const supported = classifySupportedUrl(url).isSupported && Boolean(activeTab?.isSupported);
+  const errorClass = classifySendMessageError(ping.lastError);
+  const decision = decideRecovery({ urlSupported: supported, injectAttempts: 0, errorClass });
+  if (decision.action === 'UNSUPPORTED') {
+    setContentHealth('UNSUPPORTED');
+    setConnectionStatus('UNSUPPORTED', 'RESTRICTED PAGE');
+    updatePipelineStep(stepSee, 'idle');
+    return null;
+  }
+  if (decision.action !== 'INJECT') {
+    recoveryExhausted.add(exhaustedKey);
+    return failDisconnected(errorClass);
+  }
+
+  setContentHealth('INJECTING');
+  setConnectionStatus('INJECTING', 'RECOVERING CONTENT SCRIPT');
+
+  let injectOk = false;
+  try {
+    const injectRes: ExtensionResponse = await chrome.runtime.sendMessage({
+      type: 'INJECT_CONTENT_SCRIPT',
+      tabId,
+    });
+    injectOk = Boolean(injectRes?.success);
+  } catch {
+    injectOk = false;
+  }
+  if (generation !== observeGeneration) return null;
+  if (!injectOk) {
+    recoveryExhausted.add(exhaustedKey);
+    return failDisconnected('INJECTION_FAILED');
+  }
+
+  const hello = await waitForHandshake(tabId, generation);
+  if (generation !== observeGeneration) return null;
+  if (!hello) {
+    recoveryExhausted.add(exhaustedKey);
+    return failDisconnected('TIMEOUT');
+  }
+  if (hello.contentProtocol !== CONTENT_SCRIPT_PROTOCOL) {
+    recoveryExhausted.add(exhaustedKey);
+    return failDisconnected('VERSION_MISMATCH');
+  }
+
+  const observed = await tabSendMessage<RawScene>(tabId, { type: 'OBSERVE_REQUEST' });
+  if (generation !== observeGeneration) return null;
+  if (observed.ok) return applyScene(observed.data);
+  recoveryExhausted.add(exhaustedKey);
+  return failDisconnected(classifySendMessageError(observed.lastError));
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
   });
+}
+
+function tabSendMessage<T>(
+  tabId: number,
+  message: ExtensionMessage
+): Promise<{ ok: true; data: T } | { ok: false; lastError: string }> {
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, message, (response: ExtensionResponse<T>) => {
+      if (chrome.runtime.lastError) {
+        resolve({ ok: false, lastError: chrome.runtime.lastError.message || 'unknown' });
+        return;
+      }
+      if (!response?.success || response.data === undefined) {
+        resolve({ ok: false, lastError: response?.error || 'empty response' });
+        return;
+      }
+      resolve({ ok: true, data: response.data });
+    });
+  });
+}
+
+async function pingContentScript(
+  tabId: number
+): Promise<{ ok: true; hello: ContentScriptHello } | { ok: false; lastError: string }> {
+  const result = await tabSendMessage<ContentScriptHello>(tabId, { type: 'PING' });
+  if (!result.ok) return result;
+  return { ok: true, hello: result.data };
+}
+
+async function waitForHandshake(tabId: number, generation: number): Promise<ContentScriptHello | null> {
+  const deadline = Date.now() + HANDSHAKE_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (generation !== observeGeneration) return null;
+    const ping = await pingContentScript(tabId);
+    if (ping.ok) return ping.hello;
+    await delay(HANDSHAKE_POLL_MS);
+  }
+  return null;
 }
 
 function appendTransformItem(
@@ -356,44 +483,32 @@ function appendTransformItem(
   parent.appendChild(item);
 }
 
-function renderVisualizer(findings: PrivacyFinding[], safeContext: SafeContext): void {
+function renderVisualizer(findings: PrivacyFinding[] | null, safeContext: SafeContext | null): void {
+  const model = visualizerModel(findings, safeContext);
   transformLocalItems.replaceChildren();
   transformSafeItems.replaceChildren();
+  visualizerCaption.textContent = model.caption;
+  visualizerCard.dataset['evidence'] = model.mode;
 
-  if (findings.length === 0) {
-    appendTransformItem(transformLocalItems, 'PUBLIC', 'No PII candidates');
-    appendTransformItem(transformSafeItems, 'CLEAN', 'Full public context', {
-      tagClass: 'item-tag token-tag',
-      valueClass: 'item-desc',
+  for (const item of model.local) {
+    appendTransformItem(transformLocalItems, item.tag, item.value, {
+      itemClass: item.kind === 'empty' ? 'empty' : undefined,
+      valueClass: item.kind === 'empty' ? 'item-desc' : 'item-val',
     });
-    return;
   }
-
-  for (const f of findings.slice(0, 3)) {
-    const isSecret = f.privacyClass.startsWith('SECRET_');
-    appendTransformItem(
-      transformLocalItems,
-      f.privacyClass.replace('SECRET_', '').replace('PII_', ''),
-      isSecret ? '••••••••' : f.textSpan || f.reason
-    );
-  }
-
-  for (const token of safeContext.availableTokens) {
-    appendTransformItem(transformSafeItems, token.tokenSymbol, `Scoped ${token.privacyClass}`, {
-      itemClass: 'tokenized',
-      tagClass: 'item-tag token-tag',
+  for (const item of model.safe) {
+    appendTransformItem(transformSafeItems, item.tag, item.value, {
+      itemClass: item.kind === 'token' ? 'tokenized' : item.kind === 'blocked' ? 'blocked' : item.kind === 'empty' ? 'empty' : undefined,
+      tagClass: item.kind === 'token' ? 'item-tag token-tag' : item.kind === 'blocked' ? 'item-tag blocked-tag' : 'item-tag',
       valueClass: 'item-desc',
     });
   }
+}
 
-  const hasPassword = findings.some((f) => f.privacyClass.startsWith('SECRET_'));
-  if (hasPassword) {
-    appendTransformItem(transformSafeItems, 'SECRETS', 'NEVER_SEND', {
-      itemClass: 'blocked',
-      tagClass: 'item-tag blocked-tag',
-      valueClass: 'item-desc',
-    });
-  }
+function clearLiveEvidence(): void {
+  _lastRawScene = null;
+  renderVisualizer(null, null);
+  receiptCard.classList.add('hidden');
 }
 
 /**
@@ -419,6 +534,7 @@ async function executeClosedTrustLoop(): Promise<void> {
   resetTokenCounters();
   vault.clear();
   plannerManager.reset();
+  clearLiveEvidence();
 
   currentTaskAbortController = new AbortController();
   const signal = currentTaskAbortController.signal;
@@ -804,6 +920,7 @@ async function executeClosedTrustLoop(): Promise<void> {
     if ((err as Error).name === 'AbortError') {
       setConnectionStatus('CANCELLED', 'TASK CANCELLED');
       stepSummaryText.textContent = 'Task cancelled by user.';
+      clearLiveEvidence();
     } else {
       setConnectionStatus('FAILED', 'TASK FAILED');
       stepSummaryText.textContent = `Error: ${(err as Error).message}`;
@@ -817,6 +934,7 @@ async function executeClosedTrustLoop(): Promise<void> {
 
 async function initializeActiveTab(): Promise<void> {
   setConnectionStatus('CONNECTING', 'DISCOVERING TAB');
+  renderVisualizer(null, null);
 
   try {
     const res: ExtensionResponse<TabInfo> = await chrome.runtime.sendMessage({ type: 'GET_ACTIVE_TAB_INFO' });
@@ -887,6 +1005,7 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
     activeTab = message.tabInfo;
     targetOrigin.textContent = activeTab.origin || activeTab.url;
     targetTitle.textContent = activeTab.title || 'Untitled';
+    clearLiveEvidence();
 
     const hostname = siteChangeHostname(activeTab.url, activeTab.origin, activeTab.isSupported);
     const siteEvent = maybeSiteChangeEvent(
@@ -914,9 +1033,12 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
 });
 
 applyBuildIdentityToDom();
+renderVisualizer(null, null);
+setContentHealth('UNKNOWN');
 
 // Mount
 document.addEventListener('DOMContentLoaded', () => {
   applyBuildIdentityToDom();
+  renderVisualizer(null, null);
   initializeActiveTab();
 });

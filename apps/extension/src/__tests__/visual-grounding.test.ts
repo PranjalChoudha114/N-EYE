@@ -101,6 +101,48 @@ describe('Visual grounding and DOM/OCR fusion', () => {
     expect(fused.candidates[0]?.label).toBe('PIXEL LABEL');
   });
 
+  it('does not bind a LOW-confidence OCR block to a DOM target', () => {
+    const fused = groundAndFuse({
+      elements: [button('e1', null, { x: 10, y: 10, width: 100, height: 30 })],
+      ocrBlocks: [
+        {
+          text: 'NEXT',
+          confidence: 0.5,
+          bbox: { x: 12, y: 12, width: 80, height: 20 },
+          roiId: 'roi_1',
+          pageEpoch: createPageEpoch(1),
+          blockId: 'roi_1_b1',
+        },
+      ],
+      pageEpoch: createPageEpoch(1),
+    });
+    expect(fused.candidates).toHaveLength(1);
+    expect(fused.candidates[0]?.elementId).toBeUndefined();
+    expect(fused.candidates[0]?.source).toBe('OCR');
+  });
+
+  it('abstains when two nearby controls are equally plausible', () => {
+    const fused = groundAndFuse({
+      elements: [
+        button('e1', null, { x: 10, y: 10, width: 40, height: 20 }),
+        button('e2', null, { x: 12, y: 10, width: 40, height: 20 }),
+      ],
+      ocrBlocks: [
+        {
+          text: 'GO',
+          confidence: 0.9,
+          bbox: { x: 10, y: 10, width: 42, height: 20 },
+          roiId: 'roi_1',
+          pageEpoch: createPageEpoch(1),
+          blockId: 'roi_1_b1',
+        },
+      ],
+      pageEpoch: createPageEpoch(1),
+    });
+    expect(fused.candidates.filter((c) => c.elementId)).toHaveLength(0);
+    expect(fused.fallback).toBe('GROUNDING_AMBIGUOUS');
+  });
+
   it('treats epoch mismatch as stale visual evidence', () => {
     expect(isVisualEvidenceStale(createPageEpoch(1), createPageEpoch(2))).toBe(true);
     expect(isVisualEvidenceStale(createPageEpoch(4), createPageEpoch(4))).toBe(false);

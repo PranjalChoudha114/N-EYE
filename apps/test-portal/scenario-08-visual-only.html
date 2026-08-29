@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 08: Visual-Only Targets</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    .lab { display: grid; gap: 20px; }
+    .block { border: 1px solid #334155; border-radius: 8px; padding: 16px; }
+    .block h3 { font-size: 13px; color: #7dd3fc; margin-bottom: 10px; }
+    canvas { background: #fff; display: block; }
+    .icon-stack { position: relative; width: 220px; height: 48px; }
+    .icon-stack img { width: 220px; height: 48px; display: block; }
+    .icon-stack button {
+      position: absolute; inset: 0; border: 0; background: transparent;
+      color: transparent; font-size: 1px;
+    }
+    .result { margin-top: 8px; color: #86efac; font-size: 12px; min-height: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container" style="max-width: 720px;">
+    <header class="header">
+      <div class="badge">N-EYE LABORATORY SCENARIO 08</div>
+      <h1>Visual-only targets</h1>
+      <p class="subtitle">Meaning is in pixels. No useful accessible name, CSS id lookup, or fixture attribute.</p>
+    </header>
+    <main class="card lab">
+      <section class="block">
+        <h3>Canvas control (click the painted label)</h3>
+        <canvas id="continue-canvas" width="420" height="72"></canvas>
+        <div id="canvas-result" class="result"></div>
+      </section>
+      <section class="block">
+        <h3>Icon / unlabeled hit target over image text</h3>
+        <div class="icon-stack">
+          <img src="./fixtures/visual-submit.png" alt="" width="220" height="48">
+          <button id="icon-hit" type="button"></button>
+        </div>
+        <div id="icon-result" class="result"></div>
+      </section>
+      <section class="block">
+        <h3>Document-like surface</h3>
+        <div role="document">
+          <img src="./fixtures/ocr-email.png" alt="" width="640" height="100">
+        </div>
+      </section>
+    </main>
+    <footer class="footer">
+      <p><a href="./scenario-07-visual.html">Scenario 07</a> · Scenario 08 · <a href="./scenario-09-held-out.html">Scenario 09</a></p>
+    </footer>
+  </div>
+  <script>
+    const canvas = document.getElementById('continue-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '28px sans-serif';
+    ctx.fillText('CONTINUE', 36, 48);
+    canvas.addEventListener('click', () => {
+      document.getElementById('canvas-result').textContent = 'Canvas control activated';
+    });
+    document.getElementById('icon-hit').addEventListener('click', () => {
+      document.getElementById('icon-result').textContent = 'Unlabeled control activated';
+    });
+  </script>
+</body>
+</html>

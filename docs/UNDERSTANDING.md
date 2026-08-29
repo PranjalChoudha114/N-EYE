@@ -110,18 +110,20 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 | **Egress Guard** | Byte-level canary scan + 256KB size bounds | Cryptographic zero-knowledge egress proofs |
 | **Planner Gateway** | Localhost FastAPI + Gemini / Mock adapters | Enterprise multi-tenant gateway with policy routing |
 | **Persistence** | In-memory ephemeral (10-minute TTL) | Encrypted enterprise audit vault + compliance logging |
-| **Evaluation** | Synthetic test portal (Scenarios 01–07) + test suites | Large-scale WebArena / VisualWebArena benchmark harness |
+| **Evaluation** | Synthetic test portal (Scenarios 01–09) + `bench/visual` harness | Large-scale WebArena / VisualWebArena benchmark harness |
 
 ---
 
-## 6. Current Implementation State (Gate T007/008)
+## 6. Current Implementation State (Gate T009/T010)
 
-- **Protocol Layer (`packages/protocol`)**: Branded types plus perception/assurance contracts.
-- **Chrome MV3 Shell (`apps/extension`)**: Content script observer, element registry, epoch manager, background service worker, Side Panel, ROI capture.
-- **Perception (`apps/extension/src/perception`)**: Adaptive controller, ROI bounds, PixelBuffer lifecycle, replaceable OCR engine, Tesseract.js runtime, visual grounding/fusion.
-- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors (emails, phones, API keys, passwords, OTPs, JWTs, OCR provenance), token vault, SafeContext builder, Egress Guard (includes visual canaries / screenshot magic).
-- **Human assurance (`apps/extension/src/assurance`)**: Truthful protection states, site-change events, Privacy Receipts, advisory recommendations.
+- **Protocol Layer (`packages/protocol`)**: Branded types plus perception/assurance contracts and content-script handshake (`CONTENT_SCRIPT_PROTOCOL`).
+- **Chrome MV3 Shell (`apps/extension`)**: Content script is a self-contained IIFE. Bounded PING → inject-once → handshake recovery. Observer, registry, epoch, Side Panel, ROI capture.
+- **Perception (`apps/extension/src/perception`)**: Adaptive controller, CSS↔bitmap coordinate maps, ROI bounds, PixelBuffer lifecycle, Tesseract.js, grounding/fusion with low-confidence and ambiguous abstention.
+- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors (emails, phones, API keys, passwords, OTPs, JWTs, OCR provenance), token vault, SafeContext builder, Egress Guard (visual canaries / screenshot magic).
+- **Human assurance (`apps/extension/src/assurance`)**: Truthful protection states, empty privacy visualizer until a real protect step, site-change events, Privacy Receipts.
+- **SIH visual harness (`bench/visual`)**: Ground truth separated from predictions; development vs held-out splits; reports under `bench/visual/reports/`.
 - **Planner Gateway (`apps/planner-api`)**: FastAPI backend with Google Gemini (`gemini-2.5-flash`), OpenAI-compatible, and deterministic Mock adapters. Server-side API key isolation.
 - **Local Action Authority**: Proposal validator, live semantic re-grounding, local token resolution, native event executor, and state-delta verifier.
-- **Chrome Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`).
-- **Next Eligible Milestone**: Gate 009 (Formal SIH evaluation harness + evidence pack). Do not start until explicitly approved.
+- **Chrome Side Panel E2E**: **UNVERIFIED** after this repair (manual load of `apps/extension/dist/`). Root cause of T007/008 DISCONNECTED is **IMPLEMENTED + TESTED** (ES-module content.js). Real-Chrome confirmation is still MANUAL.
+- **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008.
+- **Next Eligible Milestone**: Gate 011 — Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack (reuse `bench/visual`). Do not start until explicitly approved.

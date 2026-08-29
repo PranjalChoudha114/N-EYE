@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 09: Held-out Visual</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    body { background: #0b1220; }
+    .held { max-width: 640px; margin: 0 auto; padding: 24px; }
+    .panel { background: #111827; border-radius: 12px; padding: 18px; margin-bottom: 18px; }
+    canvas { display: block; background: #f8fafc; border-radius: 6px; }
+    .tiny-hit { width: 36px; height: 36px; border: 0; background: #1e293b; color: transparent; }
+    .status { color: #67e8f9; font-size: 12px; min-height: 16px; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="held">
+    <h1>Held-out visual page</h1>
+    <p>Different layout, copy, and private values from Scenario 07/08.</p>
+    <div class="panel">
+      <canvas id="next-canvas" width="360" height="96"></canvas>
+      <div id="next-status" class="status"></div>
+    </div>
+    <div class="panel">
+      <button class="tiny-hit" id="held-icon" type="button"></button>
+      <img src="./fixtures/canvas-target.png" alt="" width="360" height="56">
+    </div>
+    <div class="panel" role="document">
+      <canvas id="pii-canvas" width="520" height="64"></canvas>
+    </div>
+  </div>
+  <script>
+    const next = document.getElementById('next-canvas');
+    const nctx = next.getContext('2d');
+    nctx.fillStyle = '#f8fafc';
+    nctx.fillRect(0, 0, next.width, next.height);
+    nctx.fillStyle = '#111827';
+    nctx.font = '26px sans-serif';
+    nctx.fillText('NEXT STEP', 28, 58);
+    next.addEventListener('click', () => {
+      document.getElementById('next-status').textContent = 'Held-out canvas activated';
+    });
+    const pii = document.getElementById('pii-canvas');
+    const pctx = pii.getContext('2d');
+    pctx.fillStyle = '#ffffff';
+    pctx.fillRect(0, 0, pii.width, pii.height);
+    pctx.fillStyle = '#000000';
+    pctx.font = '22px sans-serif';
+    pctx.fillText('VISUAL_EMAIL_T010@example.com', 12, 42);
+  </script>
+</body>
+</html>

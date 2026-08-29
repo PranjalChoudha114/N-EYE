@@ -11,6 +11,8 @@ import {
   MAX_ROI_WIDTH_PX,
   MIN_ROI_SIDE_PX,
 } from '../perception/roi.js';
+import { mapCssBoxToBitmap } from '../perception/coordinates.js';
+import { classifySupportedUrl } from '../runtime/supported-url.js';
 
 /**
  * N-Eye Service Worker (Zone 2 - Extension Core)
@@ -30,19 +32,7 @@ chrome.sidePanel
   .catch((_err) => {});
 
 function isSupportedUrl(url?: string): { isSupported: boolean; reason?: string } {
-  if (!url) {
-    return { isSupported: false, reason: 'No active webpage URL detected.' };
-  }
-  if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || url.startsWith('devtools://')) {
-    return { isSupported: false, reason: 'Chrome internal pages cannot be observed by extensions.' };
-  }
-  if (url.includes('chromewebstore.google.com') || url.includes('chrome.google.com/webstore')) {
-    return { isSupported: false, reason: 'Chrome Web Store is protected by browser policy.' };
-  }
-  if (url.startsWith('about:') || url.startsWith('data:') || url.startsWith('javascript:')) {
-    return { isSupported: false, reason: 'Unsupported browser URI scheme.' };
-  }
-  return { isSupported: true };
+  return classifySupportedUrl(url);
 }
 
 async function getActiveTab(): Promise<chrome.tabs.Tab | null> {
@@ -198,7 +188,7 @@ chrome.runtime.onMessage.addListener(
     if (message.type === 'CAPTURE_TAB_CROPS') {
       const tab = _sender.tab;
       const windowId = tab?.windowId;
-      cropVisibleTab(windowId, message.rois)
+      cropVisibleTab(windowId, message.rois, message.viewport)
         .then((crops) => {
           sendResponse({ success: true, data: crops });
         })
@@ -229,7 +219,8 @@ interface TabCropRequest {
  */
 async function cropVisibleTab(
   windowId: number | undefined,
-  rois: TabCropRequest[]
+  rois: TabCropRequest[],
+  viewport?: { width: number; height: number }
 ): Promise<Array<{ roiId: string; width: number; height: number; rgba: number[] }>> {
   const options: chrome.tabs.CaptureVisibleTabOptions = { format: 'png' };
   const dataUrl =
@@ -241,7 +232,15 @@ async function cropVisibleTab(
   const crops: Array<{ roiId: string; width: number; height: number; rgba: number[] }> = [];
   try {
     for (const roi of rois) {
-      const fitted = fitTabCrop(roi, bitmap.width, bitmap.height);
+      const mapped = viewport
+        ? mapCssBoxToBitmap(
+            { x: roi.x, y: roi.y, width: roi.width, height: roi.height },
+            viewport,
+            { width: bitmap.width, height: bitmap.height }
+          )
+        : { x: roi.x, y: roi.y, width: roi.width, height: roi.height };
+      if (!mapped) continue;
+      const fitted = fitTabCrop({ ...roi, ...mapped }, bitmap.width, bitmap.height);
       if (!fitted) continue;
       const canvas = new OffscreenCanvas(fitted.width, fitted.height);
       const ctx = canvas.getContext('2d');

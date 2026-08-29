@@ -110,7 +110,8 @@ export function groundAndFuse(args: {
       continue;
     }
 
-    if (best) {
+    // LOW OCR confidence may emit an OCR-only hint; it must not become a DOM target.
+    if (best && conf !== 'LOW') {
       const el = best.el;
       const domNorm = normalizeLabel(el.innerTextCandidate || el.ariaLabel || '');
       const duplicate = Boolean(domNorm) && (domNorm === ocrNorm || domNorm.includes(ocrNorm) || ocrNorm.includes(domNorm));

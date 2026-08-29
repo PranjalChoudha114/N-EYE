@@ -105,4 +105,11 @@ describe('Page Observer & Visibility Engine', () => {
     expect(passFinding?.reason).toContain('password');
     expect(emailFinding).toBeDefined();
   });
+
+  it('does not require fixture-specific attributes to observe a button', () => {
+    document.body.innerHTML = `<button id="plain-btn" type="button">Go</button>`;
+    const scene = observePage(registry, createPageEpoch(1));
+    expect(scene.elements.some((e) => e.tagName === 'button')).toBe(true);
+    expect(JSON.stringify(scene)).not.toMatch(/data-n-eye-visual/);
+  });
 });
