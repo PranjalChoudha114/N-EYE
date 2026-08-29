@@ -8,6 +8,7 @@ import {
 } from '@n-eye/protocol';
 import type { ElementRegistry } from './registry.js';
 import { detectElementPrivacy } from '../privacy/detectors.js';
+import { collectVisualRegions, collectClickableVisualSurfaces } from '../perception/visual-regions.js';
 
 /**
  * PageObserver (Zone 1 - Content Script Execution)
@@ -267,6 +268,56 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
     privacyFindings.push(...findings);
   }
 
+  for (const surface of collectClickableVisualSurfaces()) {
+    const already = rawElements.some((el) => {
+      const live = registry.get(el.id)?.liveNode;
+      return live === surface;
+    });
+    if (already) continue;
+    if (!isElementVisible(surface)) continue;
+    const rect = surface.getBoundingClientRect();
+    const tagName = surface.tagName.toLowerCase();
+    const role = surface.getAttribute('role') || tagName;
+    const alt = sanitizeText(surface.getAttribute('alt') || surface.getAttribute('aria-label') || '');
+    const relBbox = {
+      xPercent: Math.max(0, Math.min(100, (rect.x / viewWidth) * 100)),
+      yPercent: Math.max(0, Math.min(100, (rect.y / viewHeight) * 100)),
+      widthPercent: Math.max(0, Math.min(100, (rect.width / viewWidth) * 100)),
+      heightPercent: Math.max(0, Math.min(100, (rect.height / viewHeight) * 100)),
+    };
+    const fingerprint = createTargetFingerprint(role, tagName, null, alt, relBbox);
+    const elemId = registry.register(surface, epoch, fingerprint);
+    rawElements.push({
+      id: elemId,
+      tagName,
+      role,
+      ariaLabel: surface.getAttribute('aria-label') ? sanitizeText(surface.getAttribute('aria-label')) : null,
+      innerTextCandidate: alt || null,
+      inputType: null,
+      isEnabled: true,
+      bbox: {
+        x: Math.round(rect.x),
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      },
+      fingerprint,
+      perceptionSource: 'DOM',
+    });
+  }
+
+  const visualRegions = collectVisualRegions(epoch);
+  for (const region of visualRegions) {
+    const associated = rawElements.find(
+      (el) =>
+        Math.abs(el.bbox.x - region.bbox.x) < 4 &&
+        Math.abs(el.bbox.y - region.bbox.y) < 4
+    );
+    if (associated) {
+      region.associatedElementId = associated.id;
+    }
+  }
+
   const durationMs = performance.now() - startTime;
 
   const rawScene: RawScene = {
@@ -283,6 +334,7 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
     privacyFindings,
     timestamp: Date.now(),
     observationDurationMs: Math.round(durationMs * 100) / 100,
+    visualRegions,
   };
 
   return rawScene;

@@ -5,6 +5,12 @@ import {
   type TabInfo,
   createTaskId,
 } from '@n-eye/protocol';
+import {
+  MAX_ROI_HEIGHT_PX,
+  MAX_ROI_PIXELS,
+  MAX_ROI_WIDTH_PX,
+  MIN_ROI_SIDE_PX,
+} from '../perception/roi.js';
 
 /**
  * N-Eye Service Worker (Zone 2 - Extension Core)
@@ -189,6 +195,86 @@ chrome.runtime.onMessage.addListener(
       return true;
     }
 
+    if (message.type === 'CAPTURE_TAB_CROPS') {
+      const tab = _sender.tab;
+      const windowId = tab?.windowId;
+      cropVisibleTab(windowId, message.rois)
+        .then((crops) => {
+          sendResponse({ success: true, data: crops });
+        })
+        .catch((err: unknown) => {
+          sendResponse({ success: false, error: (err as Error).message });
+        });
+      return true;
+    }
+
     return false;
   }
 );
+
+interface TabCropRequest {
+  roiId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Screenshot authority (Zone 2).
+ * WHY: captureVisibleTab is the smallest Chrome API that can crop unresolved regions
+ * when canvas/img drawImage is unavailable. Existing <all_urls> is sufficient — no new permission.
+ * LIFECYCLE: Full capture exists only inside this function; only ROI RGBA leaves.
+ * MUST NEVER: Log, persist, or forward the data URL.
+ */
+async function cropVisibleTab(
+  windowId: number | undefined,
+  rois: TabCropRequest[]
+): Promise<Array<{ roiId: string; width: number; height: number; rgba: number[] }>> {
+  const options: chrome.tabs.CaptureVisibleTabOptions = { format: 'png' };
+  const dataUrl =
+    windowId === undefined
+      ? await chrome.tabs.captureVisibleTab(options)
+      : await chrome.tabs.captureVisibleTab(windowId, options);
+  const blob = await (await fetch(dataUrl)).blob();
+  const bitmap = await createImageBitmap(blob);
+  const crops: Array<{ roiId: string; width: number; height: number; rgba: number[] }> = [];
+  try {
+    for (const roi of rois) {
+      const fitted = fitTabCrop(roi, bitmap.width, bitmap.height);
+      if (!fitted) continue;
+      const canvas = new OffscreenCanvas(fitted.width, fitted.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) continue;
+      ctx.drawImage(bitmap, fitted.x, fitted.y, fitted.width, fitted.height, 0, 0, fitted.width, fitted.height);
+      const image = ctx.getImageData(0, 0, fitted.width, fitted.height);
+      crops.push({
+        roiId: fitted.roiId,
+        width: image.width,
+        height: image.height,
+        rgba: Array.from(image.data),
+      });
+    }
+  } finally {
+    bitmap.close();
+  }
+  return crops;
+}
+
+function fitTabCrop(
+  roi: TabCropRequest,
+  bitmapWidth: number,
+  bitmapHeight: number
+): TabCropRequest | null {
+  const x = Math.max(0, Math.min(bitmapWidth - MIN_ROI_SIDE_PX, Math.round(roi.x)));
+  const y = Math.max(0, Math.min(bitmapHeight - MIN_ROI_SIDE_PX, Math.round(roi.y)));
+  let width = Math.min(MAX_ROI_WIDTH_PX, Math.max(0, Math.round(roi.width)), bitmapWidth - x);
+  let height = Math.min(MAX_ROI_HEIGHT_PX, Math.max(0, Math.round(roi.height)), bitmapHeight - y);
+  if (width < MIN_ROI_SIDE_PX || height < MIN_ROI_SIDE_PX) return null;
+  if (width * height > MAX_ROI_PIXELS) {
+    const scale = Math.sqrt(MAX_ROI_PIXELS / (width * height));
+    width = Math.max(MIN_ROI_SIDE_PX, Math.floor(width * scale));
+    height = Math.max(MIN_ROI_SIDE_PX, Math.floor(height * scale));
+  }
+  return { roiId: roi.roiId, x, y, width, height };
+}

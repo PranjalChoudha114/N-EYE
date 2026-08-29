@@ -20,6 +20,13 @@
       </div>
     </header>
 
+    <div id="assurance-toast" class="assurance-toast hidden" role="status" aria-live="polite"></div>
+
+    <section id="protection-strip" class="protection-strip" aria-label="N-Eye protection state">
+      <div id="protection-state-label" class="protection-state">LOCAL</div>
+      <div id="protection-detail" class="protection-detail">N-Eye is observing locally. No N-Eye AI request occurred.</div>
+    </section>
+
     <!-- Active Target Domain Bar -->
     <section class="active-target-bar" aria-label="Active Webpage Information">
       <div class="target-site-icon" aria-hidden="true">🌐</div>
@@ -113,28 +120,33 @@
             <span class="step-name">SEE</span>
             <span class="step-status">ACTIVE</span>
           </div>
-          <div id="step-protect" class="pipeline-step step-ready" title="PII Detection & Tokenization">
+          <div id="step-perceive" class="pipeline-step step-idle" title="Local visual perception when DOM is insufficient">
             <span class="step-num">2</span>
+            <span class="step-name">PERCEIVE</span>
+            <span class="step-status" id="step-perceive-status">SKIP</span>
+          </div>
+          <div id="step-protect" class="pipeline-step step-ready" title="PII Detection & Tokenization">
+            <span class="step-num">3</span>
             <span class="step-name">PROTECT</span>
             <span class="step-status">LOCAL</span>
           </div>
           <div id="step-think" class="pipeline-step step-idle" title="Remote AI / Mock Reasoning">
-            <span class="step-num">3</span>
+            <span class="step-num">4</span>
             <span class="step-name" id="step-think-name">THINK</span>
             <span class="step-status" id="step-think-status">MOCK</span>
           </div>
           <div id="step-validate" class="pipeline-step step-idle" title="Local Action & Target Authority">
-            <span class="step-num">4</span>
+            <span class="step-num">5</span>
             <span class="step-name">VALIDATE</span>
             <span class="step-status">LOCAL</span>
           </div>
           <div id="step-act" class="pipeline-step step-idle" title="Local Action Execution">
-            <span class="step-num">5</span>
+            <span class="step-num">6</span>
             <span class="step-name">ACT</span>
             <span class="step-status">LOCAL</span>
           </div>
           <div id="step-verify" class="pipeline-step step-idle" title="State-Change Verification">
-            <span class="step-num">6</span>
+            <span class="step-num">7</span>
             <span class="step-name">VERIFY</span>
             <span class="step-status">LOCAL</span>
           </div>
@@ -208,6 +220,10 @@
             <span id="lat-see" class="lat-val">0.0 ms</span>
           </div>
           <div class="latency-row">
+            <span class="lat-stage">PERCEIVE (Local OCR)</span>
+            <span id="lat-perceive" class="lat-val">skipped</span>
+          </div>
+          <div class="latency-row">
             <span class="lat-stage">PROTECT (Local Tokenize)</span>
             <span id="lat-protect" class="lat-val">0.0 ms</span>
           </div>
@@ -258,6 +274,22 @@
               <div class="stat-num" id="stat-epoch">1</div>
               <div class="stat-lbl">Page Epoch</div>
             </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-ocr-invoked">NO</div>
+              <div class="stat-lbl">OCR Invoked</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-roi-count">0</div>
+              <div class="stat-lbl">ROI Count</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-perception-source">DOM</div>
+              <div class="stat-lbl">Perception Source</div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-num" id="stat-screenshot-out">0 B</div>
+              <div class="stat-lbl">Raw Screenshot Out</div>
+            </div>
           </div>
 
           <!-- Network Telemetry Proof Box -->
@@ -282,6 +314,14 @@
               <span class="proof-label">Egress Canary Scan:</span>
               <span id="proof-canary-status" class="proof-val proof-pass">PASS (0 Secrets Detected)</span>
             </div>
+            <div class="proof-row">
+              <span class="proof-label">OCR / Escalation:</span>
+              <span id="proof-ocr-reason" class="proof-val">Not invoked</span>
+            </div>
+            <div class="proof-row">
+              <span class="proof-label">Safe crop outbound:</span>
+              <span id="proof-crop-out" class="proof-val">NO</span>
+            </div>
           </div>
 
           <div class="evidence-code-box">
@@ -289,6 +329,17 @@
             <pre><code id="evidence-safecontext-dump">{}</code></pre>
           </div>
         </div>
+      </section>
+
+      <section id="receipt-card" class="card receipt-card hidden" aria-labelledby="heading-receipt">
+        <h2 id="heading-receipt" class="card-title">Privacy Receipt</h2>
+        <p id="receipt-human" class="receipt-human">No N-Eye AI request has occurred yet.</p>
+        <div id="receipt-technical" class="receipt-technical"></div>
+      </section>
+
+      <section id="advisory-card" class="card hidden" aria-labelledby="heading-advisory">
+        <h2 id="heading-advisory" class="card-title">Advisory</h2>
+        <ul id="advisory-list" class="advisory-list"></ul>
       </section>
     </main>
 

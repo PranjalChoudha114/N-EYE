@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "N-Eye — Privacy Trust Layer for Browser Agents",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Privacy-preserving visual perception trust layer for browser agents. Observes locally, protects private data, validates actions.",
   "permissions": [
     "sidePanel",
@@ -12,6 +12,9 @@
   "host_permissions": [
     "<all_urls>"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"

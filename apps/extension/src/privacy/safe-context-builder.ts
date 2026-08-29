@@ -4,7 +4,9 @@ import type {
   RawScene,
   SafeContext,
   SafeElement,
+  SafeVisualHint,
   TaskId,
+  VisualCandidate,
 } from '@n-eye/protocol';
 import type { PrivateTokenVault } from './vault.js';
 
@@ -46,6 +48,32 @@ function sanitizeGoal(
   return cleanGoal.trim().slice(0, 300);
 }
 
+function sanitizePublicText(
+  text: string,
+  decisions: PrivacyDecision[],
+  findings: PrivacyFinding[]
+): string {
+  let clean = text;
+  const findingById = new Map(findings.map((f) => [f.findingId, f]));
+  for (const decision of decisions) {
+    const span = findingById.get(decision.findingId)?.textSpan;
+    if (!span) continue;
+    if (decision.decision === 'NEVER_SEND') {
+      clean = clean.split(span).join('');
+    } else if (decision.decision === 'TOKENIZE' && decision.tokenRole) {
+      clean = clean.split(span).join(decision.tokenRole);
+    }
+  }
+  return clean
+    .replace(EMAIL_REGEX, '[REDACTED_PII]')
+    .replace(PHONE_REGEX, '[REDACTED_PII]')
+    .replace(/CANARY_[A-Z0-9_]+/gi, '[PROTECTED_FIELD]')
+    .replace(/OCR_(API|OTP|SESSION|PASSWORD|EMAIL|PHONE)_T007[A-Z0-9_@.]*/gi, '[PROTECTED_FIELD]')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100);
+}
+
 /**
  * SafeContextBuilder (Zone 3 - Local Sensitive Processing)
  * OWNS: Field-by-field allowlist construction of the outbound SafeContext payload.
@@ -58,7 +86,8 @@ export function buildSafeContext(
   decisions: PrivacyDecision[],
   vault: PrivateTokenVault,
   taskId: TaskId,
-  findings: PrivacyFinding[] = []
+  findings: PrivacyFinding[] = [],
+  options?: { visualCandidates?: VisualCandidate[] }
 ): SafeContext {
   const decisionByElement = new Map<string, PrivacyDecision>();
   const findingById = new Map(findings.map((f) => [f.findingId, f]));
@@ -89,6 +118,7 @@ export function buildSafeContext(
     }
 
     safeLabel = safeLabel.replace(/CANARY_[A-Z0-9_]+/gi, '[PROTECTED_FIELD]').slice(0, 100);
+    safeLabel = sanitizePublicText(safeLabel, decisions, findings);
 
     const safeEl: SafeElement = {
       id: el.id,
@@ -97,6 +127,7 @@ export function buildSafeContext(
       inputType: el.inputType,
       isEnabled: el.isEnabled,
       isSelected: el.isSelected ? true : undefined,
+      perceptionSource: el.perceptionSource,
       bbox: {
         x: el.bbox.x,
         y: el.bbox.y,
@@ -109,6 +140,18 @@ export function buildSafeContext(
   }
 
   const sanitizedGoal = sanitizeGoal(rawGoal, decisions, findings, vault);
+
+  const visualHints: SafeVisualHint[] = [];
+  for (const candidate of options?.visualCandidates || []) {
+    if (visualHints.length >= 8) break;
+    const description = sanitizePublicText(candidate.label, decisions, findings);
+    if (!description || description === '[PROTECTED_FIELD]' || description === '[REDACTED_PII]') continue;
+    visualHints.push({
+      hintId: candidate.candidateId,
+      bbox: candidate.bbox,
+      description: description.slice(0, 80),
+    });
+  }
 
   const safeContext: SafeContext = {
     protocolVersion: '1.0.0',
@@ -125,6 +168,7 @@ export function buildSafeContext(
     },
     safeElements,
     availableTokens: vault.getSafeCapabilities(),
+    visualHints: visualHints.length > 0 ? visualHints : undefined,
   };
 
   return safeContext;

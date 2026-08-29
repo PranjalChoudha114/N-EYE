@@ -29,6 +29,10 @@ class SafeElement(BaseModel):
     inputType: Optional[str] = Field(default=None, description="Input subtype if applicable (e.g. email, submit)")
     isEnabled: bool = Field(default=True, description="True if element is enabled and interactable")
     isSelected: Optional[bool] = Field(default=None, description="Selection state for switches, checkboxes, or options")
+    perceptionSource: Optional[Literal["DOM", "OCR", "FUSED"]] = Field(
+        default=None,
+        description="Local perception provenance. Never includes pixels.",
+    )
     bbox: BoundingBox
 
 
@@ -100,7 +104,7 @@ class SafeContext(BaseModel):
         """Reject any attempt to leak raw DOM scenes, unredacted findings, or local flags."""
         if not isinstance(data, dict):
             return data
-        forbidden_keys = {"_isLocalOnly", "elements", "privacyFindings", "rawHtml", "xpath", "vault"}
+        forbidden_keys = {"_isLocalOnly", "elements", "privacyFindings", "rawHtml", "xpath", "vault", "ocrBlocks"}
         leaked = forbidden_keys.intersection(data.keys())
         if leaked:
             raise ValueError(f"RawScene leakage detected in SafeContext. Forbidden local keys present: {leaked}")

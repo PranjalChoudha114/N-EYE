@@ -74,7 +74,7 @@ def build_planner_prompt(context: SafeContext) -> str:
         selected = f", selected={el.isSelected}" if el.isSelected is not None else ""
         role_str = f"role={el.role}" if el.role else f"type={el.inputType or 'generic'}"
         elements_formatted.append(
-            f"- ID: {el.id} | {role_str} | label=\"{el.safeLabel}\" | status={status}{selected} | bbox=[{el.bbox.x},{el.bbox.y},{el.bbox.width},{el.bbox.height}]"
+            f"- ID: {el.id} | {role_str} | label=\"{el.safeLabel}\" | status={status}{selected} | source={getattr(el, 'perceptionSource', None) or 'DOM'} | bbox=[{el.bbox.x},{el.bbox.y},{el.bbox.width},{el.bbox.height}]"
         )
     elements_block = "\n".join(elements_formatted) if elements_formatted else "(No interactive elements visible)"
 
@@ -84,6 +84,14 @@ def build_planner_prompt(context: SafeContext) -> str:
             f"- Symbol: {tok.tokenSymbol} | ID: {tok.tokenId} | Category: {tok.privacyClass} | Role: {tok.descriptionRole}"
         )
     tokens_block = "\n".join(tokens_formatted) if tokens_formatted else "(No scoped private tokens available)"
+
+    hints_formatted = []
+    if context.visualHints:
+        for hint in context.visualHints:
+            hints_formatted.append(
+                f"- ID: {hint.hintId} | label=\"{hint.description}\" | bbox=[{hint.bbox.x},{hint.bbox.y},{hint.bbox.width},{hint.bbox.height}]"
+            )
+    hints_block = "\n".join(hints_formatted) if hints_formatted else "(No privacy-safe visual hints)"
 
     prior_block = "(Initial step; no prior action executed)"
     if context.priorOutcome:
@@ -121,6 +129,9 @@ Page Epoch: {context.pageEpoch}
 
 === VISIBLE SAFE ELEMENTS ===
 {elements_block}
+
+=== PRIVACY-SAFE VISUAL HINTS ===
+{hints_block}
 
 === PRIOR ACTION OUTCOME ===
 {prior_block}

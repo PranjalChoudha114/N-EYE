@@ -1,7 +1,9 @@
 import type {
+  ElementId,
   PrivacyFinding,
   RawElement,
 } from '@n-eye/protocol';
+import { createElementId } from '@n-eye/protocol';
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
 const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/;
@@ -12,6 +14,7 @@ const API_KEY_PATTERNS = [
   /AIza[0-9A-Za-z-_]{35}/,
   /bearer\s+[a-zA-Z0-9_.-]{20,}/i,
   /CANARY_API_KEY_[a-zA-Z0-9_]+/i,
+  /OCR_API_T007_[A-Z0-9_]+/i,
 ];
 const JWT_REGEX = /eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/;
 
@@ -174,7 +177,12 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
     }
 
     // Session token phrases
-    if (lower.includes('canary_session') || lower.includes('session_token') || lower.includes('auth_token')) {
+    if (
+      lower.includes('canary_session') ||
+      lower.includes('session_token') ||
+      lower.includes('auth_token') ||
+      lower.includes('ocr_session')
+    ) {
       findings.push({
         findingId: createFindingId(),
         privacyClass: 'SECRET_SESSION',
@@ -189,6 +197,34 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
   }
 
   return findings;
+}
+
+/**
+ * OCR-derived text uses the SAME privacy taxonomy as DOM text.
+ * PRIVACY: Local OCR is not a bypass. source is always 'ocr'.
+ */
+export function detectOcrTextPrivacy(
+  text: string,
+  meta: { roiId: string; blockId: string; elementId?: ElementId }
+): PrivacyFinding[] {
+  if (!text.trim()) return [];
+  const synthetic: RawElement = {
+    id: meta.elementId || createElementId('ocr_anon'),
+    tagName: 'ocr',
+    role: null,
+    ariaLabel: null,
+    innerTextCandidate: text,
+    inputType: null,
+    isEnabled: true,
+    bbox: { x: 0, y: 0, width: 0, height: 0 },
+  };
+  return detectElementPrivacy(synthetic).map((finding) => ({
+    ...finding,
+    source: 'ocr',
+    elementId: meta.elementId,
+    fieldLocation: `ocr.${meta.roiId}.${meta.blockId}`,
+    reason: `OCR provenance: ${finding.reason}`,
+  }));
 }
 
 export function detectGoalPrivacy(goalText: string): PrivacyFinding[] {

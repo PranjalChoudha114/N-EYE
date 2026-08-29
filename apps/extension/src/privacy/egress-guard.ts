@@ -9,10 +9,13 @@ export class EgressViolationError extends Error {
 
 const FORBIDDEN_CANARY_PATTERNS = [
   /CANARY_[A-Z0-9_]+/i,
+  /OCR_(API|OTP|SESSION|PASSWORD|EMAIL|PHONE)_T007/i,
   /sk_live_[0-9a-zA-Z]{16,}/,
   /AKIA[0-9A-Z]{16}/,
   /eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/,
   /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
+  /data:image\//i,
+  /iVBORw0KGgo/,
 ];
 
 const MAX_SAFE_CONTEXT_BYTES = 256 * 1024; // 256 KB bound
@@ -42,7 +45,7 @@ export function validateSafeContextEgress(context: SafeContext): string {
 
   // Schema sanity check - forbid local-only properties
   const rawObj = context as unknown as Record<string, unknown>;
-  if ('_isLocalOnly' in rawObj || 'elements' in rawObj || 'privacyFindings' in rawObj) {
+  if ('_isLocalOnly' in rawObj || 'elements' in rawObj || 'privacyFindings' in rawObj || 'ocrBlocks' in rawObj) {
     throw new EgressViolationError(
       'RawScene leakage detected in SafeContext. Local-only properties must never cross the network boundary.'
     );

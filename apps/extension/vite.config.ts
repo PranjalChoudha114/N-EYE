@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite';
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { resolve } from 'path';
+import { createRequire } from 'module';
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join, resolve } from 'path';
 import { formatBuildIdentity } from './src/dev/build-identity.ts';
 
+const require = createRequire(import.meta.url);
 const repoRoot = resolve(__dirname, '../..');
 
 function readGitBuildIdentity(): { label: string; detail: string } {
@@ -54,6 +56,17 @@ export default defineConfig({
         manifest.version_name = identity.label;
         writeFileSync('dist/manifest.json', `${JSON.stringify(manifest, null, 2)}\n`);
         writeFileSync('dist/build-identity.txt', `${identity.label}\n${identity.detail}\n`);
+
+        const ocrDir = join('dist', 'ocr');
+        mkdirSync(ocrDir, { recursive: true });
+        const workerSrc = require.resolve('tesseract.js/dist/worker.min.js');
+        cpSync(workerSrc, join(ocrDir, 'worker.min.js'));
+        const coreRoot = dirname(require.resolve('tesseract.js-core/package.json'));
+        cpSync(join(coreRoot, 'tesseract-core-simd-lstm.wasm.js'), join(ocrDir, 'tesseract-core-simd-lstm.wasm.js'));
+        const trained = resolve(__dirname, 'ocr-assets/eng.traineddata');
+        if (existsSync(trained)) {
+          cpSync(trained, join(ocrDir, 'eng.traineddata'));
+        }
       },
     },
   ],

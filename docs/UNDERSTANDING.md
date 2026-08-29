@@ -17,12 +17,13 @@ Standard cloud-first browser agents (such as OpenAI Operator, Anthropic Computer
 - The remote AI receives only an abstract, sanitized, and tokenized **`SafeContext`** needed for planning.
 - The remote model's output is treated strictly as **untrusted advisory proposals** (`ActionProposal`).
 - The local browser validates the proposal against current DOM state, resolves private tokens in local memory, prompts for human confirmation on high-risk actions, executes native events on live nodes, and verifies the resulting state-change delta.
+- When DOM/ARIA is insufficient, N-Eye may read **local pixels** (bounded ROI + on-device OCR). Pixels are a new local input, not a privacy bypass.
 
 ---
 
 ## 2. The Canonical Trust Loop
 
-Every N-Eye task step executes through an immutable 6-stage lifecycle:
+Every N-Eye task step executes through an immutable lifecycle:
 
 ```
 [ Active Webpage (Zone 0: Hostile DOM / Pixels) ]
@@ -31,11 +32,11 @@ Every N-Eye task step executes through an immutable 6-stage lifecycle:
 1. SEE LOCALLY       — Observe visible interactable DOM structure & compute TargetFingerprints.
                      │
                      ▼
-2. PERCEIVE LOCALLY  — Escalate perception (OCR / ROI crop) ONLY when DOM structure is insufficient.
-                     │   **Current implementation: NOT_IMPLEMENTED.** Structure-first DOM observation only.
+2. PERCEIVE LOCALLY  — Escalate OCR / ROI ONLY when DOM structure is insufficient.
+                     │   Adaptive controller records WHY. Raw pixels released after OCR.
                      │
                      ▼
-3. PROTECT LOCALLY   — Detect PII/secrets; tokenize into scoped capabilities (PrivateTokenVault).
+3. PROTECT LOCALLY   — Detect PII/secrets in DOM + OCR; tokenize into scoped capabilities.
                      │
                      ▼
 4. EGRESS GUARD      — Build SafeContext allowlist; byte-level canary scan; enforce 256KB bound.
@@ -66,21 +67,22 @@ N-Eye enforces a strict 6-zone security model:
 | Zone | Name | Location | Trust Level | Responsibility & Authority |
 |---|---|---|---|---|
 | **0** | Webpage | Live Browser Tab | **Hostile** | Untrusted third-party DOM, canvas, scripts, and adversarial injections. |
-| **1** | Content Script | Isolated Webpage Context | **Hostile-Adjacent** | Observes DOM, maintains live node references, executes validated actions. |
-| **2** | Privileged Core | Background Service Worker | **Trusted Coordinator** | Task lifecycle, tab tracking, inter-module messaging, permissions. |
-| **3** | Local Processing | Extension In-Memory Runtime | **Trusted Authority** | Privacy detectors, token vault, action validator, re-grounding, verifier. |
+| **1** | Content Script | Isolated Webpage Context | **Hostile-Adjacent** | Observes DOM, maintains live node references, executes validated actions, extracts ROI rasters. |
+| **2** | Privileged Core | Background Service Worker | **Trusted Coordinator** | Task lifecycle, tab tracking, inter-module messaging, `captureVisibleTab` crops. |
+| **3** | Local Processing | Extension In-Memory Runtime | **Trusted Authority** | Privacy detectors, token vault, OCR, action validator, re-grounding, verifier. |
 | **4** | Network Boundary | Extension Egress Client | **Controlled Gateway** | Egress Guard validation, byte scanning, schema enforcement, timeout/abort. |
 | **5** | Remote Planner | Cloud / Planner Gateway | **Untrusted Advisory** | High-level reasoning over SafeContext; **zero browser execution authority**. |
 
 ### Immutable Boundary Invariants
 1. **Secrets NEVER cross the network**: Passwords, OTPs, API keys, session tokens, and raw PII remain local.
-2. **RawScene is Local-Only**: `RawScene`, live DOM references, unredacted text, and full screenshots never leave Zone 3.
+2. **RawScene is Local-Only**: `RawScene`, live DOM references, unredacted text, full screenshots, and raw OCR never leave Zone 3 by default.
 3. **SafeContext is the Sole Egress Contract**: Outbound payloads are strictly allowlisted JSON schemas.
 4. **Remote AI is Untrusted Advice**: The planner cannot run scripts, invent element IDs, or bypass local validation.
 5. **Private Token Mappings Remain Local**: `[EMAIL_1]` is mapped to `user@example.com` exclusively in local volatile memory.
 6. **Actions Require Live Re-grounding**: Proposals must match live element fingerprints before execution.
 7. **High-Risk Actions Require Explicit User Confirmation**: Actions whose **locally approved** risk is `HIGH` pause for human authorization. Planner `riskLevel` cannot downgrade a locally HIGH click.
 8. **Verification is Empirical**: Success requires observed post-execution state deltas, not model assertions.
+9. **OCR text is untrusted page data**: Local OCR does not grant policy, token, or execution authority.
 
 ---
 
@@ -93,6 +95,7 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 - **NOT an API-key-bearing extension**: Extension client contains zero provider secrets; credentials stay server-side.
 - **NOT a client-side database**: Does not persist passwords or private token mappings to disk or `chrome.storage`.
 - **NOT a test-portal-only prototype**: Core logic operates across any real webpage via standard DOM and MV3 APIs.
+- **NOT a tracker blocker**: Third-party network privacy (REC-016) is not the SIH core boundary.
 
 ---
 
@@ -102,22 +105,23 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 |---|---|---|
 | **Browser Support** | Google Chrome (Manifest V3) | Cross-browser (Chromium, Firefox, Safari, Edge) |
 | **Observation** | DOM semantics, ARIA, geometry, visibility, epoch | Multi-tab tracking, iframe sandboxes, deep shadow DOM |
-| **Perception** | **Current: DOM structure only (OCR NOT_IMPLEMENTED).** SIH still requires on-demand local OCR (Gate T007/008). | WebGPU-accelerated local VLM / visual grounding |
-| **Privacy Engine** | Deterministic regex + heuristics + in-memory vault | Local ML-based PII classifiers + hardware enclave vault |
+| **Perception** | Adaptive on-device OCR (Tesseract.js) when DOM/ARIA is insufficient | WebGPU-accelerated local VLM / visual grounding |
+| **Privacy Engine** | Deterministic regex + heuristics + in-memory vault (DOM + OCR) | Local ML-based PII classifiers + hardware enclave vault |
 | **Egress Guard** | Byte-level canary scan + 256KB size bounds | Cryptographic zero-knowledge egress proofs |
 | **Planner Gateway** | Localhost FastAPI + Gemini / Mock adapters | Enterprise multi-tenant gateway with policy routing |
 | **Persistence** | In-memory ephemeral (10-minute TTL) | Encrypted enterprise audit vault + compliance logging |
-| **Evaluation** | Synthetic test portal (Scenarios 01–06) + test suites | Large-scale WebArena / VisualWebArena benchmark harness |
+| **Evaluation** | Synthetic test portal (Scenarios 01–07) + test suites | Large-scale WebArena / VisualWebArena benchmark harness |
 
 ---
 
-## 6. Current Implementation State (Gate 005/006 + Cursor Genesis)
+## 6. Current Implementation State (Gate T007/008)
 
-- **Protocol Layer (`packages/protocol`)**: Complete branded types, schema contracts, and typed error hierarchy.
-- **Chrome MV3 Shell (`apps/extension`)**: Content script observer, element registry, epoch manager, background service worker, and side panel UI V2.5.
-- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors (emails, phones, API keys, passwords, OTPs, JWTs), token vault, SafeContext builder, and byte-level Egress Guard.
+- **Protocol Layer (`packages/protocol`)**: Branded types plus perception/assurance contracts.
+- **Chrome MV3 Shell (`apps/extension`)**: Content script observer, element registry, epoch manager, background service worker, Side Panel, ROI capture.
+- **Perception (`apps/extension/src/perception`)**: Adaptive controller, ROI bounds, PixelBuffer lifecycle, replaceable OCR engine, Tesseract.js runtime, visual grounding/fusion.
+- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors (emails, phones, API keys, passwords, OTPs, JWTs, OCR provenance), token vault, SafeContext builder, Egress Guard (includes visual canaries / screenshot magic).
+- **Human assurance (`apps/extension/src/assurance`)**: Truthful protection states, site-change events, Privacy Receipts, advisory recommendations.
 - **Planner Gateway (`apps/planner-api`)**: FastAPI backend with Google Gemini (`gemini-2.5-flash`), OpenAI-compatible, and deterministic Mock adapters. Server-side API key isolation.
-- **Local Action Authority (`apps/extension/src/authority`, `execution`, `verification`)**: Proposal validator, live semantic re-grounding, local token resolution, native event executor, and state-delta verifier.
-- **Visual perception / OCR**: **NOT_IMPLEMENTED**. Do not describe as present.
-- **Automated Test Matrix** (Cursor Genesis seal 2026-08-29): 86 tests passing (9 protocol, 60 extension, 17 planner API). Chrome Side Panel E2E remains **UNVERIFIED**.
-- **Next Eligible Milestone**: Gate 007/008 (On-Device OCR + Local Visual Perception + Adaptive Perception Controller). Do not start until explicitly approved.
+- **Local Action Authority**: Proposal validator, live semantic re-grounding, local token resolution, native event executor, and state-delta verifier.
+- **Chrome Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`).
+- **Next Eligible Milestone**: Gate 009 (Formal SIH evaluation harness + evidence pack). Do not start until explicitly approved.

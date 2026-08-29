@@ -12,12 +12,12 @@ and verifies results.
 
 ## Project Status
 
-**Gate:** Cursor Genesis sealed (pre-T007/008). Core trust loop + real Gemini planner. OCR/visual perception **NOT_IMPLEMENTED**.
+**Gate:** T007/008 Local Visual Perception + Human Assurance. Structure-first DOM path plus on-device OCR when escalated. Chrome Side Panel E2E remains **MANUAL**.
 
 ## Architecture Overview
 
 ```
-SEE locally → PROTECT locally → THINK remotely (SafeContext) → VALIDATE locally → ACT locally → VERIFY locally
+SEE locally → PERCEIVE locally (if needed) → PROTECT locally → THINK remotely (SafeContext) → VALIDATE locally → ACT locally → VERIFY locally
 ```
 
 The browser keeps sensitive context and execution authority local. Remote reasoning
@@ -97,13 +97,13 @@ N-Eye/
 │   ├── PROTOCOLS.md             # Protocol schema contracts
 │   ├── TEST-STRATEGY.md         # Test strategy & canary proofs
 │   ├── RUNBOOK.md               # Developer operational runbook
-│   └── decisions/               # Architecture Decision Records (ADR 0001 - 0006)
+│   └── decisions/               # Architecture Decision Records (ADR 0001 - 0007)
 ├── packages/
 │   └── protocol/                # Shared protocol contracts & branded identifiers
 ├── apps/
-│   ├── extension/               # Chrome MV3 extension (Content Script, Service Worker, Side Panel)
+│   ├── extension/               # Chrome MV3 extension (Content Script, Service Worker, Side Panel, perception)
 │   ├── planner-api/             # FastAPI Remote Planner Gateway & Provider Adapters
-│   └── test-portal/             # Controlled test scenarios (01 to 06)
+│   └── test-portal/             # Controlled test scenarios (01 to 07)
 ```
 
 ## Key Documents
@@ -115,7 +115,7 @@ N-Eye/
 - [Trust Model](docs/TRUST-MODEL.md) — Trust zones and boundaries
 - [Privacy Boundary](docs/PRIVACY-BOUNDARY.md) — Privacy invariants
 - [Protocols](docs/PROTOCOLS.md) — Data contract definitions
-- [ADR-0006](docs/decisions/ADR-0006-remote-planner-boundary.md) — Remote Planner Reasoning Boundary
+- [ADR-0007](docs/decisions/ADR-0007-local-adaptive-perception.md) — Local Adaptive Visual Perception
 
 ## SIH 2026 — Problem Statement 26171
 

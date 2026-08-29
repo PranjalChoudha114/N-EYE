@@ -20,3 +20,12 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-013 | Remove unused `clientCapabilities` Any hole | **Proposed** | Planner API | `PlanRequest.clientCapabilities: Dict[str, Any]` is unused. Prefer deletion or a strict schema before any client sends it. |
 | REC-014 | ADR-0006 wording | **Proposed** | Docs | Replace “cryptographic guarantees” language with byte-level canary / regex scanning. Canary tests are not a crypto proof. |
 | REC-015 | Automatic Chrome extension reload | **Rejected for prototype** | DX | MV3 unpacked extensions do not HMR. A custom Chrome-automation reloader is extra moving parts. Documented Reload click is the supported loop. |
+| REC-016 | Third-Party Network Privacy Guard | **Proposed** | Website privacy (not SIH core) | Future capability to evaluate third-party requests, trackers, analytics, cookies/storage, fingerprinting, with allowlists and site compatibility. **Not** the current SIH protection boundary (N-Eye AI planner egress). Do not implement as uBlock/Privacy Badger in this prototype. |
+| REC-017 | Replace Tesseract if UI-font CER is weak | **Proposed** | Perception | Keep the `OcrEngine` seam. Re-benchmark tessdata_best or a small ONNX OCR only if controlled fixtures show systematic UI-text failure. |
+
+## 2. REC-016 — Third-Party Network Privacy Guard (not implemented)
+
+N-Eye's current SIH protection boundary is the **remote AI planner egress** (SafeContext → Egress Guard → gateway). Website privacy features that inspect third-party requests, trackers, analytics beacons, cookies/storage, fingerprinting, or that block network requests are a **separate product class**.
+
+A future Third-Party Network Privacy Guard could evaluate those signals with site allowlists and compatibility controls. That is **not** the T007/008 or SIH core path. Do **not** turn N-Eye into uBlock Origin / Privacy Badger during this prototype.
+

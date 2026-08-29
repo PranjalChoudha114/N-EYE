@@ -1,6 +1,7 @@
 import type { ActionId, ElementId, PageEpoch, TaskId, TokenId } from './identifiers.js';
 import type { BoundingBox, InputType } from './raw-scene.js';
 import type { PrivacyClass } from './privacy.js';
+import type { PerceptionSource } from './perception.js';
 
 export interface SafeElement {
   id: ElementId;
@@ -10,6 +11,7 @@ export interface SafeElement {
   isEnabled: boolean;
   isSelected?: boolean;
   bbox: BoundingBox;
+  perceptionSource?: PerceptionSource;
 }
 
 export interface TokenCapability {
@@ -19,6 +21,7 @@ export interface TokenCapability {
   descriptionRole: string; // e.g. "Primary user email"
 }
 
+/** Geometry + sanitized description only. Never image bytes. */
 export interface SafeVisualHint {
   hintId: string;
   bbox: BoundingBox;

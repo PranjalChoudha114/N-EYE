@@ -21,3 +21,12 @@
 3. Every element identifier is a transient opaque identifier (e.g., `e17`), not a CSS selector or XPath.
 4. Input values of type `password` or sensitive classes are omitted from `SafeContext`.
 5. Private tokens (`[EMAIL_X]`) carry only class and role metadata, never original values.
+
+## 4. Provenance
+Sensitive values may originate from DOM, ARIA, placeholder, task goal, OCR, visual labels, or document/image text. There is no OCR bypass. The same policy table applies.
+
+## 5. Visual / OCR path
+Pixels → local OCR → raw OCR text (local) → privacy detection → policy → tokenize/remove → SafeContext.
+
+Raw screenshots and raw OCR are not outbound. `visualHints` carry sanitized descriptions and geometry only. Remote privacy-safe crop transmission is deferred (T007/008 outbound screenshot bytes = 0).
+

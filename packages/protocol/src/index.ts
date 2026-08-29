@@ -6,3 +6,5 @@ export * from './action-proposal.js';
 export * from './messages.js';
 export * from './errors.js';
 export * from './fingerprint.js';
+export * from './perception.js';
+export * from './assurance.js';

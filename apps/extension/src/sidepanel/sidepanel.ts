@@ -9,17 +9,21 @@
  */
 
 import {
+  type ElementId,
   type ExtensionMessage,
   type ExtensionResponse,
+  type PerceptionResult,
   type PrivacyFinding,
+  type PrivacyReceipt,
   type RawScene,
+  type RoiSpec,
   type SafeContext,
   type TabInfo,
   type ValidatedAction,
   type VerificationResult,
   createTaskId,
 } from '@n-eye/protocol';
-import { detectGoalPrivacy } from '../privacy/detectors.js';
+import { detectGoalPrivacy, detectOcrTextPrivacy } from '../privacy/detectors.js';
 import { evaluatePrivacyPolicy, resetTokenCounters } from '../privacy/policy.js';
 import { PrivateTokenVault } from '../privacy/vault.js';
 import { tokenizeDecisionsWithValues } from '../privacy/token-values.js';
@@ -29,6 +33,28 @@ import { PlannerManager } from '../planner/planner-manager.js';
 import { validateActionProposal } from '../authority/validator.js';
 import { verifyActionExecution } from '../verification/verifier.js';
 import { applyBuildIdentityToDom } from '../dev/build-identity.js';
+import {
+  applyFusionLabels,
+  runPerception,
+  TesseractOcrEngine,
+  discardWireRois,
+  wireRoisToBuffers,
+} from '../perception/index.js';
+import type { CapturedRoiWire } from '../perception/capture.js';
+import {
+  AssuranceBus,
+  blockedState,
+  buildAdvisoryRecommendations,
+  buildPrivacyReceipt,
+  findingsHaveOcrSecrets,
+  localMonitoringState,
+  maybeSiteChangeEvent,
+  protectedState,
+  protectingState,
+  remoteReasoningState,
+  siteChangeHostname,
+  unsupportedState,
+} from '../assurance/index.js';
 
 // DOM Element References
 const connectionPill = document.getElementById('connection-pill') as HTMLDivElement;
@@ -54,6 +80,8 @@ const stepBadgeText = document.getElementById('step-badge-text') as HTMLSpanElem
 const stepSummaryText = document.getElementById('step-summary-text') as HTMLSpanElement;
 
 const stepSee = document.getElementById('step-see') as HTMLDivElement;
+const stepPerceive = document.getElementById('step-perceive') as HTMLDivElement;
+const stepPerceiveStatus = document.getElementById('step-perceive-status') as HTMLSpanElement;
 const stepProtect = document.getElementById('step-protect') as HTMLDivElement;
 const stepThink = document.getElementById('step-think') as HTMLDivElement;
 const stepThinkStatus = document.getElementById('step-think-status') as HTMLSpanElement;
@@ -71,6 +99,7 @@ const verificationStatusBadge = document.getElementById('verification-status-bad
 const verificationDeltaText = document.getElementById('verification-delta-text') as HTMLDivElement;
 
 const latSee = document.getElementById('lat-see') as HTMLSpanElement;
+const latPerceive = document.getElementById('lat-perceive') as HTMLSpanElement;
 const latProtect = document.getElementById('lat-protect') as HTMLSpanElement;
 const latPlanLabel = document.getElementById('lat-plan-label') as HTMLSpanElement;
 const latPlan = document.getElementById('lat-plan') as HTMLSpanElement;
@@ -93,6 +122,21 @@ const proofProviderModel = document.getElementById('proof-provider-model') as HT
 const proofPayloadSize = document.getElementById('proof-payload-size') as HTMLSpanElement;
 const proofCanaryStatus = document.getElementById('proof-canary-status') as HTMLSpanElement;
 const evidenceSafeContextDump = document.getElementById('evidence-safecontext-dump') as HTMLElement;
+const protectionStrip = document.getElementById('protection-strip') as HTMLElement;
+const protectionStateLabel = document.getElementById('protection-state-label') as HTMLElement;
+const protectionDetail = document.getElementById('protection-detail') as HTMLElement;
+const assuranceToast = document.getElementById('assurance-toast') as HTMLElement;
+const receiptCard = document.getElementById('receipt-card') as HTMLElement;
+const receiptHuman = document.getElementById('receipt-human') as HTMLElement;
+const receiptTechnical = document.getElementById('receipt-technical') as HTMLElement;
+const advisoryCard = document.getElementById('advisory-card') as HTMLElement;
+const advisoryList = document.getElementById('advisory-list') as HTMLElement;
+const statOcrInvoked = document.getElementById('stat-ocr-invoked') as HTMLElement;
+const statRoiCount = document.getElementById('stat-roi-count') as HTMLElement;
+const statPerceptionSource = document.getElementById('stat-perception-source') as HTMLElement;
+const statScreenshotOut = document.getElementById('stat-screenshot-out') as HTMLElement;
+const proofOcrReason = document.getElementById('proof-ocr-reason') as HTMLElement;
+const proofCropOut = document.getElementById('proof-crop-out') as HTMLElement;
 
 const confirmModal = document.getElementById('confirmation-dialog') as HTMLDialogElement;
 const modalActionName = document.getElementById('modal-action-name') as HTMLSpanElement;
@@ -106,8 +150,88 @@ let _lastRawScene: RawScene | null = null;
 let currentTaskAbortController: AbortController | null = null;
 const vault = new PrivateTokenVault();
 const plannerManager = new PlannerManager('MOCK', 'http://localhost:8000');
+const ocrEngine = new TesseractOcrEngine();
+const assuranceBus = new AssuranceBus();
+let lastSiteHostname: string | null = null;
 
 const MAX_STEPS = 8;
+
+function showToast(message: string): void {
+  assuranceToast.textContent = message;
+  assuranceToast.classList.remove('hidden');
+  window.setTimeout(() => {
+    assuranceToast.classList.add('hidden');
+  }, 4500);
+}
+
+function setProtectionView(state: string, headline: string, detail: string): void {
+  protectionStrip.dataset['state'] = state;
+  protectionStateLabel.textContent = headline;
+  protectionDetail.textContent = detail;
+}
+
+function renderReceipt(receipt: PrivacyReceipt): void {
+  receiptCard.classList.remove('hidden');
+  receiptHuman.textContent = receipt.humanSummary;
+  receiptTechnical.replaceChildren();
+  const rows: Array<[string, string]> = [
+    ['Site', receipt.hostname],
+    ['Event', receipt.protectionEvent],
+    ['Perception', receipt.perceptionSource],
+    ['Classes', receipt.sensitiveClasses.join(', ') || 'none'],
+    ['Raw screenshot sent', receipt.rawScreenshotSent ? 'YES' : 'NO'],
+    ['Safe crop sent', receipt.safeCropSent ? 'YES' : 'NO'],
+    ['SafeContext bytes', String(receipt.safeContextBytes)],
+    ['Egress', receipt.egressResult],
+    ['Provider', receipt.plannerProvider || '—'],
+  ];
+  for (const [label, value] of rows) {
+    const line = document.createElement('div');
+    line.textContent = `${label}: ${value}`;
+    receiptTechnical.appendChild(line);
+  }
+}
+
+function captureRoisFromTab(tabId: number): (rois: RoiSpec[]) => Promise<ReturnType<typeof wireRoisToBuffers>> {
+  return async (rois: RoiSpec[]) => {
+    const wires = await new Promise<CapturedRoiWire[]>((resolve) => {
+      chrome.tabs.sendMessage(
+        tabId,
+        {
+          type: 'CAPTURE_ROIS_REQUEST',
+          rois: rois.map((roi) => ({
+            roiId: roi.roiId,
+            x: roi.bbox.x,
+            y: roi.bbox.y,
+            width: roi.bbox.width,
+            height: roi.bbox.height,
+          })),
+        },
+        (response: ExtensionResponse<CapturedRoiWire[]>) => {
+          if (chrome.runtime.lastError || !response?.success || !response.data) {
+            resolve([]);
+            return;
+          }
+          resolve(response.data);
+        }
+      );
+    });
+    const buffers = wireRoisToBuffers(wires);
+    discardWireRois(wires);
+    return buffers;
+  };
+}
+
+function applyLocalMonitoring(scene: RawScene | null, supported: boolean, reason?: string): void {
+  if (!supported) {
+    const view = unsupportedState(reason || 'This page cannot be observed.');
+    setProtectionView(view.state, view.headline, view.detail);
+    return;
+  }
+  const classes = (scene?.privacyFindings || []).map((f) => f.privacyClass);
+  const view = localMonitoringState(classes);
+  setProtectionView(view.state, view.headline, view.detail);
+}
 
 function setConnectionStatus(
   status: 'IDLE' | 'CONNECTING' | 'OBSERVING' | 'READY' | 'EXECUTING' | 'UNSUPPORTED' | 'FAILED' | 'CANCELLED',
@@ -246,10 +370,11 @@ function renderVisualizer(findings: PrivacyFinding[], safeContext: SafeContext):
   }
 
   for (const f of findings.slice(0, 3)) {
+    const isSecret = f.privacyClass.startsWith('SECRET_');
     appendTransformItem(
       transformLocalItems,
       f.privacyClass.replace('SECRET_', '').replace('PII_', ''),
-      f.textSpan || f.reason
+      isSecret ? '••••••••' : f.textSpan || f.reason
     );
   }
 
@@ -327,13 +452,72 @@ async function executeClosedTrustLoop(): Promise<void> {
         throw new Error('Failed to observe active page state.');
       }
 
+      // 1b. PERCEIVE LOCALLY — OCR only when the adaptive controller escalates.
+      updatePipelineStep(stepPerceive, 'active');
+      stepPerceiveStatus.textContent = '…';
+      const perception: PerceptionResult = await runPerception({
+        scene: preScene,
+        engine: ocrEngine,
+        capture: captureRoisFromTab(tabId),
+        goal: rawGoal,
+        origin,
+      });
+      latPerceive.textContent = perception.invoked ? `${perception.timings.totalMs.toFixed(1)} ms` : 'skipped';
+
+      if (perception.fallback === 'PAGE_CHANGED') {
+        updatePipelineStep(stepPerceive, 'idle');
+        stepPerceiveStatus.textContent = 'STALE';
+        throw new Error('Page changed during visual perception. Re-perceive required.');
+      }
+
+      let workingScene = preScene;
+      if (perception.invoked) {
+        updatePipelineStep(stepPerceive, 'done');
+        stepPerceiveStatus.textContent = perception.fallback ? perception.fallback : 'OCR';
+        workingScene = {
+          ...preScene,
+          elements: applyFusionLabels(preScene.elements, perception.candidates),
+        };
+      } else {
+        updatePipelineStep(stepPerceive, 'idle');
+        stepPerceiveStatus.textContent = 'SKIP';
+      }
+      proofOcrReason.textContent = perception.invoked
+        ? perception.decision.reasons.join(', ') || 'escalated'
+        : perception.decision.skippedReason || 'DOM sufficient';
+      proofCropOut.textContent = 'NO';
+      statOcrInvoked.textContent = perception.invoked ? 'YES' : 'NO';
+      statRoiCount.textContent = String(perception.decision.roiSpecs.length);
+      statPerceptionSource.textContent = perception.invoked
+        ? perception.fusedElementIds.length > 0
+          ? 'FUSED'
+          : 'OCR'
+        : 'DOM';
+      statScreenshotOut.textContent = '0 B';
+
       // 2. PROTECT LOCALLY
       const protectStart = performance.now();
       updatePipelineStep(stepProtect, 'active');
       coreStateLabel.textContent = 'PROTECT';
+      const protecting = protectingState();
+      setProtectionView(protecting.state, protecting.headline, protecting.detail);
 
       const goalFindings = detectGoalPrivacy(rawGoal);
-      const combinedFindings = [...preScene.privacyFindings, ...goalFindings];
+      const blockToElement = new Map<string, ElementId>();
+      for (const grounding of perception.groundings) {
+        if (!grounding.elementId) continue;
+        for (const blockId of grounding.ocrBlockIds) {
+          blockToElement.set(blockId, grounding.elementId);
+        }
+      }
+      const ocrFindings = perception.ocrBlocks.flatMap((block) =>
+        detectOcrTextPrivacy(block.text, {
+          roiId: block.roiId,
+          blockId: block.blockId,
+          elementId: blockToElement.get(block.blockId),
+        })
+      );
+      const combinedFindings = [...workingScene.privacyFindings, ...goalFindings, ...ocrFindings];
       statFindingsCount.textContent = String(combinedFindings.length);
 
       const decisions = evaluatePrivacyPolicy(combinedFindings);
@@ -354,13 +538,20 @@ async function executeClosedTrustLoop(): Promise<void> {
 
       statTokensCount.textContent = String(vault.size());
 
-      const safeContext = buildSafeContext(preScene, rawGoal, decisions, vault, taskId, combinedFindings);
+      const safeContext = buildSafeContext(workingScene, rawGoal, decisions, vault, taskId, combinedFindings, {
+        visualCandidates: perception.candidates,
+      });
       if (priorOutcome) {
         safeContext.priorOutcome = priorOutcome;
       }
 
       // Egress Guard validation & byte scanning
       let serializedBytes: string;
+      const perceptionSource = perception.invoked
+        ? perception.fusedElementIds.length > 0
+          ? 'FUSED'
+          : 'OCR'
+        : 'DOM';
       try {
         serializedBytes = validateSafeContextEgress(safeContext);
         proofCanaryStatus.textContent = 'PASS (0 Secrets Detected)';
@@ -368,6 +559,32 @@ async function executeClosedTrustLoop(): Promise<void> {
       } catch (egressErr) {
         proofCanaryStatus.textContent = `BLOCKED: ${(egressErr as Error).message}`;
         proofCanaryStatus.className = 'proof-val proof-fail';
+        const blocked = blockedState();
+        setProtectionView(blocked.state, blocked.headline, blocked.detail);
+        const blockedReceipt = buildPrivacyReceipt({
+          hostname: siteChangeHostname(currentTab.url, origin, true),
+          protectionEvent: 'BLOCKED',
+          perceptionSource,
+          findings: combinedFindings,
+          decisions,
+          rawScreenshotSent: false,
+          safeCropSent: false,
+          safeContextBytes: 0,
+          egressResult: 'BLOCKED',
+          ocrInvoked: perception.invoked,
+          roiCount: perception.decision.roiSpecs.length,
+          ocrBlockCount: perception.ocrBlocks.length,
+          escalationReasons: perception.decision.reasons.join(', '),
+        });
+        renderReceipt(blockedReceipt);
+        const blockedToast = assuranceBus.emit({
+          kind: 'BLOCKED',
+          hostname: blockedReceipt.hostname,
+          message: 'N-Eye blocked an unsafe AI request. Forbidden sensitive data was detected before network.',
+          severity: 'warning',
+          dedupeKey: `blocked:${blockedReceipt.hostname}`,
+        });
+        if (blockedToast) showToast(blockedToast.message);
         throw egressErr;
       }
 
@@ -379,10 +596,23 @@ async function executeClosedTrustLoop(): Promise<void> {
       updatePipelineStep(stepProtect, 'done');
       renderVisualizer(combinedFindings, safeContext);
 
+      const notes = buildAdvisoryRecommendations(combinedFindings, perception);
+      if (notes.length > 0) {
+        advisoryCard.classList.remove('hidden');
+        advisoryList.replaceChildren();
+        for (const note of notes) {
+          const li = document.createElement('li');
+          li.textContent = note;
+          advisoryList.appendChild(li);
+        }
+      }
+
       // 3. THINK (MOCK OR REMOTE AI PLANNER)
       const planStart = performance.now();
       updatePipelineStep(stepThink, 'active');
       coreStateLabel.textContent = 'PLAN';
+      const remoteView = remoteReasoningState();
+      setProtectionView(remoteView.state, remoteView.headline, remoteView.detail);
 
       const planResult = await plannerManager.propose(safeContext, { signal });
       const proposal = planResult.proposal;
@@ -393,6 +623,49 @@ async function executeClosedTrustLoop(): Promise<void> {
       proofRequestId.textContent = metadata.requestId;
       proofProviderModel.textContent = `${metadata.provider} (${metadata.model})`;
       updatePipelineStep(stepThink, 'done');
+
+      const protectedView = protectedState(combinedFindings.length);
+      setProtectionView(protectedView.state, protectedView.headline, protectedView.detail);
+      const receipt = buildPrivacyReceipt({
+        hostname: siteChangeHostname(currentTab.url, origin, true),
+        protectionEvent: 'PROTECTED',
+        perceptionSource,
+        findings: combinedFindings,
+        decisions,
+        rawScreenshotSent: false,
+        safeCropSent: false,
+        safeContextBytes: serializedBytes.length,
+        plannerProvider: metadata.provider,
+        plannerModel: metadata.model,
+        egressResult: 'PASS',
+        requestId: metadata.requestId,
+        latencyMs: metadata.planningLatencyMs || planDuration,
+        ocrInvoked: perception.invoked,
+        roiCount: perception.decision.roiSpecs.length,
+        ocrBlockCount: perception.ocrBlocks.length,
+        escalationReasons: perception.decision.reasons.join(', '),
+      });
+      renderReceipt(receipt);
+      const protectedToast = assuranceBus.emit({
+        kind: findingsHaveOcrSecrets(combinedFindings) ? 'OCR_PROTECTED' : 'PROTECTED',
+        hostname: receipt.hostname,
+        message: findingsHaveOcrSecrets(combinedFindings)
+          ? 'OCR found private text in this visual region. It was protected locally.'
+          : protectedView.detail,
+        severity: 'success',
+        dedupeKey: `protected:${receipt.hostname}:${metadata.requestId}`,
+      });
+      if (protectedToast) showToast(protectedToast.message);
+      if (combinedFindings.some((f) => f.privacyClass === 'SECRET_PASSWORD')) {
+        const pwdToast = assuranceBus.emit({
+          kind: 'PASSWORD_EXCLUDED',
+          hostname: receipt.hostname,
+          message: 'Password was not sent to the AI planner.',
+          severity: 'info',
+          dedupeKey: `password:${receipt.hostname}`,
+        });
+        if (pwdToast) showToast(pwdToast.message);
+      }
 
       actionVerificationCard.classList.remove('hidden');
       actionProposalText.textContent = `${proposal.type} ${proposal.targetId ? `(target: ${proposal.targetId})` : ''}`;
@@ -431,7 +704,7 @@ async function executeClosedTrustLoop(): Promise<void> {
 
       let validatedAction: ValidatedAction;
       try {
-        validatedAction = validateActionProposal(proposal, preScene, vault, taskId, origin);
+        validatedAction = validateActionProposal(proposal, workingScene, vault, taskId, origin);
       } catch (err) {
         actionProposalText.textContent = `Rejected: ${(err as Error).message}`;
         updatePipelineStep(stepValidate, 'idle');
@@ -561,11 +834,17 @@ async function initializeActiveTab(): Promise<void> {
       setConnectionStatus('UNSUPPORTED', 'RESTRICTED PAGE');
       unsupportedReason.textContent = activeTab.unsupportedReason || 'Unsupported browser scheme';
       unsupportedBanner.classList.remove('hidden');
+      applyLocalMonitoring(null, false, activeTab.unsupportedReason);
       return;
     }
 
     unsupportedBanner.classList.add('hidden');
-    await requestObservation(activeTab.tabId);
+    const scene = await requestObservation(activeTab.tabId);
+    applyLocalMonitoring(scene, true);
+    const hostname = siteChangeHostname(activeTab.url, activeTab.origin, true);
+    const siteEvent = maybeSiteChangeEvent(assuranceBus, lastSiteHostname, activeTab.url, activeTab.origin, true);
+    lastSiteHostname = hostname;
+    if (siteEvent) showToast(siteEvent.message);
     await refreshGatewayStatus();
   } catch {
     setConnectionStatus('FAILED', 'CONNECTION ERROR');
@@ -609,13 +888,27 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
     targetOrigin.textContent = activeTab.origin || activeTab.url;
     targetTitle.textContent = activeTab.title || 'Untitled';
 
+    const hostname = siteChangeHostname(activeTab.url, activeTab.origin, activeTab.isSupported);
+    const siteEvent = maybeSiteChangeEvent(
+      assuranceBus,
+      lastSiteHostname,
+      activeTab.url,
+      activeTab.origin,
+      activeTab.isSupported
+    );
+    lastSiteHostname = hostname;
+    if (siteEvent) showToast(siteEvent.message);
+
     if (!activeTab.isSupported) {
       setConnectionStatus('UNSUPPORTED', 'RESTRICTED PAGE');
       unsupportedReason.textContent = activeTab.unsupportedReason || 'Unsupported browser scheme';
       unsupportedBanner.classList.remove('hidden');
+      applyLocalMonitoring(null, false, activeTab.unsupportedReason);
     } else {
       unsupportedBanner.classList.add('hidden');
-      requestObservation(activeTab.tabId);
+      requestObservation(activeTab.tabId).then((scene) => {
+        applyLocalMonitoring(scene, true);
+      });
     }
   }
 });

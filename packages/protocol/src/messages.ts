@@ -58,6 +58,8 @@ export type ExtensionMessage =
   | { type: 'STATE_UPDATED'; state: TaskState }
   | { type: 'OBSERVE_REQUEST' }
   | { type: 'OBSERVE_RESPONSE'; scene: RawScene }
+  | { type: 'CAPTURE_ROIS_REQUEST'; rois: Array<{ roiId: string; x: number; y: number; width: number; height: number }> }
+  | { type: 'CAPTURE_TAB_CROPS'; rois: Array<{ roiId: string; x: number; y: number; width: number; height: number }> }
   | { type: 'EXECUTE_ACTION_REQUEST'; action: ValidatedAction }
   | { type: 'EXECUTE_ACTION_RESPONSE'; success: boolean; error?: string }
   | { type: 'CONFIRM_ACTION'; actionId: ActionId; approved: boolean }

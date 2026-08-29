@@ -61,7 +61,7 @@ export interface TokenBinding {
 }
 
 export interface StageMetric {
-  stage: 'SEE' | 'PROTECT' | 'PLAN' | 'VALIDATE' | 'ACT' | 'VERIFY';
+  stage: 'SEE' | 'PERCEIVE' | 'PROTECT' | 'PLAN' | 'VALIDATE' | 'ACT' | 'VERIFY';
   durationMs: number;
   status: 'SUCCESS' | 'FAILURE' | 'SKIPPED' | 'MOCK';
   details?: string;

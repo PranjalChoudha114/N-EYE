@@ -1,6 +1,7 @@
 import type { ElementId, PageEpoch } from './identifiers.js';
 import type { TargetFingerprint } from './fingerprint.js';
 import type { PrivacyFinding } from './privacy.js';
+import type { PerceptionSource, VisualRegion } from './perception.js';
 
 export interface BoundingBox {
   x: number;
@@ -36,6 +37,8 @@ export interface RawElement {
   bbox: BoundingBox;
   fingerprint?: TargetFingerprint;
   xpath?: string; // Local-only for DOM re-grounding
+  /** DOM | OCR | FUSED. Omitted means DOM-only observation. */
+  perceptionSource?: PerceptionSource;
 }
 
 /**
@@ -53,4 +56,6 @@ export interface RawScene {
   privacyFindings: PrivacyFinding[];
   timestamp: number;
   observationDurationMs?: number;
+  /** Visual surfaces that may justify OCR. Geometry only — never pixels. */
+  visualRegions?: VisualRegion[];
 }

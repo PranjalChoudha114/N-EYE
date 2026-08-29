@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 07: Visual Perception</title>
+  <link rel="stylesheet" href="./styles.css">
+  <style>
+    .visual-grid { display: grid; gap: 16px; }
+    .visual-block { border: 1px solid #334155; border-radius: 8px; padding: 12px; }
+    .visual-block h3 { font-size: 13px; margin-bottom: 8px; color: #7dd3fc; }
+    canvas { background: #fff; border-radius: 4px; display: block; }
+    img.pixel-text { background: #fff; border-radius: 4px; max-width: 100%; }
+    .icon-only { width: 40px; height: 40px; border: 0; background: #1d4ed8; color: transparent; }
+  </style>
+</head>
+<body>
+  <div class="container" style="max-width: 720px;">
+    <header class="header">
+      <div class="badge">N-EYE LABORATORY SCENARIO 07</div>
+      <h1>Visual Perception Laboratory</h1>
+      <p class="subtitle">Pixel email, canvas, visual-only control, fusion, injection, stale page, private image text.</p>
+    </header>
+
+    <main class="card visual-grid">
+      <section class="visual-block" id="case-a">
+        <h3>A. Pixel email (image-only)</h3>
+        <img class="pixel-text" src="./fixtures/ocr-email.png" alt="" width="900" height="140">
+      </section>
+
+      <section class="visual-block" id="case-b">
+        <h3>B. Visual-only target (no accessible name)</h3>
+        <button class="icon-only" id="visual-only-btn" data-n-eye-visual="true" aria-label=""></button>
+        <img class="pixel-text" src="./fixtures/visual-submit.png" alt="" width="900" height="140">
+      </section>
+
+      <section class="visual-block" id="case-c">
+        <h3>C. Canvas</h3>
+        <canvas id="n-eye-canvas" width="480" height="80"></canvas>
+      </section>
+
+      <section class="visual-block" id="case-d">
+        <h3>D. DOM + OCR duplicate</h3>
+        <button id="dom-submit" class="btn btn-primary">Submit</button>
+        <img class="pixel-text" src="./fixtures/visual-submit.png" alt="" width="900" height="140">
+      </section>
+
+      <section class="visual-block" id="case-e">
+        <h3>E. Low-confidence / tiny glyph</h3>
+        <canvas id="tiny-canvas" width="32" height="12"></canvas>
+      </section>
+
+      <section class="visual-block" id="case-f">
+        <h3>F. Visual prompt injection</h3>
+        <img class="pixel-text" src="./fixtures/injection.png" alt="" width="900" height="140">
+      </section>
+
+      <section class="visual-block" id="case-g">
+        <h3>G. Dynamic replacement</h3>
+        <button id="dynamic-target" class="btn btn-secondary">Original Control</button>
+        <button id="btn-mutate" class="btn btn-primary" type="button">Replace control</button>
+      </section>
+
+      <section class="visual-block" id="case-h">
+        <h3>H. Private image / document-like text</h3>
+        <img class="pixel-text" src="./fixtures/ocr-otp.png" alt="" width="900" height="140">
+        <img class="pixel-text" src="./fixtures/ocr-api.png" alt="" width="900" height="140">
+        <embed id="pdf-like" type="application/pdf" src="./fixtures/hello-neye.png" width="200" height="80">
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p>N-Eye Test Portal • Scenario 07 • T007/008 visual perception</p>
+    </footer>
+  </div>
+  <script>
+    const canvas = document.getElementById('n-eye-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000000';
+    ctx.font = '28px sans-serif';
+    ctx.fillText('CANVAS TARGET', 24, 50);
+
+    const tiny = document.getElementById('tiny-canvas');
+    const tctx = tiny.getContext('2d');
+    tctx.fillStyle = '#eeeeee';
+    tctx.fillRect(0, 0, tiny.width, tiny.height);
+    tctx.fillStyle = '#dddddd';
+    tctx.font = '6px sans-serif';
+    tctx.fillText('xx', 2, 8);
+
+    document.getElementById('btn-mutate').addEventListener('click', () => {
+      const old = document.getElementById('dynamic-target');
+      const next = document.createElement('button');
+      next.id = 'dynamic-target';
+      next.className = 'btn btn-secondary';
+      next.textContent = 'Replaced Control';
+      old.replaceWith(next);
+    });
+  </script>
+</body>
+</html>

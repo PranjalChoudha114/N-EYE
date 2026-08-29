@@ -1,4 +1,4 @@
-# N-Eye Operational Runbook (Gate 005/006 + Cursor Genesis)
+# N-Eye Operational Runbook (Gate T007/008)
 
 ## 1. Quick Start
 
@@ -82,7 +82,13 @@ Reload the extension, then **refresh every tab** you care about. Content scripts
 ```bash
 python3 -m http.server 5173 --directory apps/test-portal
 ```
-Navigate to `http://localhost:5173/scenario-06-trust-loop.html`.
+Navigate to `http://localhost:5173/scenario-06-trust-loop.html` (DOM trust loop) or `http://localhost:5173/scenario-07-visual.html` (pixel/OCR laboratory).
+
+T007/008 notes:
+- Manifest `0.3.0` adds `wasm-unsafe-eval` on **extension pages only** (Tesseract WASM). No new host permission.
+- OCR assets live in `apps/extension/dist/ocr/` after `pnpm build:extension` (not loaded from a CDN).
+- `file://` pages still need Chrome “Allow access to file URLs” on the extension card if you open the portal as files instead of `http.server`.
+- After this gate: Reload extension → refresh the page → reopen Side Panel. Confirm `DEV • <short-sha>` matches `git rev-parse --short HEAD`.
 
 ## 3. Automated Test Execution
 

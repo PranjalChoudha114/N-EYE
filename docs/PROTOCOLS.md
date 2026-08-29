@@ -22,9 +22,15 @@ Strict allowlisted JSON object sent to remote planner:
 - `sanitizedGoal`: string
 - `safeElements`: array of `SafeElement` (id, role, safeLabel, inputType, enabled, bbox)
 - `availableTokens`: array of `TokenCapability` (`tokenId`, `tokenSymbol`, `privacyClass`, `descriptionRole`) — never real values
-- `visualHints`: optional safe crop references if explicitly escalated (**no producer until T007/008**)
+- `visualHints`: optional sanitized description + geometry (never image bytes). Produced after local OCR/fusion. Remote crop bytes are not sent.
 
-### 2.3 ActionProposal (Zone 5 -> Zone 4 -> Zone 3: Untrusted Inbound)
+### 2.3 Perception (Zone 1→3, local-only)
+- `PerceptionDecision`: escalate yes/no, reasons (WHY OCR ran), ROI specs
+- `OcrTextBlock`: text, optional engine confidence, viewport bbox, roiId, pageEpoch
+- `VisualCandidate` / `VisualGrounding`: fused local targets with source `DOM` | `OCR` | `FUSED`
+- `PerceptionResult`: `_isLocalOnly: true`; must never include rasters or data URLs
+
+### 2.4 ActionProposal (Zone 5 -> Zone 4 -> Zone 3: Untrusted Inbound)
 Structured next action suggestion returned by planner:
 - `actionId`: `ActionId`
 - `type`: `CLICK` | `TYPE_TOKEN` | `TYPE_TEXT` | `SCROLL` | `SELECT` | `WAIT` | `ASK_USER` | `COMPLETE`
@@ -36,9 +42,10 @@ Structured next action suggestion returned by planner:
 - `expectedOutcome`: string
 - `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `BLOCKED`
 
-### 2.4 Internal Extension Messages
+### 2.5 Internal Extension Messages
 Typed cross-context messaging between Content Script, Service Worker, and Side Panel.
 - `OBSERVE_REQUEST` / `OBSERVE_RESPONSE`
 - `EXECUTE_ACTION_REQUEST` / `EXECUTE_ACTION_RESPONSE`
 - `GET_TASK_STATE` / `TASK_STATE_UPDATED`
+- `CAPTURE_ROIS_REQUEST` / `CAPTURE_TAB_CROPS` (ROI RGBA locally; never planner transport)
 - `PING` / `PONG`

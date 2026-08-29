@@ -36,9 +36,9 @@ Security authority is structured into 6 distinct zones:
 - **Rule**: Ephemeral and resilient to service-worker suspension.
 
 ### Zone 3 — Local Sensitive Processing (Highly Trusted)
-- Deterministic privacy detectors, local Token Vault, Action Risk Validator, and Verification Engine.
-- Holds active session token bindings in transient memory.
-- **Rule**: Never exports raw token mappings to disk, storage, or network.
+- Deterministic privacy detectors, local Token Vault, Action Risk Validator, Verification Engine, and on-device OCR.
+- Holds active session token bindings and transient ROI rasters (released after OCR).
+- **Rule**: Never exports raw token mappings, screenshots, or raw OCR to disk, storage, or network.
 
 ### Zone 4 — Network Egress Guard (Controlled Boundary)
 - Strict serializer and allowlist schema validator.
