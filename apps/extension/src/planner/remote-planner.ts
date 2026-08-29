@@ -12,6 +12,7 @@ import {
   NEyeError,
 } from '@n-eye/protocol';
 import { validateSafeContextEgress } from '../privacy/egress-guard.js';
+import { assertProposalShape } from '../authority/proposal-schema.js';
 import type { Planner, PlannerOptions, PlannerProposalResult } from './types.js';
 
 const DEFAULT_GATEWAY_URL = 'http://localhost:8000';
@@ -137,8 +138,17 @@ export class RemotePlanner implements Planner {
           throw new NEyeError('PLANNER_ERROR', `Malicious targetId format detected: ${proposal.targetId}`);
         }
 
+        // Close the schema at the network boundary. An unknown or authority-claiming field is
+        // rejected here rather than travelling inward as an unread property.
+        let safeProposal: ActionProposal;
+        try {
+          safeProposal = assertProposalShape(proposal);
+        } catch (err) {
+          throw new NEyeError('PLANNER_ERROR', `Rejected planner proposal: ${(err as Error).message}`);
+        }
+
         return {
-          proposal,
+          proposal: safeProposal,
           metadata: {
             requestId: data.metadata?.requestId || requestId,
             provider: data.metadata?.provider || 'remote',

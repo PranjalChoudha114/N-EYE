@@ -137,4 +137,26 @@ describe('Protocol Package & Identifier Type Safety', () => {
     expect(frameId).not.toMatch(/https?:/i);
     expect(frameId).not.toContain('?');
   });
+
+  it('exports a closed security reason vocabulary and confirmation capability shape', async () => {
+    const security = await import('../security.js');
+    const codes = [
+      'MALFORMED_PROPOSAL',
+      'POLICY_VIOLATION',
+      'INVALID_TARGET',
+      'STALE_TARGET',
+      'FRAME_VIOLATION',
+      'TOKEN_SCOPE_VIOLATION',
+      'CONFIRMATION_REQUIRED',
+      'CONFIRMATION_STALE',
+      'CONFIRMATION_REPLAY',
+      'RISK_ESCALATED',
+      'UNTRUSTED_AUTHORITY_CLAIM',
+    ];
+    for (const code of codes) {
+      const sample: import('../security.js').SecurityReasonCode = code as import('../security.js').SecurityReasonCode;
+      expect(sample).toBe(code);
+    }
+    expect(typeof security).toBe('object');
+  });
 });

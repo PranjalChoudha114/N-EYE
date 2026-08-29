@@ -8,6 +8,7 @@ import type {
   ContentScriptHealth,
   PrivacyReceipt,
   RiskLevel,
+  SecurityReasonCode,
   VerificationStatus,
 } from '@n-eye/protocol';
 import type { PlannerMode } from '../planner/types.js';
@@ -75,11 +76,21 @@ export interface ActionViewModel {
   targetId?: string;
   frame?: string;
   confirmationRequired?: boolean;
+  /** Sanitized reason code for a security refusal. Never the attacker's payload. */
+  securityReason?: SecurityReasonCode;
 }
 
+/**
+ * What the user sees before granting a high-risk capability.
+ * TRUST: `confirmationId` binds the answer to one pending request. The UI echoes it back.
+ * MUST NEVER: Carry a vault realValue, a resolved token value, or raw page text.
+ */
 export interface ConfirmationView {
+  confirmationId: string;
   actionName: string;
   targetLabel: string;
+  /** Locally classified risk. Never the planner's self-declared level. */
+  risk: RiskLevel;
   why: string;
   stayedLocal: string[];
   dataUsed: string[];
@@ -109,6 +120,8 @@ export interface EvidenceViewModel {
   cropOutbound: string;
   observedControls: number;
   safeContextJson: string;
+  /** Latest security decision, as a reason code. Sanitized: no attack strings, no secrets. */
+  securityReason: string;
 }
 
 export interface LatencyView {
@@ -197,6 +210,7 @@ export function emptyEvidence(health: ContentScriptHealth = 'UNKNOWN'): Evidence
     cropOutbound: 'NO',
     observedControls: 0,
     safeContextJson: '{}',
+    securityReason: '—',
   };
 }
 

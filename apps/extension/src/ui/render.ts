@@ -279,6 +279,8 @@ export function bindProductUi(els: ProductEls): ProductUi {
       if (a.verification) els.actionView.append(row('Verification', a.verification));
       if (a.verificationDelta) els.actionView.append(row('Delta', a.verificationDelta));
       if (a.blockedReason) els.actionView.append(row('Blocked', a.blockedReason));
+      // Reason code, not the attacker's payload. Safe to show in the compact Action tab.
+      if (a.securityReason) els.actionView.append(row('Security reason', a.securityReason));
       if (a.reasoning) els.actionView.append(row('Planner note', a.reasoning));
     } else {
       const empty = document.createElement('p');
@@ -321,6 +323,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
     els.evidenceView.append(
       group('Authority', [
         row('Validation', ev.validationResult),
+        row('Security reason', ev.securityReason),
         row('Execution', ev.executionResult),
         row('Verification', ev.verificationResult),
         row('Vault tokens', String(ev.vaultTokenCount)),
@@ -366,7 +369,8 @@ export function bindProductUi(els: ProductEls): ProductUi {
     if (state.confirmation && role === 'owner' && !els.confirm.open) {
       setSafeText(els.confirmWhat, `What: ${state.confirmation.actionName}`);
       setSafeText(els.confirmTarget, `Target: ${state.confirmation.targetLabel}`);
-      setSafeText(els.confirmWhy, state.confirmation.why);
+      // Risk shown is the locally classified level, never the planner's self-declared one.
+      setSafeText(els.confirmWhy, `Risk: ${state.confirmation.risk} (classified locally). ${state.confirmation.why}`);
       setSafeText(
         els.confirmLocal,
         `Stayed local: ${state.confirmation.stayedLocal.join(', ') || 'No secrets in this step'}`

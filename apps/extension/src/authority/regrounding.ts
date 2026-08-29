@@ -116,11 +116,46 @@ function scoreCandidates(
  * Re-grounds an opaque target against the live DOM immediately before execution.
  * SEMANTIC MATCH > GEOMETRIC CONVENIENCE. Ambiguity abstains. Semantic swap blocks.
  */
+/**
+ * Authority the caller already approved, so re-grounding can tell whether it still holds.
+ * WHY: The old code asserted `tokenScopeValid: true` and `riskStillValid: true`, which made
+ *      two branches of the stale-action contract unreachable. These are now real evidence.
+ */
+export interface RegroundAuthority {
+  /** True when this action carries a vault token into the target. */
+  usesToken: boolean;
+  /** Risk level the local validator approved (and the user confirmed, if HIGH). */
+  approvedRiskLevel: 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
+}
+
+/** A token must never land in a credential or upload control, whatever the label says. */
+function tokenScopeStillValid(node: HTMLElement, authority?: RegroundAuthority): boolean {
+  if (!authority?.usesToken) return true;
+  const type = liveInputType(node);
+  return type !== 'password' && type !== 'file';
+}
+
+/**
+ * A replaced control must not have become more consequential than what was approved.
+ * RISK: structure-derived (form submit control / file input), so relabelling cannot evade it.
+ */
+function riskStillValid(node: HTMLElement, authority?: RegroundAuthority): boolean {
+  if (!authority) return true;
+  if (authority.approvedRiskLevel === 'HIGH') return true;
+  const type = liveInputType(node);
+  if (type === 'file') return false;
+  const isSubmitControl =
+    (node instanceof HTMLInputElement && ['submit', 'image'].includes(node.type.toLowerCase()) && node.form !== null) ||
+    (node instanceof HTMLButtonElement && node.type.toLowerCase() === 'submit' && node.form !== null);
+  return !isSubmitControl;
+}
+
 export function regroundTarget(
   targetId: ElementId,
   registry: ElementRegistry,
   expectedFingerprint?: TargetFingerprint,
-  expectedFrameId?: FrameId
+  expectedFrameId?: FrameId,
+  authority?: RegroundAuthority
 ): RegroundResult {
   const entry = registry.get(targetId);
   if (!entry) {
@@ -175,6 +210,20 @@ export function regroundTarget(
       );
     }
 
+    if (!tokenScopeStillValid(liveNode, authority)) {
+      throw new TargetStaleError(
+        `Target ${targetId} is now a credential or upload control. Token capability is no longer scoped to it.`,
+        'BLOCK'
+      );
+    }
+
+    if (!riskStillValid(liveNode, authority)) {
+      throw new TargetStaleError(
+        `Target ${targetId} became a consequential control after approval. Local risk classification no longer permits this action.`,
+        'BLOCK'
+      );
+    }
+
     return {
       node: liveNode,
       isFingerprintMatch: true,
@@ -192,6 +241,9 @@ export function regroundTarget(
 
   const neighborhoodHits = scored.filter((candidate) => candidate.neighborhood);
   const unique = neighborhoodHits.length === 1 ? neighborhoodHits : scored;
+  // scoreCandidates already required visible + enabled + same frame + matching semantics.
+  // Token scope and risk are re-derived from the surviving candidate, never assumed.
+  const sole = unique.length === 1 ? unique[0] : undefined;
   const decision = decideStaleActionOutcome({
     checks: {
       originCompatible: true,
@@ -200,8 +252,8 @@ export function regroundTarget(
       targetEnabled: unique.length > 0,
       frameMatches: true,
       semanticMatches: unique.length > 0,
-      tokenScopeValid: true,
-      riskStillValid: true,
+      tokenScopeValid: !sole || tokenScopeStillValid(sole.node, authority),
+      riskStillValid: !sole || riskStillValid(sole.node, authority),
     },
     uniqueSemanticCandidate: unique.length === 1,
     ambiguousCandidates: unique.length > 1,

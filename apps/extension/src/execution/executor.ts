@@ -60,7 +60,9 @@ export function executeValidatedAction(
       targetElementId,
       registry,
       action.expectedFingerprint,
-      action.expectedFrameId
+      action.expectedFrameId,
+      // TRUST: token scope and risk are re-derived from the live node, not assumed still valid.
+      { usesToken: proposal.type === 'TYPE_TOKEN', approvedRiskLevel: action.approvedRiskLevel }
     );
     if (action.expectedFingerprint && !reground.isFingerprintMatch) {
       return {

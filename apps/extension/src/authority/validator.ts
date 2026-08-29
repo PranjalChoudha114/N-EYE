@@ -3,21 +3,42 @@ import {
   type RawElement,
   type RawScene,
   type RiskLevel,
+  type SecurityReasonCode,
   type TaskId,
   type ValidatedAction,
 } from '@n-eye/protocol';
 import type { PrivateTokenVault } from '../privacy/vault.js';
+import { assertProposalShape, MalformedProposalError } from './proposal-schema.js';
 
 export class ActionValidationError extends Error {
-  constructor(message: string) {
+  public readonly reasonCode: SecurityReasonCode;
+
+  constructor(message: string, reasonCode: SecurityReasonCode = 'POLICY_VIOLATION') {
     super(message);
     this.name = 'ActionValidationError';
+    this.reasonCode = reasonCode;
   }
 }
 
 const RISK_ORDER: Record<RiskLevel, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, BLOCKED: 3 };
 
-const HIGH_CLICK_LABEL = /\b(submit|login|sign in|sign-in|pay|purchase|delete|checkout|transfer|send payment)\b/i;
+/**
+ * Consequential-action vocabulary for the controlled prototype.
+ * WHY: These verbs cover submission, deletion, upload, publication, and value transfer — the
+ *      classes an unwanted action cannot be undone from. Escalation is the only direction, so a
+ *      false positive costs one confirmation prompt and a false negative is never silent.
+ */
+const HIGH_CLICK_LABEL =
+  /\b(submit|log ?in|sign[ -]?in|pay|payment|purchase|buy|order|checkout|transfer|withdraw|wire|remit|send|publish|delete|remove|erase|wipe|deactivate|deregister|close account|upload|attach file|apply)\b/i;
+
+/**
+ * Structural high-risk semantics that a page cannot relabel away.
+ * RISK: label text is page-controlled, so an attacker could aria-label a Delete control
+ *       "Continue". Structure (form submit control, file input) is not label-derived.
+ */
+function structurallyConsequential(target: RawElement): boolean {
+  return target.inputType === 'submit' || target.inputType === 'file' || target.formSubmitting === true;
+}
 
 function maxRisk(a: RiskLevel, b: RiskLevel): RiskLevel {
   return RISK_ORDER[a] >= RISK_ORDER[b] ? a : b;
@@ -26,13 +47,18 @@ function maxRisk(a: RiskLevel, b: RiskLevel): RiskLevel {
 /**
  * Local risk classification (Zone 3)
  * TRUST: Planner-declared riskLevel is untrusted advice and cannot downgrade a locally HIGH action.
- * WHY: Confirmation must not depend on a model choosing riskLevel=LOW for submit/pay/delete.
+ * WHY: Confirmation must not depend on a model choosing riskLevel=LOW for submit/pay/delete/upload.
  */
 export function classifyLocalRisk(proposal: ActionProposal, target?: RawElement): RiskLevel {
   if (proposal.riskLevel === 'BLOCKED') return 'BLOCKED';
-  if (proposal.type === 'CLICK' && target) {
+  if (!target) return proposal.riskLevel || 'LOW';
+
+  // Writing into a file input is an upload decision, whatever the action verb says.
+  if (target.inputType === 'file') return 'HIGH';
+
+  if (proposal.type === 'CLICK' || proposal.type === 'SELECT') {
     const label = `${target.innerTextCandidate || ''} ${target.ariaLabel || ''}`;
-    if (target.inputType === 'submit' || HIGH_CLICK_LABEL.test(label)) {
+    if (structurallyConsequential(target) || HIGH_CLICK_LABEL.test(label)) {
       return 'HIGH';
     }
   }
@@ -46,18 +72,36 @@ export function classifyLocalRisk(proposal: ActionProposal, target?: RawElement)
  * ENFORCES: Target existence, enabled state, local risk elevation, token scope, and password-field isolation.
  */
 export function validateActionProposal(
-  proposal: ActionProposal,
+  untrustedProposal: ActionProposal,
   scene: RawScene,
   vault: PrivateTokenVault,
   taskId: TaskId,
   origin: string
 ): ValidatedAction {
-  if (!proposal || !proposal.actionId || !proposal.type) {
-    throw new ActionValidationError('Invalid proposal structure: missing actionId or type.');
+  if (!untrustedProposal || !untrustedProposal.actionId || !untrustedProposal.type) {
+    throw new ActionValidationError(
+      'Invalid proposal structure: missing actionId or type.',
+      'MALFORMED_PROPOSAL'
+    );
+  }
+
+  // Shape gate first: an unknown or authority-claiming field is rejected, never ignored.
+  // This runs here as well as at the network boundary so mock and internal paths are covered.
+  let proposal: ActionProposal;
+  try {
+    proposal = assertProposalShape(untrustedProposal);
+  } catch (err) {
+    if (err instanceof MalformedProposalError) {
+      throw new ActionValidationError(err.message, err.reasonCode);
+    }
+    throw err;
   }
 
   if (proposal.riskLevel === 'BLOCKED') {
-    throw new ActionValidationError('Proposal is BLOCKED by risk policy and cannot be executed.');
+    throw new ActionValidationError(
+      'Proposal is BLOCKED by risk policy and cannot be executed.',
+      'POLICY_VIOLATION'
+    );
   }
 
   // COMPLETE / WAIT / ASK_USER / SCROLL do not require a live target.
@@ -76,30 +120,42 @@ export function validateActionProposal(
   }
 
   if (!proposal.targetId) {
-    throw new ActionValidationError(`Action type ${proposal.type} requires a targetId.`);
+    throw new ActionValidationError(`Action type ${proposal.type} requires a targetId.`, 'INVALID_TARGET');
   }
 
   const target = scene.elements.find((e) => e.id === proposal.targetId);
   if (!target) {
     throw new ActionValidationError(
-      `Target element ${proposal.targetId} was not found in current scene (epoch: ${scene.pageEpoch}). Stale proposal.`
+      `Target element ${proposal.targetId} was not found in current scene (epoch: ${scene.pageEpoch}). Stale proposal.`,
+      'INVALID_TARGET'
     );
   }
 
   if (!target.isEnabled) {
-    throw new ActionValidationError(`Target element ${proposal.targetId} is disabled.`);
+    throw new ActionValidationError(`Target element ${proposal.targetId} is disabled.`, 'INVALID_TARGET');
   }
 
   if (target.frameProvenance?.frameKind === 'inaccessible') {
     throw new ActionValidationError(
-      `Target element ${proposal.targetId} belongs to an inaccessible frame. Execution blocked.`
+      `Target element ${proposal.targetId} belongs to an inaccessible frame. Execution blocked.`,
+      'FRAME_VIOLATION'
     );
   }
 
   // SECURITY: untrusted TYPE_TEXT must never write into password fields.
   if ((proposal.type === 'TYPE_TOKEN' || proposal.type === 'TYPE_TEXT') && target.inputType === 'password') {
     throw new ActionValidationError(
-      `Security violation: Attempted to type into a password field via ${proposal.type}. Access blocked.`
+      `Security violation: Attempted to type into a password field via ${proposal.type}. Access blocked.`,
+      'POLICY_VIOLATION'
+    );
+  }
+
+  // SECURITY: a file input's value is set by the user, not by N-Eye. Typing a path here would
+  // be an upload decision the human never made, so it is refused outright rather than confirmed.
+  if ((proposal.type === 'TYPE_TOKEN' || proposal.type === 'TYPE_TEXT') && target.inputType === 'file') {
+    throw new ActionValidationError(
+      `Security violation: Attempted to write into a file upload field via ${proposal.type}. Access blocked.`,
+      'POLICY_VIOLATION'
     );
   }
 
@@ -108,7 +164,10 @@ export function validateActionProposal(
   if (proposal.type === 'TYPE_TOKEN') {
     const tokenIdentifier = proposal.tokenId || proposal.tokenSymbol;
     if (!tokenIdentifier) {
-      throw new ActionValidationError('TYPE_TOKEN proposal must provide tokenId or tokenSymbol.');
+      throw new ActionValidationError(
+        'TYPE_TOKEN proposal must provide tokenId or tokenSymbol.',
+        'TOKEN_SCOPE_VIOLATION'
+      );
     }
 
     const targetSemantic = target.inputType || target.role || target.tagName;

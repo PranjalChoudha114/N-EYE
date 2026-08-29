@@ -157,9 +157,44 @@ export function mapInputType(typeStr: string): InputType {
       return 'textarea';
     case 'select':
       return 'select';
+    case 'file':
+      return 'file';
     default:
       return 'other';
   }
+}
+
+/**
+ * Offscreen-clipped observation policy (Zone 1).
+ * WHY: `position:absolute; left:-9999px` is the classic channel for planting instruction text
+ *      that a human never sees. N-Eye will not offer such a node as an action target.
+ * SCOPE: Only nodes wholly left of or above the document origin are excluded. Below-the-fold
+ *        and right-of-viewport controls remain observable because scrolling reaches them, and
+ *        1px `clip`-style visually-hidden accessibility text keeps positive coordinates.
+ */
+export function isOffscreenClipped(bbox: BoundingBox, scrollX: number, scrollY: number): boolean {
+  // Requires positive layout evidence. Environments without layout report a zero-size rect,
+  // and treating "no geometry" as "offscreen" would hide every control.
+  if (bbox.width <= 0 && bbox.height <= 0) return false;
+  const docRight = bbox.x + scrollX + bbox.width;
+  const docBottom = bbox.y + scrollY + bbox.height;
+  return docRight <= 0 || docBottom <= 0;
+}
+
+/**
+ * True when this control submits an owning form.
+ * RISK: Structure, not label. A page can rename a submit button but cannot detach it from
+ *       its form without also removing its submit behavior.
+ */
+export function isFormSubmitControl(el: HTMLElement): boolean {
+  if (el instanceof HTMLInputElement) {
+    const type = el.type.toLowerCase();
+    return (type === 'submit' || type === 'image') && el.form !== null;
+  }
+  if (el instanceof HTMLButtonElement) {
+    return el.type.toLowerCase() === 'submit' && el.form !== null;
+  }
+  return false;
 }
 
 export function collectCandidates(root: Document | ShadowRoot): HTMLElement[] {
@@ -235,6 +270,12 @@ function materializeElement(
     { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     frameOffset
   );
+
+  const view = el.ownerDocument.defaultView;
+  if (isOffscreenClipped(bbox, view?.scrollX ?? 0, view?.scrollY ?? 0)) {
+    return null;
+  }
+
   const inputType = inputTypeOf(el);
   const normalizedLabelCandidate = getSanitizedLabelCandidate(el);
   const role = el.getAttribute('role') || el.tagName.toLowerCase();
@@ -271,6 +312,7 @@ function materializeElement(
     bbox,
     fingerprint,
     frameProvenance,
+    formSubmitting: isFormSubmitControl(el) ? true : undefined,
   };
 }
 

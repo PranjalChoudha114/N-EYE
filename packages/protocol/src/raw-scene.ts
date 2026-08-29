@@ -39,6 +39,7 @@ export type InputType =
   | 'search'
   | 'textarea'
   | 'select'
+  | 'file'
   | 'other';
 
 export interface RawElement {
@@ -55,6 +56,12 @@ export interface RawElement {
   xpath?: string; // Local-only for DOM re-grounding
   /** DOM | OCR | FUSED. Omitted means DOM-only observation. */
   perceptionSource?: PerceptionSource;
+  /**
+   * True when this control submits an owning form (input[type=submit] or a form-associated
+   * submit button). RISK: derived from DOM structure, not from the label, so a page cannot
+   * relabel a submit control to escape high-risk confirmation.
+   */
+  formSubmitting?: boolean;
   /** Local frame authority. Required for execution; omitted only on legacy fixtures. */
   frameProvenance?: FrameProvenance;
 }

@@ -49,4 +49,6 @@ Security authority is structured into 6 distinct zones:
 - Cloud or local AI model endpoint.
 - Only receives `SafeContext`.
 - Returns `ActionProposal` JSON objects.
-- Authority: **Advisory only**. Cannot run arbitrary JavaScript or bypass local policy.
+- Authority: **Advisory only**. Cannot run arbitrary JavaScript, mint confirmation, change privacy/risk policy, or bypass local validation.
+
+HIGH-risk execution additionally requires a local **confirmation capability** (ADR-0011). A webpage or planner claiming “user confirmed” has no effect.

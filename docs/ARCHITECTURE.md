@@ -51,7 +51,8 @@ Observation is **structure-first**. Local OCR / ROI capture / adaptive visual pe
 ## 4. Architectural Invariants
 1. Raw DOM dumps, full screenshots, form values, and credentials never cross the network by default.
 2. `SafeContext` is the sole allowed schema for outbound network planner requests.
-3. `ActionProposal` returned by planners is untrusted advice and must be locally validated before execution.
+3. `ActionProposal` returned by planners is untrusted advice and must be locally validated before execution. Extra keys and self-granted confirmation claims are rejected (ADR-0011).
+4. HIGH-risk execution requires a local confirmation capability, then live revalidation.
 4. Private token mapping (`[EMAIL_1]` -> `user@example.com`) is held purely in local memory and resolved at the moment of authorized execution.
 5. All critical actions require post-execution verification against live page deltas.
 6. Remote AI reasoning engines receive intelligence context only; they receive NO direct browser execution authority.

@@ -79,7 +79,7 @@ function applyCommand(msg: NEyeUiCommand): void {
     return;
   }
   if (msg.command === 'confirm') {
-    controller.confirm(msg.approved);
+    controller.confirm(msg.approved, msg.confirmationId);
     return;
   }
   if (msg.command === 'setTheme') {
@@ -149,11 +149,11 @@ els.modeRemote.addEventListener('click', () => {
 });
 
 els.confirmOk.addEventListener('click', () => {
-  controller.confirm(true);
+  controller.confirm(true, controller.getState().confirmation?.confirmationId);
 });
 
 els.confirmCancel.addEventListener('click', () => {
-  controller.confirm(false);
+  controller.confirm(false, controller.getState().confirmation?.confirmationId);
 });
 
 els.goal.addEventListener('change', () => {

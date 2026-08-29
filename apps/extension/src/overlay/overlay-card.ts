@@ -26,6 +26,10 @@ export interface OverlayEls {
   cancel: HTMLButtonElement;
   extra: HTMLButtonElement;
   confirmBox: HTMLElement;
+  confirmAction: HTMLElement;
+  confirmTarget: HTMLElement;
+  confirmRisk: HTMLElement;
+  confirmWhy: HTMLElement;
   confirmOk: HTMLButtonElement;
   confirmCancel: HTMLButtonElement;
   modeMock: HTMLButtonElement;
@@ -73,8 +77,17 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
   const extra = el('button', { class: 'nq-btn nq-hidden', type: 'button' }, ['Review']);
   const confirmOk = el('button', { class: 'nq-btn nq-btn-danger', type: 'button' }, ['Confirm']);
   const confirmCancel = el('button', { class: 'nq-btn', type: 'button' }, ['Cancel']);
+  // Truthful confirmation: the user must see the action, the target, and the local risk.
+  // Cancel is first and nothing is preselected — no dark patterns, no auto-confirm timer.
+  const confirmAction = el('p', { class: 'nq-message' }, ['Approval required for a high-risk action.']);
+  const confirmTarget = el('p', { class: 'nq-confirm-line' });
+  const confirmRisk = el('p', { class: 'nq-confirm-line' });
+  const confirmWhy = el('p', { class: 'nq-confirm-line' });
   const confirmBox = el('div', { class: 'nq-confirm nq-hidden' }, [
-    el('p', { class: 'nq-message' }, ['Approval required for a high-risk action.']),
+    confirmAction,
+    confirmTarget,
+    confirmRisk,
+    confirmWhy,
     el('div', { class: 'nq-row-btns' }, [confirmCancel, confirmOk]),
   ]);
   const modeMock = el('button', { class: 'nq-chip is-active', type: 'button' }, ['Mock']);
@@ -132,6 +145,10 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
     cancel,
     extra,
     confirmBox,
+    confirmAction,
+    confirmTarget,
+    confirmRisk,
+    confirmWhy,
     confirmOk,
     confirmCancel,
     modeMock,
@@ -172,7 +189,16 @@ export function paintOverlayCard(
   els.modeRemote.classList.toggle('is-active', state.plannerMode === 'REMOTE');
   els.modeMock.disabled = state.running;
   els.modeRemote.disabled = state.running;
-  els.confirmBox.classList.toggle('nq-hidden', state.phase !== 'AWAITING_CONFIRMATION');
+  // Only a real pending capability shows Confirm. An ASK_USER pause is not an approval request,
+  // so it must never render a Confirm button the user could mistake for one.
+  const confirmation = state.confirmation;
+  els.confirmBox.classList.toggle('nq-hidden', !confirmation);
+  if (confirmation) {
+    setSafeText(els.confirmAction, `Action: ${confirmation.actionName}`);
+    setSafeText(els.confirmTarget, `Target: ${confirmation.targetLabel}`);
+    setSafeText(els.confirmRisk, `Risk: ${confirmation.risk} (classified locally)`);
+    setSafeText(els.confirmWhy, confirmation.why);
+  }
 
   els.facts.replaceChildren();
   const facts: Array<[string, string]> = [];

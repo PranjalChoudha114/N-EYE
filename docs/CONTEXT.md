@@ -34,11 +34,11 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T013/T014 correction: overlay quick card over the page + Side Panel Trust Center. Not T015/T016. |
+| **Current Phase** | T015/T016: adversarial security & local authority hardening. T013/T014 UI preserved. |
 | **Branch** | `main` |
-| **HEAD Commit** | T013/T014 working tree on parent `de6df5e` (T011/T012). Commit when the human asks. |
-| **Latest Verified Gate** | Gate 013/014: product UI transformation. Trust architecture unchanged. |
-| **Next Eligible Gate** | Gate 015/016: previously planned T013/T014 security campaign (DOM/OCR/ARIA prompt-injection hardening, expanded adversarial suite, formal privacy P/R/F1, formal performance). Do not start until approved. |
+| **HEAD Commit** | T015/T016 working tree on parent `2d548b9` (T013/T014). Commit when the human asks. |
+| **Latest Verified Gate** | Gate 015/016: confirmation capability, proposal shape gate, DOM/ARIA/OCR injection corpus. Chrome E2E MANUAL. |
+| **Next Eligible Gate** | Gate 017/018: provider failure / recovery / service-worker lifetime (recommended). Formal PII P/R/F1 and performance remain later. |
 | **SIH Prototype Completion** | ~86% (planning estimate; product UI exists; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
 | **Core Architecture Completion** | ~88% (planning estimate; perception layer implemented; SELECT/SCROLL executor still incomplete) |
 | **Company-Product Completion** | ~24% (planning estimate) |
@@ -96,7 +96,7 @@ These rules are enforced by code, tested by automated suites, and must never be 
 7. **Local validation is mandatory**: `validateActionProposal()` must produce a `ValidatedAction` before the executor accepts any action.
 8. **Re-grounding is mandatory**: `regroundTarget()` verifies the node remains `.isConnected` **or** finds a unique semantic equivalent in the same frame. Live role/tag/inputType/label must match. Bounding-box digest drift from scroll does not fail the action. Duplicate candidates abstain. Semantic swap fail-closes. Executor re-checks immediately before native dispatch.
 9. **Token resolution is strictly local**: `vault.resolve()` dereferences `[EMAIL_1]` → `user@example.com` in volatile memory at the moment of execution.
-10. **High-risk actions require explicit human confirmation**: A modal dialog (`<dialog>`) blocks execution when local `approvedRiskLevel === 'HIGH'`. Planner-declared `riskLevel` cannot downgrade a locally HIGH click (submit/login/pay/delete).
+10. **High-risk actions require explicit human confirmation**: A confirmation *capability* (ADR-0011) bound to task/origin/route/frame/action/target/risk, not a bare boolean. Planner-declared `riskLevel` cannot downgrade a locally HIGH action. After approval the live scene is re-observed and re-validated before execute.
 11. **Verification is empirical**: Success requires measurable evidence (epoch progression, URL change, target consumption). Not model claims.
 12. **Failure cannot increase authority**: Errors and fallbacks do not bypass privacy guards or expand execution scope.
 13. **Failure cannot reduce privacy**: Network errors do not cause raw secrets to be sent in retry payloads.
@@ -252,7 +252,8 @@ N-Eye/
 | **Remote Planner** | `remote-planner.ts` | HTTP transport, mandatory pre-flight `EgressGuard` call, timeout (15s), retry (1× on 5xx), `AbortSignal` cancellation | Prompt engineering, model reasoning | Egress-guarded `SafeContext` | `ActionProposal` + metadata |
 | **FastAPI Gateway** | `main.py` | Request routing (`/v1/health`, `/v1/plan`), payload size enforcement, CORS, error mapping | Browser observation, local validation | HTTP POST with `PlanRequest` body | HTTP response with `PlanResponse` body |
 | **Gemini Adapter** | `gemini.py` | Gemini REST API invocation with structured `responseSchema`, response parsing, error classification | Prompt construction, SafeContext building | `SafeContext`, system prompt text | Parsed `ActionProposal` + token counts |
-| **Validator** | `validator.ts` | Target existence, enabled state, token scope, local risk elevation, password TYPE block | Action execution, re-grounding | `ActionProposal`, `RawScene`, `PrivateTokenVault`, `TaskId`, `origin` | `ValidatedAction` (or throws `ActionValidationError`). Does **not** compare a planner epoch; `ActionProposal` has no epoch field. |
+| **Validator** | `validator.ts` + `proposal-schema.ts` | Target existence, enabled state, token scope, local risk elevation, password/file TYPE block, unknown-key rejection | Action execution, re-grounding | `ActionProposal`, `RawScene`, `PrivateTokenVault`, `TaskId`, `origin` | `ValidatedAction` (or throws). Extra authority fields are `UNTRUSTED_AUTHORITY_CLAIM`. |
+| **Confirmation** | `authority/confirmation.ts` | Single-use confirmation capability + binding verify | UI chrome | `ValidatedAction` + task/origin | `ConfirmationGrant` then post-approval revalidation |
 | **Re-grounding** | `regrounding.ts` | Live node or unique same-frame semantic candidate, TOCTOU re-check | Validation logic | `ElementId`, `ElementRegistry`, fingerprint, `frameId` | `RegroundResult { node, outcome }` |
 | **Executor** | `executor.ts` | Native DOM event dispatching after live authority check | Validation, token resolution | `ValidatedAction`, `ElementRegistry` | `ExecutionResult { success, error?, outcome? }` |
 | **Verifier** | `verifier.ts` | Pre/post `RawScene` comparison: URL, target consumption, control-set; epoch-only → AMBIGUOUS | Execution, re-observation | `ValidatedAction`, pre-scene, post-scene | `VerificationResult` with status and `observedDelta` |
@@ -547,9 +548,9 @@ The system prompt ([`system_prompt.py`](file:///Users/pranjalchoudha/Desktop/N-E
 | `HIGH` | Form submission, account modification, payment | **Show modal dialog** — requires user click "Confirm" to proceed |
 | `BLOCKED` | Action that violates security policy | Reject in validator — never execute |
 
-`approvedRiskLevel` is `max(plannerRisk, localClassification)`. Local classification marks CLICK on `input type=submit` or labels matching submit/login/pay/delete/checkout as HIGH even if the planner said LOW.
+`approvedRiskLevel` is `max(plannerRisk, localClassification)`. Local HIGH includes CLICK/SELECT on `input type=submit|file`, `formSubmitting` structure, and consequential labels (submit/delete/upload/send/publish/transfer/deactivate/…). Planner cannot downgrade.
 
-Confirmation dialog is a native `<dialog>` element with `showModal()`. Displays action type and target ID. User must explicitly confirm or cancel.
+Confirmation is a `ConfirmationBroker` capability (ADR-0011): bound to task, origin, route, frame, action type, target id + semantic key, risk, optional token. Overlay and Side Panel show Action / Target / local Risk / why. After Confirm: re-observe → re-validate → verify binding → execute. Deny, dismiss, tab/origin change, expiry, or semantic swap → no action.
 
 ---
 
@@ -684,27 +685,25 @@ Recorded from Cursor Genesis verification (2026-08-29, this-run). All figures ar
 
 ## 31. Current Fresh Test Results
 
-Run at T013/T014 correction (2026-08-30), this revision:
+Run at T015/T016 (2026-08-30), this revision:
 
 ```
-@n-eye/protocol:  15 passed (3 files)
-@n-eye/extension: 159 passed (39 files)
-apps/planner-api: 18 passed, 1 skipped (live Gemini 429 rate limit; prompt canary assertions ran before skip)
+@n-eye/protocol:  16 passed (3 files)
+@n-eye/extension: 222 passed (49 files)
+apps/planner-api: 25 passed, 1 skipped (live Gemini; prompt canary assertions ran before skip)
 ─────────────────────────────────────
-TOTAL:            192 passed, 0 failed, 1 skipped (environment quota)
+TOTAL:            263 passed, 0 failed, 1 skipped (environment quota)
 ```
 
-T011/T012 behavioral tests and prior T013 UI tests did not regress. Overlay/surface tests are included in the 159.
+T009–T014 behavioral tests did not regress.
 
-- **Lint**: 0 errors, 1 warning (console statement in `real-gemini-integration.test.ts`)
-- **Typecheck**: 0 errors across all packages
-- **Build**: `content.js` is a self-contained IIFE (no `import` of `./assets`). Identity `DEV • de6df5e*` while the working tree is dirty. Rebuild after commit.
-- **Chrome unpacked capsule E2E**: UNVERIFIED — MANUAL VERIFICATION REQUIRED (`docs/evidence/T013-T014-MANUAL-CHECKLIST.md`)
-- **Test environment**: happy-dom (not jsdom) plus node for Tesseract fixtures
+- **Lint**: 0 errors, 1 warning (console statement in `real-gemini-integration.test.ts`) — same baseline
+- **Typecheck**: 0 errors
+- **Build**: `content.js` remains a self-contained IIFE. Identity `DEV • 2d548b9*` while the working tree is dirty. Rebuild after commit.
+- **Chrome unpacked security E2E**: UNVERIFIED — MANUAL (`docs/evidence/T015-T016-MANUAL-CHECKLIST.md`)
+- **Test environment**: happy-dom plus node for Tesseract fixtures
 
-Popup JS gzip ~32.0 KB (development measurement, this machine). Previous Side Panel JS gzip ~25.9 KB (prior build). Build ~185 ms (development measurement).
-
-Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness): see `bench/visual/reports/t009-t010-latest.json`. Cold/warm from `ocr-fixture.test.ts` remains a separate development measurement. Not a SIH benchmark.
+Real OCR DEVELOPMENT MEASUREMENT: `ocr-fixture.test.ts` / `ocr-injection-fixture.test.ts`. Not a SIH benchmark.
 
 ---
 
@@ -722,6 +721,8 @@ Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness): see `bench/visual
 | 07: Visual Perception | `scenario-07-visual.html` | Pixel email, canvas, visual-only control, fusion, injection, stale page, private image text |
 | 08: Visual-only | `scenario-08-visual-only.html` | Canvas click target, unlabeled hit target, document-like region — no fixture data attributes |
 | 09: Held-out visual | `scenario-09-held-out.html` | Different layout/copy/private canvas text for generalization |
+| 11: Prompt injection | `scenario-11-injection.html` | DOM / ARIA / hidden / canvas OCR / document-like injection corpus |
+| 12: High risk | `scenario-12-high-risk.html` | Submit / Delete / Upload / Send + confirmation-race mutate |
 
 ---
 
@@ -928,6 +929,7 @@ pnpm test
 | ADR-0008 | Content-script IIFE + visual-model non-admission | **ACCEPTED** | `content.js` is IIFE; bounded handshake recovery; MODEL_ADMISSION=REJECTED |
 | ADR-0009 | Dynamic-state authority + frame provenance | **ACCEPTED** | Semantic PageEpoch; stale-action contract; namespaced frame IDs; no `all_frames`; opaque `frameId` only |
 | ADR-0010 | Overlay quick card + Side Panel Trust Center | **ACCEPTED** | Page overlay (closed Shadow DOM) is the compact surface; Side Panel owns vault/OCR; no `windows.create`; no `action.default_popup` |
+| ADR-0011 | Confirmation capability + proposal shape gate | **ACCEPTED** | Single-use confirmation bound to action/context; extra proposal keys rejected; local risk escalate-only; prompt contract v2 |
 
 ---
 
@@ -1003,7 +1005,7 @@ These are **planning estimates**, not scientific metrics:
 ## 47. Remaining Capability Map
 
 ```
-COMPLETED (Gates 001-014):
+COMPLETED (Gates 001-016):
   ✅ Repository genesis & engineering constitution
   ✅ Protocol contracts & branded types
   ✅ Active web observation (DOM, visibility, epoch, fingerprint)
@@ -1014,29 +1016,28 @@ COMPLETED (Gates 001-014):
   ✅ Native DOM executor
   ✅ Empirical state-delta verifier
   ✅ Overlay quick card + Side Panel Trust Center + theme (T013/T014)
-  ✅ Controlled test portal (Scenarios 01-10)
+  ✅ Controlled test portal (Scenarios 01-12)
   ✅ Adaptive perception + on-device Tesseract OCR + OCR privacy + visual grounding
   ✅ Human assurance: site-change, Privacy Receipt, truthful protection states
   ✅ Content-script IIFE + bounded recovery + SIH visual eval harness (T009/T010)
   ✅ SPA stale-action + frame provenance (T011/T012)
+  ✅ Adversarial security: confirmation capability, proposal shape gate, DOM/ARIA/OCR injection corpus (T015/T016)
 
-NEXT (Gate 015/016 — previously planned T013/T014 security campaign):
-  ⏳ DOM/OCR/ARIA prompt-injection hardening + expanded adversarial suite
+NEXT (Gate 017/018 — recommended):
+  ⏳ Provider failure / recovery / service-worker lifetime
   ⏳ Broader privacy P/R/F1 (DOM+OCR) beyond the visual canary set
-  ⏳ Formal client-resource / E2E latency benches (not only OCR-warm n=7)
-  ⏳ Human Chrome verification of T011/T012 SPA + frame checklist and T013/T014 overlay + Side Panel checklist
+  ⏳ Formal client-resource / E2E latency benches
+  ⏳ Human Chrome verification of T011–T016 checklists
   ⏳ SELECT/SCROLL executor if a later task requires it (REC-011)
 ```
 
 ---
 
-## 48. NEXT GATE — T015/T016
+## 48. NEXT GATE — T017/T018
 
-**Previously planned T013/T014 security campaign:** DOM/OCR/ARIA prompt-injection hardening, expanded adversarial suite, formal SIH privacy P/R/F1, formal performance.
+**Recommended:** provider failure / recovery / service-worker lifetime (the original post-security campaign). Formal SIH P/R/F1 and performance remain later and should not be mixed into recovery.
 
-Do **not** implement until a human opens that gate.
-
-T013/T014 closed the product-interface transformation. Remaining SIH weight is measured privacy/resource/latency on a larger set, plus human Chrome of the T011/T012 and T013/T014 checklists. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
+T015/T016 closed the security/authority campaign on a deterministic corpus. Chrome unpacked security E2E is MANUAL. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
 
 ---
 
@@ -1234,7 +1235,19 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Trust invariants:** SafeContext, EgressGuard, vault locality, validator/re-grounding/TOCTOU/frames, HIGH-risk confirm, OCR privacy, screenshot outbound 0 B, MV3 CSP, no `innerHTML` for planner/page text — unchanged.
 
-**Next gate:** T015/T016. Do not start until approved.
+**Next gate at the time:** T015/T016 (opened and implemented; see §60).
+
+---
+
+## 60. T015/T016 Adversarial security & local authority (2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED. Real Chrome security E2E: UNVERIFIED (MANUAL: `docs/evidence/T015-T016-MANUAL-CHECKLIST.md`). ADR-0011.
+
+**Property demonstrated on the tested corpus:** hostile DOM/ARIA/OCR/document text may influence observations and even a bad planner proposal; local N-Eye still enforces policy. Secrets do not gain egress authority. Tokens do not gain wrong scope. HIGH-risk actions do not auto-execute. Confirmation cannot be forged as a boolean, replayed across action/target/task/origin/frame, or used after a semantic swap. Live revalidation remains.
+
+**Not claimed:** “prompt-injection proof,” formal PII P/R/F1, or live-Gemini obedience.
+
+**Next eligible combined gate:** T017/T018 provider failure / recovery / service-worker lifetime.
 
 
 

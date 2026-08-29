@@ -13,6 +13,7 @@ import {
   type PrivacyFinding,
   type RawScene,
   type SafeContext,
+  type SecurityReasonCode,
   type TabInfo,
   type ValidatedAction,
   type VerificationResult,
@@ -28,6 +29,12 @@ import { validateSafeContextEgress } from '../privacy/egress-guard.js';
 import { PlannerManager } from '../planner/planner-manager.js';
 import type { GatewayHealth, PlannerMode } from '../planner/types.js';
 import { validateActionProposal } from '../authority/validator.js';
+import {
+  buildConfirmationBinding,
+  ConfirmationBroker,
+  verifyConfirmationBinding,
+} from '../authority/confirmation.js';
+import { SecurityLog } from '../authority/security-log.js';
 import { verifyActionExecution } from '../verification/verifier.js';
 import { applyFusionLabels, runPerception } from '../perception/index.js';
 import type { OcrEngine } from '../perception/ocr-engine.js';
@@ -93,12 +100,14 @@ export class TrustLoopController {
   private readonly listeners = new Set<Listener>();
   private readonly recoveryExhausted = new Set<string>();
   private readonly assuranceBus = new AssuranceBus();
+  private readonly confirmations = new ConfirmationBroker();
+  private readonly securityLog = new SecurityLog();
   private state: ProductState = createIdleState();
   private tab: TabInfo | null = null;
   private abort: AbortController | null = null;
   private observeGeneration = 0;
   private lastHostname: string | null = null;
-  private confirmWait: { resolve: (approved: boolean) => void } | null = null;
+  private confirmWait: { confirmationId: string; resolve: (approved: boolean) => void } | null = null;
 
   constructor(deps: TrustLoopDeps) {
     this.ports = deps.ports;
@@ -159,6 +168,14 @@ export class TrustLoopController {
     // WHY: T011 cleared live evidence on every TAB_CHANGED so tab B cannot inherit A's receipt.
     if (this.tab !== null) {
       this.clearLiveEvidence();
+    }
+    // An open approval must not survive a tab or origin change.
+    if (this.tab !== null && (this.tab.tabId !== tab.tabId || this.tab.origin !== tab.origin)) {
+      this.confirmations.invalidate();
+      if (this.confirmWait) {
+        this.confirmWait.resolve(false);
+        this.confirmWait = null;
+      }
     }
     this.tab = tab;
     const siteEvent = maybeSiteChangeEvent(
@@ -240,18 +257,42 @@ export class TrustLoopController {
 
   public cancel(): void {
     this.abort?.abort();
+    this.confirmations.invalidate();
     if (this.confirmWait) {
       this.confirmWait.resolve(false);
       this.confirmWait = null;
     }
   }
 
-  public confirm(approved: boolean): void {
-    if (!this.confirmWait) return;
+  /**
+   * Records a human answer to the pending confirmation capability.
+   *
+   * TRUST: `approved` alone is not authority. The answer must name the pending confirmationId,
+   *        and the grant is still re-verified against freshly observed page state before execute.
+   * WHY optional id: local trusted callers (the Side Panel buttons) may omit it; the broker then
+   *        answers only the single pending request. A supplied id that does not match is refused,
+   *        so a replayed or fabricated id cannot answer on the user's behalf.
+   */
+  public confirm(approved: boolean, confirmationId?: string): void {
     const wait = this.confirmWait;
+    if (!wait) return;
+    const id = confirmationId ?? wait.confirmationId;
+    const resolution = this.confirmations.resolve(id, approved);
+    if (!resolution.ok) {
+      this.securityLog.record({
+        reasonCode: resolution.reasonCode ?? 'UNTRUSTED_AUTHORITY_CLAIM',
+        detail: resolution.reason ?? 'Confirmation answer refused.',
+      });
+      this.patch({ evidence: { ...this.state.evidence, securityReason: resolution.reasonCode ?? 'UNTRUSTED_AUTHORITY_CLAIM' } });
+      return;
+    }
     this.confirmWait = null;
     this.patch({ confirmation: undefined });
     wait.resolve(approved);
+  }
+
+  public getSecurityEvents(): ReturnType<SecurityLog['list']> {
+    return this.securityLog.list();
   }
 
   public async start(goal?: string): Promise<void> {
@@ -283,6 +324,33 @@ export class TrustLoopController {
 
   private setPipeline(id: PipelineId, visual: ProductState['pipeline'][PipelineId]): void {
     this.patch({ pipeline: { ...this.state.pipeline, [id]: visual } });
+  }
+
+  /**
+   * Single exit for security refusals.
+   * WHY: A failure must never widen authority. This drops any pending approval, records a
+   *      reason code, and shows the user a truthful block — it never retries with more context.
+   * PRIVACY: `detail` is scrubbed by SecurityLog. Attack payloads are not surfaced verbatim.
+   */
+  private failClosed(reasonCode: SecurityReasonCode, detail: string, actionType?: string, targetId?: string): void {
+    this.confirmations.invalidate();
+    const event = this.securityLog.record({ reasonCode, detail, actionType, targetId });
+    this.applyPhase('BLOCKED', detail);
+    this.patch({
+      confirmation: undefined,
+      toast: toastFromEvent({
+        kind: 'BLOCKED',
+        hostname: this.state.siteHostname,
+        message: `Action blocked. ${event.detail}`,
+        severity: 'warning',
+        dedupeKey: `blocked-sec:${reasonCode}:${event.timestamp}`,
+        timestamp: event.timestamp,
+      }),
+      action: this.state.action
+        ? { ...this.state.action, blockedReason: event.detail, securityReason: reasonCode }
+        : this.state.action,
+      evidence: { ...this.state.evidence, securityReason: reasonCode, validationResult: reasonCode },
+    });
   }
 
   private clearLiveEvidence(): void {
@@ -764,6 +832,16 @@ export class TrustLoopController {
         try {
           validatedAction = validateActionProposal(proposal, workingScene, this.vault, taskId, origin);
         } catch (err) {
+          const reasonCode: SecurityReasonCode =
+            err instanceof Error && 'reasonCode' in err
+              ? (err as { reasonCode: SecurityReasonCode }).reasonCode
+              : 'POLICY_VIOLATION';
+          this.securityLog.record({
+            reasonCode,
+            detail: (err as Error).message,
+            actionType: proposal.type,
+            targetId: String(proposal.targetId || ''),
+          });
           this.setPipeline('VALIDATE', 'pending');
           this.applyPhase('BLOCKED', (err as Error).message);
           this.patch({
@@ -792,8 +870,13 @@ export class TrustLoopController {
                 riskPolicy: (err as Error).message,
               },
               blockedReason: (err as Error).message,
+              securityReason: reasonCode,
             },
-            evidence: { ...this.state.evidence, validationResult: (err as Error).message },
+            evidence: {
+              ...this.state.evidence,
+              validationResult: (err as Error).message,
+              securityReason: reasonCode,
+            },
           });
           throw err;
         }
@@ -821,17 +904,35 @@ export class TrustLoopController {
         });
         this.setPipeline('VALIDATE', 'done');
 
+        // The action that will actually run. For HIGH risk it is replaced by a freshly
+        // re-validated action after approval, so a stale closure can never be executed.
+        let actionToExecute: ValidatedAction = validatedAction;
+        let executionScene: RawScene = workingScene;
+
         if (validatedAction.approvedRiskLevel === 'HIGH') {
           const stayedLocal = summary?.keptLocal ?? [];
           const dataUsed = summary?.tokenized.map((t) => t.token) ?? [];
+          const request = this.confirmations.issue(
+            buildConfirmationBinding(validatedAction, { taskId, origin }),
+            { pageEpoch: workingScene.pageEpoch }
+          );
+          this.securityLog.record({
+            reasonCode: 'CONFIRMATION_REQUIRED',
+            detail: `High-risk ${proposal.type} requires explicit approval.`,
+            actionType: proposal.type,
+            targetId: String(proposal.targetId || ''),
+          });
           this.patch({
             confirmation: {
+              confirmationId: request.confirmationId,
               actionName: describeAction(proposal, targetLabel),
               targetLabel,
-              why: 'This action can submit or change an account. N-Eye will not continue without your confirmation.',
+              risk: request.riskLevel,
+              why: 'This action can submit, upload, or change an account. N-Eye will not continue without your confirmation.',
               stayedLocal,
               dataUsed,
             },
+            evidence: { ...this.state.evidence, securityReason: 'CONFIRMATION_REQUIRED' },
           });
           this.applyPhase('AWAITING_CONFIRMATION', `Confirm: ${describeAction(proposal, targetLabel)}`);
           this.patch({
@@ -839,18 +940,80 @@ export class TrustLoopController {
           });
 
           const confirmed = await new Promise<boolean>((resolve) => {
-            this.confirmWait = { resolve };
+            this.confirmWait = { confirmationId: request.confirmationId, resolve };
           });
           if (!confirmed || signal.aborted) {
+            this.confirmations.invalidate();
             this.applyPhase('CANCELLED', 'Action cancelled by user.');
             throw new DOMException('Action cancelled by user.', 'AbortError');
           }
+
+          // Single-use consumption. An approval can authorize at most one execution.
+          const consumed = this.confirmations.consume(request.confirmationId);
+          if (!('grant' in consumed)) {
+            this.failClosed(
+              consumed.reasonCode ?? 'CONFIRMATION_REPLAY',
+              consumed.reason ?? 'Approval could not be used.',
+              proposal.type,
+              String(proposal.targetId || '')
+            );
+            throw new Error(consumed.reason ?? 'Approval could not be used.');
+          }
+
+          // TOCTOU: the page may have mutated while the dialog was open. Re-observe and
+          // re-validate rather than trusting the authority captured before the user read it.
+          const freshScene = await this.requestObservation(tabId, false);
+          if (!freshScene) {
+            this.failClosed(
+              'STALE_TARGET',
+              'Page could not be re-observed after approval. Refusing to execute.',
+              proposal.type,
+              String(proposal.targetId || '')
+            );
+            throw new Error('Page could not be re-observed after approval.');
+          }
+
+          let revalidated: ValidatedAction;
+          try {
+            revalidated = validateActionProposal(proposal, freshScene, this.vault, taskId, origin);
+          } catch (err) {
+            const reasonCode =
+              err instanceof Error && 'reasonCode' in err
+                ? (err as { reasonCode: SecurityReasonCode }).reasonCode
+                : 'STALE_TARGET';
+            this.failClosed(reasonCode, (err as Error).message, proposal.type, String(proposal.targetId || ''));
+            throw err;
+          }
+
+          const binding = verifyConfirmationBinding(
+            consumed.request,
+            buildConfirmationBinding(revalidated, { taskId, origin })
+          );
+          if (!binding.ok) {
+            this.failClosed(
+              binding.reasonCode ?? 'CONFIRMATION_STALE',
+              binding.reason ?? 'Approval no longer matches the live action.',
+              proposal.type,
+              String(proposal.targetId || '')
+            );
+            throw new Error(binding.reason ?? 'Approval no longer matches the live action.');
+          }
+
+          actionToExecute = revalidated;
+          executionScene = freshScene;
+          this.patch({
+            evidence: {
+              ...this.state.evidence,
+              securityReason: 'CONFIRMATION_REVALIDATED',
+              pageEpoch: freshScene.pageEpoch,
+            },
+          });
         }
 
         const actStart = performance.now();
         this.setPipeline('ACT', 'active');
         this.applyPhase('ACTING');
-        const execResult = await executeOnTab(this.ports, tabId, validatedAction);
+        const execResult = await executeOnTab(this.ports, tabId, actionToExecute);
         this.patch({
           latency: { ...this.state.latency, act: `${(performance.now() - actStart).toFixed(1)} ms` },
           evidence: {
@@ -884,7 +1047,8 @@ export class TrustLoopController {
         await this.wait(120);
         const postScene = await this.requestObservation(tabId, false);
         if (postScene) {
-          const verification: VerificationResult = verifyActionExecution(validatedAction, preScene, postScene);
+          // Compare against the scene the action actually ran on, not a pre-approval snapshot.
+          const verification: VerificationResult = verifyActionExecution(actionToExecute, executionScene, postScene);
           this.patch({
             action: {
               ...(this.state.action as NonNullable<ProductState['action']>),
@@ -915,6 +1079,9 @@ export class TrustLoopController {
       if ((err as Error).name === 'AbortError') {
         this.applyPhase('CANCELLED', 'Task cancelled by user.');
         this.clearLiveEvidence();
+      } else if (this.state.phase === 'BLOCKED' || this.state.phase === 'CANCELLED') {
+        // failClosed / validation already told the truth. Do not promote a security block into ERROR.
+        this.patch({ step: { index: this.state.step?.index ?? 1, max: MAX_STEPS, summary: (err as Error).message } });
       } else {
         const message = (err as Error).message;
         const phase = classifyPlannerFailure(message);
@@ -927,6 +1094,8 @@ export class TrustLoopController {
     } finally {
       this.abort = null;
       this.confirmWait = null;
+      // Approval never outlives the task that requested it.
+      this.confirmations.invalidate();
       this.patch({
         running: false,
         canRun: Boolean(this.tab?.isSupported && this.state.contentScriptHealth === 'READY'),

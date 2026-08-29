@@ -84,6 +84,42 @@ describe('overlay host', () => {
     expect(handle.shadow.querySelector('.nq-facts')?.classList.contains('nq-hidden')).toBe(true);
     expect(overlayContainsRaw('CANARY_PASSWORD_X')).toBe(false);
   });
+
+  it('Confirm is hidden until a confirmation capability exists, and echoes the id', () => {
+    const { sendMessage } = stubChrome();
+    const handle = mountOverlay(document);
+    expect(handle.els.confirmBox.classList.contains('nq-hidden')).toBe(true);
+    handle.els.confirmOk.click();
+    expect(sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ command: 'confirm' }));
+
+    const state = createIdleState();
+    applyOverlayState(
+      {
+        ...state,
+        phase: 'AWAITING_CONFIRMATION',
+        confirmation: {
+          confirmationId: 'cnf_test_1',
+          actionName: 'CLICK Delete account',
+          targetLabel: 'Delete account',
+          risk: 'HIGH',
+          why: 'Destructive action',
+          stayedLocal: ['Password'],
+          dataUsed: [],
+        },
+      },
+      'dark'
+    );
+    expect(handle.els.confirmBox.classList.contains('nq-hidden')).toBe(false);
+    expect(handle.els.confirmAction.textContent).toContain('CLICK Delete account');
+    expect(handle.els.confirmRisk.textContent).toContain('HIGH');
+    handle.els.confirmOk.click();
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'N_EYE_UI_COMMAND',
+      command: 'confirm',
+      approved: true,
+      confirmationId: 'cnf_test_1',
+    });
+  });
 });
 
 describe('overlay messages', () => {

@@ -132,6 +132,7 @@ button, input { font: inherit; color: inherit; }
 .nq-more-frame.is-ready { pointer-events: auto; }
 .nq-alert { margin: 0; color: var(--nq-danger); font: 400 12px/1.4 sans-serif; }
 .nq-confirm { display: grid; gap: 6px; padding-top: 4px; }
+.nq-confirm-line { margin: 0; color: var(--muted); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .nq-card { animation: none; transition: none; }
 }

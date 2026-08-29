@@ -61,11 +61,17 @@ function bind(els: OverlayEls): void {
   els.modeRemote.addEventListener('click', () => {
     sendCommand({ type: 'N_EYE_UI_COMMAND', command: 'setMode', mode: 'REMOTE' });
   });
+  // TRUST: the overlay echoes the pending confirmationId it was given. It cannot invent one,
+  // and the owner refuses any id that is not the currently pending capability.
   els.confirmOk.addEventListener('click', () => {
-    sendCommand({ type: 'N_EYE_UI_COMMAND', command: 'confirm', approved: true });
+    const confirmationId = lastState.confirmation?.confirmationId;
+    if (!confirmationId) return;
+    sendCommand({ type: 'N_EYE_UI_COMMAND', command: 'confirm', approved: true, confirmationId });
   });
   els.confirmCancel.addEventListener('click', () => {
-    sendCommand({ type: 'N_EYE_UI_COMMAND', command: 'confirm', approved: false });
+    const confirmationId = lastState.confirmation?.confirmationId;
+    if (!confirmationId) return;
+    sendCommand({ type: 'N_EYE_UI_COMMAND', command: 'confirm', approved: false, confirmationId });
   });
   els.goal.addEventListener('change', () => {
     sendCommand({ type: 'N_EYE_UI_COMMAND', command: 'setGoal', goal: els.goal.value });

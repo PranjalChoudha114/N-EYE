@@ -24,7 +24,7 @@
 6. Optional `frameId` on `SafeElement` is an opaque token (`f1`). It is never a frame URL, hostname path, or query string. `inaccessibleFrames` never leaves the local RawScene.
 
 ## 4. Provenance
-Sensitive values may originate from DOM, ARIA, placeholder, task goal, OCR, visual labels, or document/image text. There is no OCR bypass. The same policy table applies.
+Sensitive values may originate from DOM, ARIA, placeholder, task goal, OCR, visual labels, or document/image text. There is no OCR bypass. The same policy table applies. Instruction-like text in those channels is observation data: it cannot mint tokens, skip NEVER_SEND, or grant confirmation.
 
 ## 5. Visual / OCR path
 Pixels → local OCR → raw OCR text (local) → privacy detection → policy → tokenize/remove → SafeContext.

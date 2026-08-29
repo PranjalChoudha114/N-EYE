@@ -22,7 +22,8 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-015 | Automatic Chrome extension reload | **Rejected for prototype** | DX | MV3 unpacked extensions do not HMR. A custom Chrome-automation reloader is extra moving parts. Documented Reload click is the supported loop. |
 | REC-016 | Third-Party Network Privacy Guard | **Proposed** | Website privacy (not SIH core) | Future capability to evaluate third-party requests, trackers, analytics, cookies/storage, fingerprinting, with allowlists and site compatibility. **Not** the current SIH protection boundary (N-Eye AI planner egress). Do not implement as uBlock/Privacy Badger in this prototype. |
 | REC-017 | Replace Tesseract if UI-font CER is weak | **Proposed** (not justified at T009/T010) | Perception | Keep the `OcrEngine` seam. T009/T010 held-out high-contrast fixtures did not justify ONNX/WebGPU. Re-open only if realistic UI-font CER fails materially. |
-| REC-018 | Bundle MV3 content.js as IIFE | **Adopted** | Extension runtime | Chrome content_scripts cannot execute Vite ES `import` graphs. T009/T010 IIFE + handshake. ADR-0008. |
+| REC-019 | Confirmation capability (not boolean) | **Adopted** (ADR-0011) | Authority | T015/T016: single-use grant bound to action/context; post-approval revalidation. |
+| REC-020 | Do not put confirmationId in overlay ProductState | **Proposed** | Overlay / Zone 1 | Overlay paint currently includes `confirmationId`. Page world cannot use it. A modified content script could. Prefer owner-document-only confirm if a later hardening pass is opened. |
 
 ## 2. REC-016 — Third-Party Network Privacy Guard (not implemented)
 

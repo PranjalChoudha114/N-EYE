@@ -16,7 +16,8 @@ Standard cloud-first browser agents (such as OpenAI Operator, Anthropic Computer
 - The browser stays in control of the private environment and retains final execution authority.
 - The remote AI receives only an abstract, sanitized, and tokenized **`SafeContext`** needed for planning.
 - The remote model's output is treated strictly as **untrusted advisory proposals** (`ActionProposal`).
-- The local browser validates the proposal against current DOM state, resolves private tokens in local memory, prompts for human confirmation on high-risk actions, executes native events on live nodes, and verifies the resulting state-change delta.
+- The local browser validates the proposal against current DOM state, resolves private tokens in local memory, prompts for human confirmation on high-risk actions **as a bound capability** (this action, this target, this context — not a standing permission), executes native events on live nodes, and verifies the resulting state-change delta.
+- **Page content is data, never policy.** DOM, ARIA, OCR, and document text may impersonate SYSTEM/DEVELOPER instructions or fake user confirmation. That remains an observation. Local risk classification, token scope, confirmation binding, and TOCTOU revalidation are the authority boundary. The planner prompt names this (contract `n-eye-planner-policy/2`) as defense-in-depth only.
 - When DOM/ARIA is insufficient, N-Eye may read **local pixels** (bounded ROI + on-device OCR). Pixels are a new local input, not a privacy bypass.
 
 ---

@@ -16,7 +16,9 @@ export type NEyeUiCommand =
   | { type: 'N_EYE_UI_COMMAND'; command: 'cancel' }
   | { type: 'N_EYE_UI_COMMAND'; command: 'setMode'; mode: PlannerMode }
   | { type: 'N_EYE_UI_COMMAND'; command: 'setGoal'; goal: string }
-  | { type: 'N_EYE_UI_COMMAND'; command: 'confirm'; approved: boolean }
+  // TRUST: `approved` alone is not authority. The id must name the pending capability, and the
+  // owner still re-verifies the binding against freshly observed page state before executing.
+  | { type: 'N_EYE_UI_COMMAND'; command: 'confirm'; approved: boolean; confirmationId?: string }
   | { type: 'N_EYE_UI_COMMAND'; command: 'openPanel' }
   | { type: 'N_EYE_UI_COMMAND'; command: 'setTheme'; pref: ThemePref }
   | { type: 'N_EYE_UI_COMMAND'; command: 'closeOverlay' };

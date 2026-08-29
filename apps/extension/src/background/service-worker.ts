@@ -16,6 +16,7 @@ import { classifySupportedUrl } from '../runtime/supported-url.js';
 import type { ProductState } from '../runtime/ui-snapshot.js';
 import { markSessionInterrupted } from '../runtime/ui-snapshot.js';
 import { isNeyeOverlayMessage, type NEyeOverlayMessage, type NEyeUiCommand } from '../runtime/ui-messages.js';
+import { classifyOwnerPort, isSameExtensionSender, overlayConfirmPermitted, resolveInjectTarget } from '../runtime/message-trust.js';
 import type { ThemePref } from '../ui/theme.js';
 
 /**
@@ -84,8 +85,27 @@ async function broadcastOverlayState(state: ProductState): Promise<void> {
   await sendToTab(tab.id, { type: 'N_EYE_OVERLAY_STATE', state, themePref });
 }
 
+function extensionOrigin(): string {
+  try {
+    return new URL(chrome.runtime.getURL('')).origin;
+  } catch {
+    return `chrome-extension://${chrome.runtime.id}`;
+  }
+}
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== 'n-eye-owner') return;
+  // TRUST: the owner port carries confirmation commands. Only an extension-served document may
+  // claim it, so a page-adjacent content script cannot take over the session.
+  const verdict = classifyOwnerPort(port.sender, chrome.runtime.id, extensionOrigin());
+  if (!verdict.ok) {
+    try {
+      port.disconnect();
+    } catch {
+      // Port already gone.
+    }
+    return;
+  }
   ownerPort = port;
   void getActiveTabInfo().then((tabInfo) => {
     port.postMessage({ type: 'UI_HELLO', tabInfo, state: lastUiState, themePref });
@@ -225,6 +245,10 @@ async function handleOverlayBus(message: NEyeOverlayMessage, sender: chrome.runt
     return;
   }
 
+  if (message.command === 'confirm' && !overlayConfirmPermitted(sender, message.confirmationId)) {
+    return;
+  }
+
   if (!ownerPort && message.command === 'run' && tabId !== undefined) {
     await openSidePanel(tabId, windowId);
   }
@@ -242,6 +266,13 @@ chrome.runtime.onMessage.addListener(
     sender: chrome.runtime.MessageSender,
     sendResponse: (response: ExtensionResponse) => void
   ) => {
+    // TRUST: reject anything that is not this extension. Another extension or an unexpected
+    // context must not be able to drive tab discovery, injection, or the owner bus.
+    if (!isSameExtensionSender(sender, chrome.runtime.id)) {
+      sendResponse({ success: false, error: 'Rejected: untrusted message sender.' });
+      return true;
+    }
+
     if (isNeyeOverlayMessage(message)) {
       void handleOverlayBus(message, sender).then(() => {
         sendResponse({ success: true });
@@ -264,11 +295,21 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === 'INJECT_CONTENT_SCRIPT') {
-      ensureContentScriptInjected(message.tabId).then((injected) => {
-        sendResponse({ success: injected });
-      }).catch((err) => {
-        sendResponse({ success: false, error: (err as Error).message });
-      });
+      // A requested tabId is not authority. A content script may only re-inject its own tab, and
+      // the owner UI may only inject the tab it is already bound to.
+      getActiveTab()
+        .then(async (activeTab) => {
+          const targetTabId = resolveInjectTarget(sender, message.tabId, activeTab?.id);
+          if (targetTabId === null) {
+            sendResponse({ success: false, error: 'Rejected: injection target is not permitted for this sender.' });
+            return;
+          }
+          const injected = await ensureContentScriptInjected(targetTabId);
+          sendResponse({ success: injected });
+        })
+        .catch((err) => {
+          sendResponse({ success: false, error: (err as Error).message });
+        });
       return true;
     }
 
@@ -309,8 +350,14 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === 'CAPTURE_TAB_CROPS') {
+      // Screenshot authority belongs to the observed tab's own content script. An extension page
+      // must not be able to ask for a capture of whatever tab happens to be focused.
       const tab = sender.tab;
-      const windowId = tab?.windowId;
+      if (tab?.id === undefined) {
+        sendResponse({ success: false, error: 'Rejected: crop requests must originate from the observed tab.' });
+        return true;
+      }
+      const windowId = tab.windowId;
       cropVisibleTab(windowId, message.rois, message.viewport)
         .then((crops) => {
           sendResponse({ success: true, data: crops });

@@ -26,10 +26,14 @@ Testing is a parallel engineering track, not an afterthought. Invariants receive
 
 ### 2.4 Adversarial & Fault Injection Tests
 - Stale target replacement during plan-to-act transition.
-- Prompt injection text in button labels, headings, **and OCR output**.
-- Cross-origin message forgery attempts.
-- Stale visual evidence / page epoch change during perception.
+- Prompt injection text in button labels, headings, ARIA, hidden DOM, **and OCR output** (including genuine `injection.png` pixels).
+- Hostile `ActionProposal` extra fields, invented tokens, risk downgrade, self-confirm claims.
+- Confirmation capability replay / expiry / post-approval semantic swap.
+- Cross-origin message forgery predicates (`message-trust.ts`).
+- Combined stacks (`combo-adversarial.test.ts`).
 - Adaptive controller must not invoke OCR when DOM/ARIA is sufficient.
+
+Portal Scenarios 11 (injection) and 12 (high-risk + confirmation race) extend the synthetic lab. Manual Chrome: `docs/evidence/T015-T016-MANUAL-CHECKLIST.md`.
 
 ### 2.5 Real OCR fixture
 At least one test feeds actual PNG pixels through Tesseract.js (`ocr-fixture.test.ts`). Mock OCR remains for policy/fusion unit tests.

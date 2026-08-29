@@ -46,7 +46,12 @@ Structured next action suggestion returned by planner:
 - `textValue`?: string (non-sensitive text only; validator rejects password targets)
 - `reasoning`: string
 - `expectedOutcome`: string
-- `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `BLOCKED`
+- `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `BLOCKED` (advisory; local `max` wins)
+
+Unknown keys, including `confirmed`, `selector`, `javascript`, `policyOverride`, `verified`, are rejected (`UNTRUSTED_AUTHORITY_CLAIM` / `MALFORMED_PROPOSAL`). `targetId` must be opaque `eN` / `fKeN`.
+
+### 2.5b Confirmation capability (Zone 3, local only)
+`ConfirmationRequest` / `ConfirmationGrant` in `packages/protocol/src/security.ts`. Never sent to the planner. Bound to task, origin, route, frame, action type, target id + semantic key, risk, optional token. Single-use. TTL 120s. See ADR-0011.
 
 ### 2.6 Internal Extension Messages
 Typed cross-context messaging between Content Script, Service Worker, and Product UI.
