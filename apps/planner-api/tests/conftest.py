@@ -3,6 +3,8 @@
 import pytest
 from fastapi.testclient import TestClient
 from src.main import app
+import src.main as main_module
+from src.adapters.mock import MockProviderAdapter
 from src.schemas.safe_context import (
     BoundingBox,
     PageMetadata,
@@ -11,6 +13,17 @@ from src.schemas.safe_context import (
     TokenCapability,
     Viewport,
 )
+
+
+@pytest.fixture(autouse=True)
+def isolate_http_adapter_from_live_providers():
+    """Unit tests must not inherit PLANNER_PROVIDER=gemini from a developer .env."""
+    original = main_module.adapter
+    main_module.adapter = MockProviderAdapter()
+    try:
+        yield
+    finally:
+        main_module.adapter = original
 
 
 @pytest.fixture

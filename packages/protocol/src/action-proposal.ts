@@ -1,4 +1,5 @@
 import type { ActionId, ElementId, PageEpoch, TokenId } from './identifiers.js';
+import type { TargetFingerprint } from './fingerprint.js';
 
 export type ActionType =
   | 'CLICK'
@@ -39,6 +40,7 @@ export interface ValidatedAction {
   proposal: ActionProposal;
   targetElementId?: ElementId;
   resolvedTokenValue?: string; // Injected purely at execution time if TYPE_TOKEN
+  expectedFingerprint?: TargetFingerprint; // Observation-time identity for live re-grounding
   approvedRiskLevel: RiskLevel;
   timestamp: number;
 }

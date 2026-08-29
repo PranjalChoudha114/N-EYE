@@ -3,6 +3,8 @@
 ## 1. System Identity
 N-Eye is a privacy-preserving visual perception trust layer for browser agents. It operates as a Chrome Manifest V3 (MV3) extension, serving as an immutable trust boundary between the user's private browser session and remote AI reasoning engines.
 
+The **current** implementation is structure-first DOM observation. Local OCR / ROI capture / adaptive visual perception are **NOT_IMPLEMENTED** (Gate T007/008). Do not describe the perception stage as present in the running product.
+
 ## 2. Core Execution Loop
 ```
 [ Webpage (DOM / Visual Pixels) ]
@@ -20,7 +22,7 @@ N-Eye is a privacy-preserving visual perception trust layer for browser agents. 
 [ Remote Planner Gateway (FastAPI) -> Provider Adapter (Gemini / Mock) ]
              │
              ▼ (Zone 5 -> Zone 4 -> Zone 3)
-[ Local Action Validator (Schema + Epoch + Target + Policy Guard) ]
+[ Local Action Validator (schema + target + token scope + local risk; live re-ground at execute) ]
              │
              ▼ (Zone 3 -> Zone 1)
 [ Local Action Executor (Content Script Live Reference Execution) ]

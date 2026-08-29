@@ -1,4 +1,4 @@
-# N-Eye Operational Runbook (Gate 005/006)
+# N-Eye Operational Runbook (Gate 005/006 + Cursor Genesis)
 
 ## 1. Quick Start
 
@@ -32,35 +32,68 @@ PLANNER_PROVIDER=mock PYTHONPATH=apps/planner-api .venv/bin/uvicorn src.main:app
 PYTHONPATH=apps/planner-api .venv/bin/uvicorn src.main:app --port 8000 --host 127.0.0.1 --reload
 ```
 
-### Building the Chrome MV3 Extension
-```bash
-# Build extension bundle into apps/extension/dist
-pnpm -r --filter './apps/**' run build
-```
+## 2. Chrome extension — canonical development loop
 
-### Loading Extension in Chrome
-1. Open Google Chrome and navigate to `chrome://extensions`.
-2. Enable **Developer mode** in the top right.
-3. Click **Load unpacked** and select `apps/extension/dist`.
-4. Open the extension Side Panel by clicking the N-Eye icon in the toolbar.
+**Canonical source:** `apps/extension/src/` (and `apps/extension/manifest.json`)
+**Canonical Chrome Load unpacked path:** `apps/extension/dist/`
+**Do not load** `apps/extension/` (source). Vite emits the MV3 bundle only into `dist/`.
+
+Chrome does **not** hot-reload this extension. Rebuilding `dist/` is necessary but not sufficient. You must click **Reload** on `chrome://extensions`.
+
+| Operation | What it does | Chrome updated? |
+|---|---|---|
+| `pnpm build:extension` | One-shot production bundle into `dist/` | No |
+| `pnpm dev:extension` | Watches source and rebuilds `dist/` | No |
+| Reload on `chrome://extensions` | Reloads service worker + extension runtime | Yes |
+| Refresh the target webpage | Re-injects content script | After extension reload |
+| Close/reopen Side Panel | Loads current side panel HTML/JS | After extension reload |
+
+**True live/hot reload: NO.**
+
+### First-time install
+1. `pnpm build:extension` (or `pnpm build`)
+2. Open `chrome://extensions`
+3. Enable **Developer mode**
+4. **Load unpacked** → select `apps/extension/dist` (the folder that contains `manifest.json`, `background.js`, `content.js`)
+5. Confirm **one** N-Eye card. Do not keep a second unpacked copy.
+6. Pin the icon / open the Side Panel
+7. Verify **build identity**:
+   - `chrome://extensions` version line shows `DEV • <git-short-sha>` (trailing `*` means uncommitted source)
+   - Side Panel header next to “Trust Layer” shows the same label
+   - `cat apps/extension/dist/build-identity.txt` matches
+
+### After a normal Cursor source change
+1. `pnpm build:extension` **or** keep `pnpm dev:extension` running
+2. `chrome://extensions` → N-Eye → **Reload**
+3. Refresh the target webpage if content-script / observer / executor changed
+4. Close and reopen the Side Panel (or the panel after Reload)
+5. Confirm the `DEV • <sha>` label changed or matches `git rev-parse --short HEAD` (`*` if dirty)
+
+### After manifest / permission change
+Reload the extension. If Chrome disables the extension, review the new permissions prompt, then Reload again. Re-select `apps/extension/dist` only if you previously loaded the wrong folder.
+
+### After service-worker change
+`chrome://extensions` → **Reload** is mandatory. A page refresh alone will not replace the background worker. Stale workers can keep an old manifest version (e.g. `0.1.0`) while `dist/manifest.json` is already `0.2.0`.
+
+### After content-script change
+Reload the extension, then **refresh every tab** you care about. Content scripts do not upgrade in already-open pages.
 
 ### Running Test Portal
 ```bash
-# Serve test portal on port 5173
 python3 -m http.server 5173 --directory apps/test-portal
 ```
 Navigate to `http://localhost:5173/scenario-06-trust-loop.html`.
 
-## 2. Automated Test Execution
+## 3. Automated Test Execution
 
 ```bash
-# Run TypeScript/Vitest test suites across packages & extension (57 tests)
+# TypeScript/Vitest (protocol + extension)
 pnpm -r run test
 
-# Run Python/Pytest test suites on Planner Gateway (16 tests)
+# Python/Pytest (16 isolated mock HTTP + 1 live Gemini adapter)
 PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests
 
-# Run lint and typecheck
+# Lint and typecheck
 pnpm lint
 pnpm typecheck
 ```

@@ -8,15 +8,11 @@ export class EgressViolationError extends Error {
 }
 
 const FORBIDDEN_CANARY_PATTERNS = [
-  /CANARY_PASSWORD_[A-Z0-9_]+/i,
-  /CANARY_OTP_[A-Z0-9_]+/i,
-  /CANARY_API_KEY_[A-Z0-9_]+/i,
-  /CANARY_SESSION_[A-Z0-9_]+/i,
-  /CANARY_SECRET_[A-Z0-9_]+/i,
-  /CANARY_TASK_SECRET_[A-Z0-9_]+/i,
-  /CANARY_CSRF_[A-Z0-9_]+/i,
+  /CANARY_[A-Z0-9_]+/i,
   /sk_live_[0-9a-zA-Z]{16,}/,
   /AKIA[0-9A-Z]{16}/,
+  /eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/,
+  /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
 ];
 
 const MAX_SAFE_CONTEXT_BYTES = 256 * 1024; // 256 KB bound

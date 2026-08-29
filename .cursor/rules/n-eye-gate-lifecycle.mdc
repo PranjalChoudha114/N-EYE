@@ -1,0 +1,17 @@
+---
+description: Mandatory gate lifecycle, tests, explainability, and memory sync
+alwaysApply: true
+---
+
+# N-Eye — Gate lifecycle
+
+Every major gate:
+
+READ → VERIFY BASELINE → PLAN → IMPLEMENT → TARGETED TEST → INTEGRATE → ADVERSARIAL SELF-REVIEW → FIX SAFE IN-SCOPE DEFECTS → REGRESSION TESTS → RE-AUDIT → FULL REGRESSION → REAL-RUNTIME VERIFY WHERE APPLICABLE → MEASURE → EXPLAINABILITY COMMENTS → UPDATE CONTEXT.md → UPDATE UNDERSTANDING.md IF NEEDED → ADR/RECOMMENDATIONS → COMMIT ONLY WHEN ASKED AND VERIFIED → EVIDENCE REPORT.
+
+Comments: code is WHAT; comments are WHY / TRUST / PRIVACY / RISK / LIFECYCLE (1–2 lines). Boundary modules state what may cross and what must never cross.
+
+Do not implement T007/008 (OCR, ROI, visual grounding, adaptive perception) unless the human explicitly opens that gate.
+
+After every major gate: update `docs/CONTEXT.md` to match source and this-run evidence.
+---

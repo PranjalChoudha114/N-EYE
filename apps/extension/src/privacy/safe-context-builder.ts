@@ -1,5 +1,6 @@
 import type {
   PrivacyDecision,
+  PrivacyFinding,
   RawScene,
   SafeContext,
   SafeElement,
@@ -7,23 +8,39 @@ import type {
 } from '@n-eye/protocol';
 import type { PrivateTokenVault } from './vault.js';
 
-function sanitizeGoal(goal: string, decisions: PrivacyDecision[]): string {
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
+
+function sanitizeGoal(
+  goal: string,
+  decisions: PrivacyDecision[],
+  findings: PrivacyFinding[],
+  vault: PrivateTokenVault
+): string {
   let cleanGoal = goal;
+  const findingById = new Map(findings.map((f) => [f.findingId, f]));
+  const caps = vault.getSafeCapabilities();
 
-  // Replace any detected direct password values in goal
-  cleanGoal = cleanGoal.replace(/(?:password|passcode|secret)[:=\s]+([^\s,]+)/gi, 'password [REDACTED_SECRET]');
+  // Prefer vault-exported symbols so the planner never sees a token the local vault did not bind.
+  const emailToken =
+    caps.find((t) => t.privacyClass === 'PII_EMAIL')?.tokenSymbol ||
+    decisions.find((d) => d.privacyClass === 'PII_EMAIL' && d.tokenRole)?.tokenRole;
+  const phoneToken =
+    caps.find((t) => t.privacyClass === 'PII_PHONE')?.tokenSymbol ||
+    decisions.find((d) => d.privacyClass === 'PII_PHONE' && d.tokenRole)?.tokenRole;
 
-  // Replace tokenized PII with token symbols
   for (const decision of decisions) {
-    if (decision.decision === 'TOKENIZE' && decision.tokenRole) {
-      // If finding had a text span in goal, replace it
-      if (decision.findingId.includes('email') || decision.privacyClass === 'PII_EMAIL') {
-        cleanGoal = cleanGoal.replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, decision.tokenRole);
-      }
+    if (decision.decision !== 'TOKENIZE' || !decision.tokenRole) continue;
+    if (decision.privacyClass === 'PII_EMAIL' || decision.privacyClass === 'PII_PHONE') continue;
+    const span = findingById.get(decision.findingId)?.textSpan;
+    if (span && cleanGoal.includes(span)) {
+      cleanGoal = cleanGoal.split(span).join(decision.tokenRole);
     }
   }
 
-  // Remove high-entropy canary secret tokens from goal
+  cleanGoal = cleanGoal.replace(EMAIL_REGEX, emailToken || '[REDACTED_PII]');
+  cleanGoal = cleanGoal.replace(PHONE_REGEX, phoneToken || '[REDACTED_PII]');
+  cleanGoal = cleanGoal.replace(/(?:password|passcode|secret)[:=\s]+([^\s,]+)/gi, 'password [REDACTED_SECRET]');
   cleanGoal = cleanGoal.replace(/CANARY_[A-Z0-9_]+/gi, '[REDACTED_CANARY]');
 
   return cleanGoal.trim().slice(0, 300);
@@ -40,9 +57,11 @@ export function buildSafeContext(
   rawGoal: string,
   decisions: PrivacyDecision[],
   vault: PrivateTokenVault,
-  taskId: TaskId
+  taskId: TaskId,
+  findings: PrivacyFinding[] = []
 ): SafeContext {
   const decisionByElement = new Map<string, PrivacyDecision>();
+  const findingById = new Map(findings.map((f) => [f.findingId, f]));
   for (const d of decisions) {
     if (d.elementId) {
       decisionByElement.set(d.elementId, d);
@@ -57,17 +76,18 @@ export function buildSafeContext(
 
     if (decision) {
       if (decision.decision === 'NEVER_SEND') {
-        // Redact any possible label secret text
         safeLabel = el.inputType === 'password' ? 'Password Field' : 'Auth Control';
       } else if (decision.decision === 'TOKENIZE' && decision.tokenRole) {
-        // Use token symbol
-        safeLabel = `${decision.tokenRole} (${el.inputType || 'field'})`;
+        const finding = findingById.get(decision.findingId);
+        // Only rewrite labels that actually contained a private value, not the field type itself.
+        if (finding?.textSpan) {
+          safeLabel = `${decision.tokenRole} (${el.inputType || 'field'})`;
+        }
       } else if (decision.decision === 'MASK') {
         safeLabel = 'Masked Field';
       }
     }
 
-    // Ensure safeLabel has no remaining canary strings
     safeLabel = safeLabel.replace(/CANARY_[A-Z0-9_]+/gi, '[PROTECTED_FIELD]').slice(0, 100);
 
     const safeEl: SafeElement = {
@@ -88,7 +108,7 @@ export function buildSafeContext(
     safeElements.push(safeEl);
   }
 
-  const sanitizedGoal = sanitizeGoal(rawGoal, decisions);
+  const sanitizedGoal = sanitizeGoal(rawGoal, decisions, findings, vault);
 
   const safeContext: SafeContext = {
     protocolVersion: '1.0.0',

@@ -21,18 +21,20 @@ Strict allowlisted JSON object sent to remote planner:
 - `pageEpoch`: `PageEpoch`
 - `sanitizedGoal`: string
 - `safeElements`: array of `SafeElement` (id, role, safeLabel, inputType, enabled, bbox)
-- `tokenRoles`: array of available token capabilities (e.g. `[TOKEN_EMAIL_1]`)
-- `visualHints`: optional safe crop references if explicitly escalated
+- `availableTokens`: array of `TokenCapability` (`tokenId`, `tokenSymbol`, `privacyClass`, `descriptionRole`) — never real values
+- `visualHints`: optional safe crop references if explicitly escalated (**no producer until T007/008**)
 
 ### 2.3 ActionProposal (Zone 5 -> Zone 4 -> Zone 3: Untrusted Inbound)
 Structured next action suggestion returned by planner:
 - `actionId`: `ActionId`
-- `type`: `CLICK` | `TYPE_TOKEN` | `SCROLL` | `SELECT` | `WAIT` | `ASK_USER` | `COMPLETE`
+- `type`: `CLICK` | `TYPE_TOKEN` | `TYPE_TEXT` | `SCROLL` | `SELECT` | `WAIT` | `ASK_USER` | `COMPLETE`
 - `targetId`?: `ElementId`
 - `tokenId`?: `TokenId`
-- `value`?: string (for non-sensitive input)
-- `reasoning`?: string
-- `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `CRITICAL`
+- `tokenSymbol`?: string (e.g. `[EMAIL_1]`)
+- `textValue`?: string (non-sensitive text only; validator rejects password targets)
+- `reasoning`: string
+- `expectedOutcome`: string
+- `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `BLOCKED`
 
 ### 2.4 Internal Extension Messages
 Typed cross-context messaging between Content Script, Service Worker, and Side Panel.

@@ -6,6 +6,8 @@
   "description": "Privacy-preserving visual perception for lightweight browser agents",
   "scripts": {
     "build": "pnpm -r --filter './apps/**' run build",
+    "build:extension": "pnpm --filter @n-eye/protocol build && pnpm --filter @n-eye/extension build",
+    "dev:extension": "pnpm --filter @n-eye/protocol build && pnpm --filter @n-eye/extension dev",
     "typecheck": "pnpm -r run typecheck",
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test && PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests",

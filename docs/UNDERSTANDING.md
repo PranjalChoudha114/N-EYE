@@ -32,6 +32,7 @@ Every N-Eye task step executes through an immutable 6-stage lifecycle:
                      │
                      ▼
 2. PERCEIVE LOCALLY  — Escalate perception (OCR / ROI crop) ONLY when DOM structure is insufficient.
+                     │   **Current implementation: NOT_IMPLEMENTED.** Structure-first DOM observation only.
                      │
                      ▼
 3. PROTECT LOCALLY   — Detect PII/secrets; tokenize into scoped capabilities (PrivateTokenVault).
@@ -46,10 +47,11 @@ Every N-Eye task step executes through an immutable 6-stage lifecycle:
                      │
      ════════════════╪════════════════ NETWORK BOUNDARY ════════════════
                      │
-6. VALIDATE LOCALLY  — Validate element existence, epoch freshness, target semantics & token scope.
+6. VALIDATE LOCALLY  — Validate element existence, live target semantics & token scope.
+                     │   (`ActionProposal` has no epoch field; freshness is live re-grounding at execute time.)
                      │
                      ▼
-7. RESOLVE & ACT     — Resolve token value in local memory; prompt on HIGH risk; dispatch native events.
+7. RESOLVE & ACT     — Resolve token value in local memory; prompt on locally approved HIGH risk; dispatch native events.
                      │
                      ▼
 8. VERIFY LOCALLY    — Observe post-state; prove genuine delta (epoch progression / DOM mutation).
@@ -77,7 +79,7 @@ N-Eye enforces a strict 6-zone security model:
 4. **Remote AI is Untrusted Advice**: The planner cannot run scripts, invent element IDs, or bypass local validation.
 5. **Private Token Mappings Remain Local**: `[EMAIL_1]` is mapped to `user@example.com` exclusively in local volatile memory.
 6. **Actions Require Live Re-grounding**: Proposals must match live element fingerprints before execution.
-7. **High-Risk Actions Require Explicit User Confirmation**: Actions with `riskLevel: HIGH` pause for human authorization.
+7. **High-Risk Actions Require Explicit User Confirmation**: Actions whose **locally approved** risk is `HIGH` pause for human authorization. Planner `riskLevel` cannot downgrade a locally HIGH click.
 8. **Verification is Empirical**: Success requires observed post-execution state deltas, not model assertions.
 
 ---
@@ -100,7 +102,7 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 |---|---|---|
 | **Browser Support** | Google Chrome (Manifest V3) | Cross-browser (Chromium, Firefox, Safari, Edge) |
 | **Observation** | DOM semantics, ARIA, geometry, visibility, epoch | Multi-tab tracking, iframe sandboxes, deep shadow DOM |
-| **Perception** | Structure-first; on-demand local OCR (Tesseract WASM) | WebGPU-accelerated local VLM / visual grounding |
+| **Perception** | **Current: DOM structure only (OCR NOT_IMPLEMENTED).** SIH still requires on-demand local OCR (Gate T007/008). | WebGPU-accelerated local VLM / visual grounding |
 | **Privacy Engine** | Deterministic regex + heuristics + in-memory vault | Local ML-based PII classifiers + hardware enclave vault |
 | **Egress Guard** | Byte-level canary scan + 256KB size bounds | Cryptographic zero-knowledge egress proofs |
 | **Planner Gateway** | Localhost FastAPI + Gemini / Mock adapters | Enterprise multi-tenant gateway with policy routing |
@@ -109,12 +111,13 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 
 ---
 
-## 6. Current Implementation State (Gate 005/006 Verified)
+## 6. Current Implementation State (Gate 005/006 + Cursor Genesis)
 
 - **Protocol Layer (`packages/protocol`)**: Complete branded types, schema contracts, and typed error hierarchy.
 - **Chrome MV3 Shell (`apps/extension`)**: Content script observer, element registry, epoch manager, background service worker, and side panel UI V2.5.
 - **Privacy Engine (`apps/extension/src/privacy`)**: Detectors (emails, phones, API keys, passwords, OTPs, JWTs), token vault, SafeContext builder, and byte-level Egress Guard.
 - **Planner Gateway (`apps/planner-api`)**: FastAPI backend with Google Gemini (`gemini-2.5-flash`), OpenAI-compatible, and deterministic Mock adapters. Server-side API key isolation.
-- **Local Action Authority (`apps/extension/src/authority`, `execution`, `verification`)**: Proposal validator, target re-grounding, local token resolution, native event executor, and state-delta verifier.
-- **Automated Test Matrix**: 75 tests passing (9 protocol, 49 extension, 17 planner API).
-- **Next Eligible Milestone**: Gate 007/008 (On-Device OCR + Local Visual Perception + Adaptive Perception Controller).
+- **Local Action Authority (`apps/extension/src/authority`, `execution`, `verification`)**: Proposal validator, live semantic re-grounding, local token resolution, native event executor, and state-delta verifier.
+- **Visual perception / OCR**: **NOT_IMPLEMENTED**. Do not describe as present.
+- **Automated Test Matrix** (Cursor Genesis seal 2026-08-29): 86 tests passing (9 protocol, 60 extension, 17 planner API). Chrome Side Panel E2E remains **UNVERIFIED**.
+- **Next Eligible Milestone**: Gate 007/008 (On-Device OCR + Local Visual Perception + Adaptive Perception Controller). Do not start until explicitly approved.

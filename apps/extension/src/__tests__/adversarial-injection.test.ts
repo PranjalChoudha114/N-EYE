@@ -68,7 +68,7 @@ describe('Adversarial Prompt-Injection & Rogue Model Defense Suite', () => {
       }
     }
 
-    const safeContext = buildSafeContext(rawScene, rawGoal, decisions, vault, taskId);
+    const safeContext = buildSafeContext(rawScene, rawGoal, decisions, vault, taskId, combinedFindings);
     const serializedBytes = validateSafeContextEgress(safeContext);
 
     // Egress guard guarantees password is NEVER in serialized bytes

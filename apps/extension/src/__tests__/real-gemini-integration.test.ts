@@ -82,7 +82,7 @@ describe('Real Gemini API Extension Trust Loop', () => {
     }
     expect(registeredToken).toBeDefined();
 
-    const safeContext = buildSafeContext(rawScene, goalText, decisions, vault, taskId);
+    const safeContext = buildSafeContext(rawScene, goalText, decisions, vault, taskId, combinedFindings);
     expect(safeContext.availableTokens.length).toBe(1);
 
     // Egress Guard Check

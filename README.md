@@ -12,7 +12,7 @@ and verifies results.
 
 ## Project Status
 
-**Gate 005/006 Complete** — Remote AI Planner Integration (FastAPI Gateway + Google Gemini / Mock Provider Adapters + SafeContext-Only Network Boundary + Local Authority Preservation + Network Proof UI).
+**Gate:** Cursor Genesis sealed (pre-T007/008). Core trust loop + real Gemini planner. OCR/visual perception **NOT_IMPLEMENTED**.
 
 ## Architecture Overview
 
@@ -47,13 +47,12 @@ pnpm build
 ### Run Tests
 
 ```bash
-# Run TypeScript test suites across protocol & extension (57 tests)
+# TypeScript suites (protocol + extension)
 pnpm -r run test
 
-# Run Python test suites on Planner Gateway (16 tests)
+# Python suites (planner gateway)
 PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests
 
-# Static lint and typecheck
 pnpm lint
 pnpm typecheck
 ```
@@ -67,12 +66,19 @@ PYTHONPATH=apps/planner-api .venv/bin/uvicorn src.main:app --port 8000 --host 12
 
 ### Load Extension in Chrome
 
-1. Run `pnpm build`
-2. Open Chrome → `chrome://extensions/`
-3. Enable "Developer mode" (top right)
-4. Click "Load unpacked"
-5. Select the `apps/extension/dist/` directory
-6. The N-Eye icon will appear in the toolbar. Open the side panel to interact.
+Canonical unpacked path is **`apps/extension/dist/`** (never `apps/extension/` source).
+
+Chrome does **not** hot-reload N-Eye. After source changes:
+
+```bash
+pnpm build:extension    # one-shot
+# or
+pnpm dev:extension       # watch: rebuilds dist only
+```
+
+Then `chrome://extensions` → N-Eye → **Reload**, refresh the page, reopen the Side Panel. Confirm the `DEV • <git-short-sha>` label in the panel header and on the extension card.
+
+Full loop: [docs/RUNBOOK.md](docs/RUNBOOK.md).
 
 ## Repository Structure
 

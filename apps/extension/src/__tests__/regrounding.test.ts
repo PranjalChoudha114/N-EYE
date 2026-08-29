@@ -58,4 +58,20 @@ describe('Live Re-Grounding Authority', () => {
       regroundTarget(unknownId, registry);
     }).toThrow(TargetStaleError);
   });
+
+  it('reports fingerprint mismatch when live control semantics diverge', () => {
+    const btn = document.getElementById('btn-submit') as HTMLButtonElement;
+    const epoch = createPageEpoch(1);
+    const fp = createTargetFingerprint('button', 'button', null, 'Submit Application', {
+      xPercent: 10,
+      yPercent: 10,
+      widthPercent: 20,
+      heightPercent: 5,
+    });
+    const elemId = registry.register(btn, epoch, fp);
+
+    btn.textContent = 'Delete Account';
+    const result = regroundTarget(elemId, registry, fp);
+    expect(result.isFingerprintMatch).toBe(false);
+  });
 });

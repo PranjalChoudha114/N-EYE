@@ -1,0 +1,21 @@
+---
+description: Anti-hallucination and evidence vocabulary for N-Eye claims
+alwaysApply: true
+---
+
+# N-Eye — Evidence
+
+Use only: `IMPLEMENTED` | `TESTED` | `VERIFIED IN REAL RUNTIME` | `MEASURED` | `TARGET` | `UNVERIFIED` | `NOT_IMPLEMENTED`.
+
+- Documentation says it exists ≠ verified implementation.
+- Code exists ≠ runtime works.
+- Test exists ≠ requirement proven.
+- Build passes ≠ browser behavior verified.
+- Mock passes ≠ real provider verified.
+- UI says protected ≠ privacy proven.
+- Development measurement ≠ formal SIH benchmark.
+- Previous agent said PASS ≠ PASS.
+- No evidence = UNVERIFIED.
+
+Never invent metrics. Never claim Chrome Side Panel E2E without loading the unpacked extension. Never print provider API keys.
+---

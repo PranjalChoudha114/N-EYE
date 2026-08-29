@@ -12,3 +12,11 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-005 | Debounced Mutation Tracking for PageEpoch | **Adopted** | Observer / DOM | Debounce DOM mutations by 60ms and filter for interactive attributes (`hidden`, `disabled`, `style`, `class`) to prevent epoch churn. |
 | REC-006 | Bounded Label Candidates | **Adopted** | Observer / Security | Enforce a strict 120-character limit on extracted label candidates to prevent prompt-injection bloat and memory attacks. |
 | REC-007 | Structural Target Fingerprinting | **Adopted** | Grounding / Security | Generate deterministic djb2 digest from role, tag, inputType, normalized label, and relative geometry to enable robust re-grounding without exposing secrets. |
+| REC-008 | Tighten gateway CORS | **Proposed** | Network | Replace `allow_origins=["*"]` + credentials with an explicit chrome-extension + localhost allowlist. Wire `config.allowed_origins`. ADR if origin policy becomes product-facing. |
+| REC-009 | Split Side Panel orchestration | **Proposed** | Extension UI | Extract trust-loop orchestration from `sidepanel.ts` into a dedicated coordinator. Not a product feature. |
+| REC-010 | TYPE_TOKEN verifier value check | **Proposed** | Verification | After TYPE_TOKEN, re-read the live control (without sending the value over the network) instead of treating event dispatch as success. |
+| REC-011 | Implement SELECT / SCROLL executor | **Proposed** | Execution | Protocol types exist; executor has no branch. Implement only when a gate needs them. |
+| REC-012 | PageEpoch characterData | **Proposed** | Observation | Current observer omits `characterData`. Text-only mutations may not bump epoch. Decide with ADR if verification depends on it. |
+| REC-013 | Remove unused `clientCapabilities` Any hole | **Proposed** | Planner API | `PlanRequest.clientCapabilities: Dict[str, Any]` is unused. Prefer deletion or a strict schema before any client sends it. |
+| REC-014 | ADR-0006 wording | **Proposed** | Docs | Replace “cryptographic guarantees” language with byte-level canary / regex scanning. Canary tests are not a crypto proof. |
+| REC-015 | Automatic Chrome extension reload | **Rejected for prototype** | DX | MV3 unpacked extensions do not HMR. A custom Chrome-automation reloader is extra moving parts. Documented Reload click is the supported loop. |

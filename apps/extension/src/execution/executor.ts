@@ -32,7 +32,13 @@ export function executeValidatedAction(
 
   let liveNode: HTMLElement;
   try {
-    const reground = regroundTarget(targetElementId, registry);
+    const reground = regroundTarget(targetElementId, registry, action.expectedFingerprint);
+    if (action.expectedFingerprint && !reground.isFingerprintMatch) {
+      return {
+        success: false,
+        error: `Target ${targetElementId} semantic fingerprint mismatch. Re-observation required.`,
+      };
+    }
     liveNode = reground.node;
   } catch (err) {
     if (err instanceof TargetStaleError) {

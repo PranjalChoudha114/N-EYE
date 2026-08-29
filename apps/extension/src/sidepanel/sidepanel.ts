@@ -22,11 +22,13 @@ import {
 import { detectGoalPrivacy } from '../privacy/detectors.js';
 import { evaluatePrivacyPolicy, resetTokenCounters } from '../privacy/policy.js';
 import { PrivateTokenVault } from '../privacy/vault.js';
+import { tokenizeDecisionsWithValues } from '../privacy/token-values.js';
 import { buildSafeContext } from '../privacy/safe-context-builder.js';
 import { validateSafeContextEgress } from '../privacy/egress-guard.js';
 import { PlannerManager } from '../planner/planner-manager.js';
 import { validateActionProposal } from '../authority/validator.js';
 import { verifyActionExecution } from '../verification/verifier.js';
+import { applyBuildIdentityToDom } from '../dev/build-identity.js';
 
 // DOM Element References
 const connectionPill = document.getElementById('connection-pill') as HTMLDivElement;
@@ -211,36 +213,61 @@ async function requestObservation(tabId: number, retry = true): Promise<RawScene
   });
 }
 
+function appendTransformItem(
+  parent: HTMLElement,
+  tag: string,
+  value: string,
+  options?: { itemClass?: string; tagClass?: string; valueClass?: string }
+): void {
+  // PRIVACY/SECURITY: Untrusted page text (labels, ARIA, findings) must never be assigned via innerHTML.
+  const item = document.createElement('div');
+  item.className = options?.itemClass ? `transform-item ${options.itemClass}` : 'transform-item';
+  const tagEl = document.createElement('span');
+  tagEl.className = options?.tagClass || 'item-tag';
+  tagEl.textContent = tag;
+  const valEl = document.createElement('span');
+  valEl.className = options?.valueClass || 'item-val';
+  valEl.textContent = value;
+  item.append(tagEl, valEl);
+  parent.appendChild(item);
+}
+
 function renderVisualizer(findings: PrivacyFinding[], safeContext: SafeContext): void {
-  transformLocalItems.innerHTML = '';
-  transformSafeItems.innerHTML = '';
+  transformLocalItems.replaceChildren();
+  transformSafeItems.replaceChildren();
 
   if (findings.length === 0) {
-    transformLocalItems.innerHTML = `<div class="transform-item"><span class="item-tag">PUBLIC</span><span class="item-val">No PII candidates</span></div>`;
-    transformSafeItems.innerHTML = `<div class="transform-item"><span class="item-tag token-tag">CLEAN</span><span class="item-desc">Full public context</span></div>`;
+    appendTransformItem(transformLocalItems, 'PUBLIC', 'No PII candidates');
+    appendTransformItem(transformSafeItems, 'CLEAN', 'Full public context', {
+      tagClass: 'item-tag token-tag',
+      valueClass: 'item-desc',
+    });
     return;
   }
 
   for (const f of findings.slice(0, 3)) {
-    const localItem = document.createElement('div');
-    localItem.className = 'transform-item';
-    localItem.innerHTML = `<span class="item-tag">${f.privacyClass.replace('SECRET_', '').replace('PII_', '')}</span><span class="item-val">${f.textSpan || f.reason}</span>`;
-    transformLocalItems.appendChild(localItem);
+    appendTransformItem(
+      transformLocalItems,
+      f.privacyClass.replace('SECRET_', '').replace('PII_', ''),
+      f.textSpan || f.reason
+    );
   }
 
   for (const token of safeContext.availableTokens) {
-    const safeItem = document.createElement('div');
-    safeItem.className = 'transform-item tokenized';
-    safeItem.innerHTML = `<span class="item-tag token-tag">${token.tokenSymbol}</span><span class="item-desc">Scoped ${token.privacyClass}</span>`;
-    transformSafeItems.appendChild(safeItem);
+    appendTransformItem(transformSafeItems, token.tokenSymbol, `Scoped ${token.privacyClass}`, {
+      itemClass: 'tokenized',
+      tagClass: 'item-tag token-tag',
+      valueClass: 'item-desc',
+    });
   }
 
   const hasPassword = findings.some((f) => f.privacyClass.startsWith('SECRET_'));
   if (hasPassword) {
-    const blockedItem = document.createElement('div');
-    blockedItem.className = 'transform-item blocked';
-    blockedItem.innerHTML = `<span class="item-tag blocked-tag">SECRETS</span><span class="item-desc">NEVER_SEND</span>`;
-    transformSafeItems.appendChild(blockedItem);
+    appendTransformItem(transformSafeItems, 'SECRETS', 'NEVER_SEND', {
+      itemClass: 'blocked',
+      tagClass: 'item-tag blocked-tag',
+      valueClass: 'item-desc',
+    });
   }
 }
 
@@ -311,28 +338,23 @@ async function executeClosedTrustLoop(): Promise<void> {
 
       const decisions = evaluatePrivacyPolicy(combinedFindings);
 
-      // Register tokenizable findings into in-memory vault
-      for (const d of decisions) {
-        if (d.decision === 'TOKENIZE' && d.tokenRole) {
-          const matchedFinding = combinedFindings.find((f) => f.findingId === d.findingId);
-          const realVal =
-            matchedFinding?.textSpan ||
-            (d.privacyClass === 'PII_EMAIL' ? 'alice.applicant@example.com' : '+1-555-0199');
-          vault.registerToken(
-            d.tokenRole,
-            d.privacyClass,
-            realVal,
-            taskId,
-            tabId,
-            origin,
-            ['text', 'textbox', 'email', 'tel']
-          );
-        }
+      // Register only findings that carry a real value. Never invent demo identities.
+      for (const { decision, realValue } of tokenizeDecisionsWithValues(decisions, combinedFindings)) {
+        if (!decision.tokenRole) continue;
+        vault.registerToken(
+          decision.tokenRole,
+          decision.privacyClass,
+          realValue,
+          taskId,
+          tabId,
+          origin,
+          ['text', 'textbox', 'email', 'tel']
+        );
       }
 
       statTokensCount.textContent = String(vault.size());
 
-      const safeContext = buildSafeContext(preScene, rawGoal, decisions, vault, taskId);
+      const safeContext = buildSafeContext(preScene, rawGoal, decisions, vault, taskId, combinedFindings);
       if (priorOutcome) {
         safeContext.priorOutcome = priorOutcome;
       }
@@ -419,9 +441,11 @@ async function executeClosedTrustLoop(): Promise<void> {
       const validateDuration = performance.now() - validateStart;
       latValidate.textContent = `${validateDuration.toFixed(1)} ms`;
       updatePipelineStep(stepValidate, 'done');
+      actionRiskBadge.textContent = validatedAction.approvedRiskLevel;
+      actionRiskBadge.className = `risk-badge risk-${validatedAction.approvedRiskLevel.toLowerCase()}`;
 
-      // 5. HIGH-RISK CONFIRMATION GATE
-      if (proposal.riskLevel === 'HIGH') {
+      // 5. HIGH-RISK CONFIRMATION GATE (local approvedRiskLevel; planner cannot downgrade)
+      if (validatedAction.approvedRiskLevel === 'HIGH') {
         modalActionName.textContent = proposal.type;
         modalActionTarget.textContent = proposal.targetId || 'Interactive Action';
         confirmModal.showModal();
@@ -596,7 +620,10 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage) => {
   }
 });
 
+applyBuildIdentityToDom();
+
 // Mount
 document.addEventListener('DOMContentLoaded', () => {
+  applyBuildIdentityToDom();
   initializeActiveTab();
 });

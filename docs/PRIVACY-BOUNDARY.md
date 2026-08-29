@@ -8,12 +8,12 @@
 
 | Privacy Class | Examples | Default Policy Action | Network Representation |
 |---------------|----------|-----------------------|------------------------|
-| **SECRET_AUTH** | Password, Passcode, Master PIN | `NEVER_SEND` | Redacted / Omitted completely |
-| **SECRET_OTP** | 2FA code, SMS OTP, Email verification pin | `NEVER_SEND` | Redacted / Omitted completely |
-| **SECRET_TOKEN** | Bearer token, JWT, API Key, Session Cookie | `NEVER_SEND` | Redacted / Omitted completely |
-| **PII_DIRECT** | Email address, Phone number, Credit Card number | `TOKENIZE` (if task-relevant) | `[EMAIL_1]`, `[PHONE_1]` |
-| **PII_CONTEXT** | Personal Name, Street Address, Account ID | `MINIMIZE` / `MASK` | Generalized role or masked string |
-| **PUBLIC_UI** | Button labels, Navigation links, Form headings | `KEEP` / `ALLOW` | Raw label string (sanitized) |
+| **SECRET_PASSWORD** | Password, passcode | `NEVER_SEND` | Omitted |
+| **SECRET_OTP** | 2FA / SMS OTP | `NEVER_SEND` | Omitted |
+| **SECRET_API_KEY** / **SECRET_AUTH_TOKEN** / **SECRET_SESSION** | API keys, bearer/JWT, session cookies | `NEVER_SEND` | Omitted |
+| **PII_EMAIL** / **PII_PHONE** | Email, phone | `TOKENIZE` when a real `textSpan` exists | `[EMAIL_1]`, `[PHONE_1]` capabilities only |
+| **PII_NAME** / **PII_ADDRESS** / **PII_ACCOUNT_ID** | Name, address, account id | `MINIMIZE` / `MASK` | Generalized role or masked string |
+| **PUBLIC_UI** | Button labels, navigation | `ALLOW` | Raw label (length-bounded) |
 
 ## 3. SafeContext Invariants
 1. `SafeContext` is an immutable, strictly allowlisted data structure.

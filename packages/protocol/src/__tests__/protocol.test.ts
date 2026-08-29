@@ -62,7 +62,8 @@ describe('Protocol Package & Identifier Type Safety', () => {
       availableTokens: [
         {
           tokenId: createTokenId('TOKEN_EMAIL_1'),
-          privacyClass: 'PII_DIRECT',
+          tokenSymbol: '[EMAIL_1]',
+          privacyClass: 'PII_EMAIL',
           descriptionRole: 'Primary user email',
         },
       ],
@@ -97,10 +98,13 @@ describe('Protocol Package & Identifier Type Safety', () => {
       ],
       privacyFindings: [
         {
+          findingId: 'find_1',
           elementId: createElementId('e1'),
-          privacyClass: 'SECRET_AUTH',
+          privacyClass: 'SECRET_PASSWORD',
           confidence: 1.0,
-          source: 'browser_input_type',
+          source: 'input_semantics',
+          fieldLocation: 'element.inputType',
+          detector: 'browser_input_type',
           reason: 'Input type is password',
         },
       ],
@@ -108,7 +112,7 @@ describe('Protocol Package & Identifier Type Safety', () => {
     };
 
     expect(rawScene._isLocalOnly).toBe(true);
-    expect(rawScene.privacyFindings[0]?.privacyClass).toBe('SECRET_AUTH');
+    expect(rawScene.privacyFindings[0]?.privacyClass).toBe('SECRET_PASSWORD');
   });
 
   it('validates ActionProposal structured schema', () => {

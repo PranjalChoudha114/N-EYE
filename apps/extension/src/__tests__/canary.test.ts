@@ -93,7 +93,6 @@ describe('Privacy Canary & Byte-Level Egress Proof Suite', () => {
     const goalFindings = detectGoalPrivacy(rawGoal);
     const combinedFindings = [...rawScene.privacyFindings, ...goalFindings];
 
-    // 3. Policy & Vault Tokenization
     const decisions = evaluatePrivacyPolicy(combinedFindings);
     for (const d of decisions) {
       if (d.decision === 'TOKENIZE' && d.tokenRole) {
@@ -101,8 +100,7 @@ describe('Privacy Canary & Byte-Level Egress Proof Suite', () => {
       }
     }
 
-    // 4. SafeContext
-    const safeContext = buildSafeContext(rawScene, rawGoal, decisions, vault, taskId);
+    const safeContext = buildSafeContext(rawScene, rawGoal, decisions, vault, taskId, combinedFindings);
 
     // 5. Egress Guard Byte Scan
     const serializedBytes = validateSafeContextEgress(safeContext);

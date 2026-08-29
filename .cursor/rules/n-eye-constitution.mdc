@@ -1,0 +1,25 @@
+---
+description: Canonical N-Eye governance — read constitution and memory before changing code
+alwaysApply: true
+---
+
+# N-Eye — Constitution (do not fork)
+
+Canonical sources (do not duplicate them here):
+
+1. `AGENTS.md` — engineering constitution and trust invariants
+2. `docs/UNDERSTANDING.md` — product and system understanding
+3. `docs/CONTEXT.md` — current operational state (map, not substitute for source)
+4. `docs/decisions/ADR-*.md` — accepted architecture decisions
+5. Current source + fresh tests — territory
+
+Before any gate:
+
+- Read AGENTS.md, CONTEXT.md, UNDERSTANDING.md.
+- Inspect `git status`, `git rev-parse HEAD`, recent `git log`.
+- Read ADRs relevant to the requested gate.
+- Implement **exactly** the approved gate. Record extras in `docs/RECOMMENDATIONS.md`.
+- Consequential architecture changes need human approval + ADR. Do not silently redesign.
+
+Privacy/vault packages must never import planner or network transport packages.
+---

@@ -38,6 +38,7 @@ describe('Page Observer & Visibility Engine', () => {
         <button id="btn-visible">Visible Button</button>
         <button id="btn-hidden-attr" hidden>Hidden Button</button>
         <button id="btn-aria-hidden" aria-hidden="true">Aria Hidden Button</button>
+        <button id="btn-display-none" style="display:none">Display None Button</button>
         <input type="hidden" id="raw-hidden" name="token" value="secret_csrf">
       </div>
     `;

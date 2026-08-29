@@ -92,6 +92,7 @@ body {
   font-size: 10px;
   color: var(--text-muted);
   font-weight: 400;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .status-pill {

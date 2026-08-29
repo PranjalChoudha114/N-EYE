@@ -76,7 +76,7 @@ describe('Closed-Loop Trust Architecture (SEE -> PROTECT -> PLAN -> VALIDATE -> 
       );
     }
 
-    const safeContext = buildSafeContext(rawScene, goalText, decisions, vault, taskId);
+    const safeContext = buildSafeContext(rawScene, goalText, decisions, vault, taskId, combinedFindings);
     expect(safeContext.availableTokens.length).toBe(1);
     expect(safeContext.availableTokens[0]?.tokenSymbol).toBe('[EMAIL_1]');
 
@@ -147,7 +147,7 @@ describe('Closed-Loop Trust Architecture (SEE -> PROTECT -> PLAN -> VALIDATE -> 
     }
     expect(registeredTokenBinding).toBeDefined();
 
-    const safeContext = buildSafeContext(rawScene, goalText, decisions, vault, taskId);
+    const safeContext = buildSafeContext(rawScene, goalText, decisions, vault, taskId, combinedFindings);
     const serializedSafe = validateSafeContextEgress(safeContext);
     expect(serializedSafe).toContain('[EMAIL_1]');
 
