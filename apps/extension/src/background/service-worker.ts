@@ -13,12 +13,16 @@ import {
 } from '../perception/roi.js';
 import { mapCssBoxToBitmap } from '../perception/coordinates.js';
 import { classifySupportedUrl } from '../runtime/supported-url.js';
+import type { ProductState } from '../runtime/ui-snapshot.js';
+import { markSessionInterrupted } from '../runtime/ui-snapshot.js';
+import { isNeyeOverlayMessage, type NEyeOverlayMessage, type NEyeUiCommand } from '../runtime/ui-messages.js';
+import type { ThemePref } from '../ui/theme.js';
 
 /**
  * N-Eye Service Worker (Zone 2 - Extension Core)
- * OWNS: MV3 lifecycle coordination, active tab tracking, and programmatic injection fallback.
- * TRUST BOUNDARY: Privileged extension background context. Never accesses raw DOM directly.
- * SELF-HEALING: Executes content.js dynamically via chrome.scripting when tabs pre-exist before extension reload.
+ * OWNS: MV3 lifecycle, tab tracking, overlay toggle, Side Panel owner bus.
+ * TRUST BOUNDARY: Privileged background context. Never accesses raw DOM or vault values.
+ * UI: Toolbar click toggles the page overlay. The Side Panel owns the trust loop.
  */
 let currentTaskState: TaskState = {
   taskId: createTaskId('task-active'),
@@ -26,10 +30,90 @@ let currentTaskState: TaskState = {
   status: 'IDLE',
 };
 
-// Enable side panel on extension action icon click
+let ownerPort: chrome.runtime.Port | null = null;
+let lastUiState: ProductState | null = null;
+let themePref: ThemePref = 'dark';
+let pendingCommands: NEyeUiCommand[] = [];
+
 chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
+  .setPanelBehavior({ openPanelOnActionClick: false })
   .catch((_err) => {});
+
+chrome.action.onClicked.addListener((tab) => {
+  void toggleOverlay(tab);
+});
+
+async function toggleOverlay(tab?: chrome.tabs.Tab): Promise<void> {
+  const target = tab?.id !== undefined ? tab : await getActiveTab();
+  if (!target?.id) return;
+  const delivered = await sendToTab(target.id, { type: 'N_EYE_TOGGLE_OVERLAY' });
+  if (!delivered) {
+    const injected = await ensureContentScriptInjected(target.id);
+    if (!injected) return;
+    await sendToTab(target.id, { type: 'N_EYE_TOGGLE_OVERLAY' });
+  }
+  if (lastUiState) {
+    await sendToTab(target.id, { type: 'N_EYE_OVERLAY_STATE', state: lastUiState, themePref });
+  }
+}
+
+async function sendToTab(tabId: number, message: NEyeOverlayMessage): Promise<boolean> {
+  try {
+    await chrome.tabs.sendMessage(tabId, message);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function openSidePanel(tabId: number, windowId?: number): Promise<void> {
+  try {
+    if (windowId !== undefined) {
+      await chrome.sidePanel.open({ tabId, windowId });
+    } else {
+      await chrome.sidePanel.open({ tabId });
+    }
+  } catch {
+    // Chrome may require a user gesture; toolbar click already opened the overlay.
+  }
+}
+
+async function broadcastOverlayState(state: ProductState): Promise<void> {
+  const tab = await getActiveTab();
+  if (!tab?.id) return;
+  await sendToTab(tab.id, { type: 'N_EYE_OVERLAY_STATE', state, themePref });
+}
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== 'n-eye-owner') return;
+  ownerPort = port;
+  void getActiveTabInfo().then((tabInfo) => {
+    port.postMessage({ type: 'UI_HELLO', tabInfo, state: lastUiState, themePref });
+    if (pendingCommands.length > 0) {
+      for (const command of pendingCommands) port.postMessage(command);
+      pendingCommands = [];
+    }
+  });
+  port.onMessage.addListener((msg: { type?: string; state?: ProductState; pref?: ThemePref }) => {
+    if (msg.type === 'UI_STATE' && msg.state) {
+      lastUiState = msg.state;
+      void broadcastOverlayState(msg.state);
+    }
+    if (msg.type === 'UI_THEME' && msg.pref) {
+      themePref = msg.pref;
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    if (port !== ownerPort) return;
+    ownerPort = null;
+    if (!lastUiState?.running) return;
+    lastUiState = markSessionInterrupted(
+      lastUiState,
+      'The N-Eye Trust Center closed. The in-flight task was stopped.'
+    );
+    void broadcastOverlayState(lastUiState);
+  });
+});
 
 function isSupportedUrl(url?: string): { isSupported: boolean; reason?: string } {
   return classifySupportedUrl(url);
@@ -103,7 +187,7 @@ async function notifyTabChanged(): Promise<void> {
       type: 'TAB_CHANGED',
       tabInfo,
     }).catch(() => {
-      // Side panel may be closed, ignore
+      // Product UI may be closed.
     });
   }
 }
@@ -119,13 +203,52 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
   }
 });
 
+async function handleOverlayBus(message: NEyeOverlayMessage, sender: chrome.runtime.MessageSender): Promise<void> {
+  if (message.type !== 'N_EYE_UI_COMMAND') return;
+
+  if (message.command === 'closeOverlay') return;
+
+  if (message.command === 'setTheme') {
+    themePref = message.pref;
+    ownerPort?.postMessage(message);
+    return;
+  }
+
+  const tabId = sender.tab?.id;
+  const windowId = sender.tab?.windowId;
+
+  if (message.command === 'openPanel') {
+    if (tabId !== undefined) {
+      await openSidePanel(tabId, windowId);
+      await sendToTab(tabId, { type: 'N_EYE_UNMOUNT_OVERLAY' });
+    }
+    return;
+  }
+
+  if (!ownerPort && message.command === 'run' && tabId !== undefined) {
+    await openSidePanel(tabId, windowId);
+  }
+  if (ownerPort) {
+    ownerPort.postMessage(message);
+    return;
+  }
+  pendingCommands.push(message);
+}
+
 // Central message router
 chrome.runtime.onMessage.addListener(
   (
-    message: ExtensionMessage,
-    _sender: chrome.runtime.MessageSender,
+    message: ExtensionMessage | NEyeOverlayMessage,
+    sender: chrome.runtime.MessageSender,
     sendResponse: (response: ExtensionResponse) => void
   ) => {
+    if (isNeyeOverlayMessage(message)) {
+      void handleOverlayBus(message, sender).then(() => {
+        sendResponse({ success: true });
+      });
+      return true;
+    }
+
     if (message.type === 'PING') {
       sendResponse({ success: true, data: { pong: true, timestamp: Date.now() } });
       return true;
@@ -186,7 +309,7 @@ chrome.runtime.onMessage.addListener(
     }
 
     if (message.type === 'CAPTURE_TAB_CROPS') {
-      const tab = _sender.tab;
+      const tab = sender.tab;
       const windowId = tab?.windowId;
       cropVisibleTab(windowId, message.rois, message.viewport)
         .then((crops) => {

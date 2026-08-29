@@ -49,7 +49,7 @@ Structured next action suggestion returned by planner:
 - `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `BLOCKED`
 
 ### 2.6 Internal Extension Messages
-Typed cross-context messaging between Content Script, Service Worker, and Side Panel.
+Typed cross-context messaging between Content Script, Service Worker, and Product UI.
 - `OBSERVE_REQUEST` / `OBSERVE_RESPONSE`
 - `EXECUTE_ACTION_REQUEST` / `EXECUTE_ACTION_RESPONSE`
 - `GET_TASK_STATE` / `TASK_STATE_UPDATED`

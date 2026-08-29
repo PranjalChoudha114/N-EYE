@@ -5,7 +5,7 @@ N-Eye is a privacy-preserving visual perception trust layer for browser agents. 
 
 Observation is **structure-first**. Local OCR / ROI capture / adaptive visual perception exist in `apps/extension/src/perception/` and run only when the adaptive controller records a reason. Raw screenshots are not sent to Gemini.
 
-**Content script packaging (ADR-0008):** `content.js` must be a self-contained IIFE. The Side Panel and service worker may use ES modules. A Vite ES `import` graph in the content script does not execute in the page and produces CONTENT SCRIPT DISCONNECTED.
+**Content script packaging (ADR-0008):** `content.js` must be a self-contained IIFE. Product UI pages and the service worker may use ES modules. A Vite ES `import` graph in the content script does not execute in the page and produces CONTENT SCRIPT DISCONNECTED.
 
 ## 2. Core Execution Loop
 ```
@@ -42,8 +42,8 @@ Observation is **structure-first**. Local OCR / ROI capture / adaptive visual pe
 |-----------|---------|------------------------|----------------------|
 | **Content Script** | Isolated Webpage Context | Observes visible interactable DOM elements, visual-region geometry, ROI rasters, executes validated actions | Hostile-adjacent; no secrets or planner API keys |
 | **Service Worker** | Chrome MV3 Background | Task lifecycle coordinator, message router, `captureVisibleTab` crop (RGBA only) | No DOM access; never logs data URLs |
-| **Side Panel UI** | Privileged Extension UI | Trust Core, OCR host (Tesseract WASM), Privacy Receipt, mode switcher | Privileged UI; observes state, does not store secrets |
-| **Perception module** | Side Panel JS | Adaptive decision, OCR, grounding/fusion, pixel release | Local-only rasters; OCR text still untrusted |
+| **Product UI** | Privileged Side Panel (owner) + isolated page overlay (view) | Compact glass card, Trust Center, OCR host (Tesseract WASM), Privacy Receipt, theme | Overlay has no vault; Side Panel observes state, does not store secrets |
+| **Perception module** | Owner product-document JS | Adaptive decision, OCR, grounding/fusion, pixel release | Local-only rasters; OCR text still untrusted |
 | **Planner Gateway** | Backend Service (`apps/planner-api`) | Validates SafeContext, holds provider API keys, formats structured prompt, returns ActionProposal | Server-side only; zero browser execution authority |
 | **Provider Adapters** | Gateway Subsystem | Translates SafeContext into LLM structured generation (Gemini, OpenAI, Mock) | Vendor-isolated; output treated as untrusted data |
 | **Remote Planner Client** | Extension Client (`apps/extension`) | Dispatches egress-guarded SafeContext via HTTP POST with timeout, cancellation, and retry | Strictly calls Egress Guard before transport |

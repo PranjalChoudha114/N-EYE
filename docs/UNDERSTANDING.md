@@ -114,13 +114,14 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 
 ---
 
-## 6. Current Implementation State (Gate T011/T012)
+## 6. Current Implementation State (Gate T013/T014)
 
 - **Protocol Layer (`packages/protocol`)**: Branded types plus `FrameId`, `FrameProvenance`, semantic fingerprint helpers, optional SafeElement `frameId`, perception/assurance contracts, and content-script handshake (`CONTENT_SCRIPT_PROTOCOL`).
 - **Chrome MV3 Shell (`apps/extension`)**: Content script remains a self-contained IIFE (top frame only). Observer walks same-origin `iframe.contentDocument`. PageEpoch uses classified mutations (ADR-0009). Bounded PING → inject-once → handshake recovery.
-- **Perception (`apps/extension/src/perception`)**: Adaptive controller, CSS↔bitmap coordinate maps, ROI bounds, PixelBuffer lifecycle, Tesseract.js, grounding/fusion with epoch+frame staleness.
+- **Product UI**: Two surfaces (ADR-0010). Toolbar click toggles a closed Shadow DOM glass card over the current webpage. More / Details opens the Chrome Side Panel Trust Center (Activity / Privacy / Action / Evidence). Canonical eye+N mark. Dark / light / system theme via Side Panel `localStorage` only. Overlay never writes page `localStorage`. Overlay is view/control; Side Panel owns vault/OCR/loop.
+- **Perception (`apps/extension/src/perception`)**: Adaptive controller, CSS↔bitmap coordinate maps, ROI bounds, PixelBuffer lifecycle, Tesseract.js, grounding/fusion with epoch+frame staleness. OCR runs in the owner product document.
 - **Privacy Engine (`apps/extension/src/privacy`)**: Detectors, token vault, SafeContext builder (opaque `frameId` only), Egress Guard.
 - **Local Action Authority**: Stale-action contract, unique-candidate re-grounding, TOCTOU check immediately before native dispatch, empirical verifier (`AMBIGUOUS` for epoch-only click deltas).
-- **Chrome Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T011-T012-MANUAL-CHECKLIST.md`.
+- **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T013-T014-MANUAL-CHECKLIST.md`.
 - **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008.
-- **Next Eligible Milestone**: Gate 013 — Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack. Do not start until explicitly approved.
+- **Next Eligible Milestone**: Gate 015/016 — previously planned T013/T014 security campaign (prompt-injection hardening, formal privacy P/R/F1, formal performance). Do not start until explicitly approved.

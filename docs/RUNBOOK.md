@@ -1,4 +1,4 @@
-# N-Eye Operational Runbook (Gate T011/T012)
+# N-Eye Operational Runbook (Gate T013/T014)
 
 ## 1. Quick Start
 
@@ -46,7 +46,7 @@ Chrome does **not** hot-reload this extension. Rebuilding `dist/` is necessary b
 | `pnpm dev:extension` | Watches source and rebuilds `dist/` | No |
 | Reload on `chrome://extensions` | Reloads service worker + extension runtime | Yes |
 | Refresh the target webpage | Re-injects content script | After extension reload |
-| Close/reopen Side Panel | Loads current side panel HTML/JS | After extension reload |
+| Close overlay / reopen Side Panel | Overlay is a view; Side Panel reload after extension Reload | After extension reload |
 
 **True live/hot reload: NO.**
 
@@ -56,17 +56,17 @@ Chrome does **not** hot-reload this extension. Rebuilding `dist/` is necessary b
 3. Enable **Developer mode**
 4. **Load unpacked** → select `apps/extension/dist` (the folder that contains `manifest.json`, `background.js`, `content.js`)
 5. Confirm **one** N-Eye card. Do not keep a second unpacked copy.
-6. Pin the icon / open the Side Panel
+6. Pin the icon / click it to open the N-Eye overlay card on the current page
 7. Verify **build identity**:
    - `chrome://extensions` version line shows `DEV • <git-short-sha>` (trailing `*` means **tracked** files have uncommitted edits; untracked files such as `scratch/` do not count)
-   - Side Panel header next to “Trust Layer” shows the same label
+   - Capsule footer shows the same label
    - `cat apps/extension/dist/build-identity.txt` matches
 
 ### After a normal Cursor source change
 1. `pnpm build:extension` **or** keep `pnpm dev:extension` running
 2. `chrome://extensions` → N-Eye → **Reload**
 3. Refresh the target webpage if content-script / observer / executor changed
-4. Close and reopen the Side Panel (or the panel after Reload)
+4. Close and reopen the N-Eye capsule (or the window after Reload)
 5. Confirm the `DEV • <sha>` label changed or matches `git rev-parse --short HEAD` (`*` if dirty)
 
 ### After manifest / permission change
@@ -84,7 +84,7 @@ T009/T010 notes:
 - Manifest `0.3.0` adds `wasm-unsafe-eval` on **extension pages only** (Tesseract WASM). No new host permission.
 - OCR assets live in `apps/extension/dist/ocr/` after `pnpm build:extension` (not loaded from a CDN).
 - `file://` pages still need Chrome “Allow access to file URLs” on the extension card if you open the portal as files instead of `http.server`.
-- After this gate: Reload extension → open Side Panel → confirm `DEV • <short-sha>` matches `git rev-parse --short HEAD`. If the page was open before Reload, the Side Panel should show RECOVERING CONTENT SCRIPT then TRUST LAYER READY, or a truthful DISCONNECTED state — never READY with a dead script.
+- After this gate: Reload extension → click the toolbar icon → confirm `DEV • <short-sha>` matches `git rev-parse --short HEAD`. If the page was open before Reload, the capsule should show RECOVERING then Ready, or a truthful Disconnected state — never Ready with a dead script.
 - Visualizer must start empty: “No N-Eye privacy transformation has occurred for this task.”
 - Scenarios 08/09: `http://localhost:5173/scenario-08-visual-only.html` and `scenario-09-held-out.html`.
 
@@ -92,7 +92,7 @@ T009/T010 notes:
 ```bash
 python3 -m http.server 5173 --directory apps/test-portal
 ```
-Navigate to `http://localhost:5173/scenario-06-trust-loop.html` (DOM), `scenario-03-dynamic.html` (SPA-1..9), `scenario-10-frames.html` (iframes), `scenario-07-visual.html` (pixel/OCR), `scenario-08-visual-only.html` (canvas/icon/document), or `scenario-09-held-out.html` (held-out layout). T011/T012 manual Chrome steps: `docs/evidence/T011-T012-MANUAL-CHECKLIST.md`.
+Navigate to `http://localhost:5173/scenario-06-trust-loop.html` (DOM), `scenario-03-dynamic.html` (SPA-1..9), `scenario-10-frames.html` (iframes), `scenario-07-visual.html` (pixel/OCR), `scenario-08-visual-only.html` (canvas/icon/document), or `scenario-09-held-out.html` (held-out layout). T011/T012 manual Chrome steps: `docs/evidence/T011-T012-MANUAL-CHECKLIST.md`. T013/T014 overlay + Side Panel checklist: `docs/evidence/T013-T014-MANUAL-CHECKLIST.md`.
 
 ## 3. Automated Test Execution
 

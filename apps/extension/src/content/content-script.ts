@@ -10,6 +10,8 @@ import { PageEpochManager } from './epoch.js';
 import { observePage } from './observer.js';
 import { executeValidatedAction } from '../execution/executor.js';
 import { captureRoisInPage, discardWireRois, type CapturedRoiWire } from '../perception/capture.js';
+import { isNeyeOverlayMessage, type NEyeOverlayMessage } from '../runtime/ui-messages.js';
+import { applyOverlayState, toggleOverlay, unmountOverlay } from '../overlay/overlay-host.js';
 
 const BOOT_KEY = '__N_EYE_CONTENT_BOOT__';
 
@@ -44,10 +46,29 @@ function pingAlive(): boolean {
 }
 
 function handleMessage(
-  message: ExtensionMessage,
+  message: ExtensionMessage | NEyeOverlayMessage,
   _sender: chrome.runtime.MessageSender,
   sendResponse: (response: ExtensionResponse) => void
 ): boolean {
+  if (isNeyeOverlayMessage(message)) {
+    if (message.type === 'N_EYE_TOGGLE_OVERLAY') {
+      const open = toggleOverlay();
+      sendResponse({ success: true, data: { open } });
+      return true;
+    }
+    if (message.type === 'N_EYE_UNMOUNT_OVERLAY') {
+      unmountOverlay();
+      sendResponse({ success: true });
+      return true;
+    }
+    if (message.type === 'N_EYE_OVERLAY_STATE') {
+      applyOverlayState(message.state, message.themePref);
+      sendResponse({ success: true });
+      return true;
+    }
+    return false;
+  }
+
   if (message.type === 'PING') {
     const hello: ContentScriptHello = {
       pong: true,

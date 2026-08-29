@@ -34,12 +34,12 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T011/T012 Dynamic-world robustness: SPA stale-action defense + frame provenance — implemented this revision |
+| **Current Phase** | T013/T014 correction: overlay quick card over the page + Side Panel Trust Center. Not T015/T016. |
 | **Branch** | `main` |
-| **HEAD Commit** | T011/T012 commit on `main` (this revision). Parent T009/T010 seal was `27bc77d`. |
-| **Latest Verified Gate** | Gate 011/012: mutation/PageEpoch policy, stale-action contract, local re-grounding, TOCTOU pre-dispatch check, same-origin iframe provenance |
-| **Next Eligible Gate** | Gate 013: Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack (reuse `bench/visual`; do not start until approved) |
-| **SIH Prototype Completion** | ~84% (planning estimate; SPA/frame authority exist; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
+| **HEAD Commit** | T013/T014 working tree on parent `de6df5e` (T011/T012). Commit when the human asks. |
+| **Latest Verified Gate** | Gate 013/014: product UI transformation. Trust architecture unchanged. |
+| **Next Eligible Gate** | Gate 015/016: previously planned T013/T014 security campaign (DOM/OCR/ARIA prompt-injection hardening, expanded adversarial suite, formal privacy P/R/F1, formal performance). Do not start until approved. |
+| **SIH Prototype Completion** | ~86% (planning estimate; product UI exists; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
 | **Core Architecture Completion** | ~88% (planning estimate; perception layer implemented; SELECT/SCROLL executor still incomplete) |
 | **Company-Product Completion** | ~24% (planning estimate) |
 
@@ -74,11 +74,11 @@ Every N-Eye task step executes through an immutable lifecycle. Each stage has a 
 | Stage | Name | Trust Zone | Implementation | What Happens |
 |---|---|---|---|---|
 | 1 | **SEE LOCALLY** | Zone 1 (Content Script) | [`observer.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/observer.ts), [`registry.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/registry.ts), [`epoch.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/epoch.ts), [`frames.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/content/frames.ts) | Traverse visible interactive DOM in the top document and same-origin frames, compute `TargetFingerprint` hashes, assign opaque IDs (`e1`, `f1e1`), track `PageEpoch` via classified `MutationObserver`. Output: `RawScene` (local-only) including visual-region geometry (no pixels) and local `inaccessibleFrames`. |
-| 1b | **PERCEIVE LOCALLY** | Zone 3 (Side Panel) | [`apps/extension/src/perception/`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/perception) | Adaptive controller decides if DOM/ARIA is insufficient. If yes: bounded ROI capture, Tesseract.js WASM OCR, grounding/fusion. Raw pixels released before return. OCR text is still untrusted page data. |
+| 1b | **PERCEIVE LOCALLY** | Zone 3 (Owner UI document) | [`apps/extension/src/perception/`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/perception) | Adaptive controller decides if DOM/ARIA is insufficient. If yes: bounded ROI capture, Tesseract.js WASM OCR, grounding/fusion. Raw pixels released before return. OCR text is still untrusted page data. |
 | 2 | **PROTECT LOCALLY** | Zone 3 (Local Processing) | [`detectors.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/detectors.ts), [`policy.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/policy.ts), [`vault.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/vault.ts), [`safe-context-builder.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/safe-context-builder.ts), [`egress-guard.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/privacy/egress-guard.ts) | Detect PII/secrets in elements and task goal. Tokenize into scoped capabilities (`[EMAIL_1]`) inside in-memory `PrivateTokenVault`. Build `SafeContext` via field-by-field allowlist. Run byte-level canary scan and enforce 256KB payload bound. |
 | 3 | **THINK REMOTELY** | Zone 4→5 (Network→Planner) | [`remote-planner.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/planner/remote-planner.ts), [`main.py`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/planner-api/src/main.py), [`gemini.py`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/planner-api/src/adapters/gemini.py) | HTTP POST `SafeContext` to FastAPI gateway. Gateway validates schema, builds structured prompt with delimited sections, invokes Gemini 2.5 Flash with `responseSchema`. Returns constrained `ActionProposal`. |
 | 4 | **VALIDATE LOCALLY** | Zone 3 (Local Authority) | [`validator.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/validator.ts), [`regrounding.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/regrounding.ts), [`stale-action.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/stale-action.ts) | Verify target exists in current `RawScene`, is enabled, frame is accessible, and token scope matches. Locally classify risk (`max(planner, local)`). `ActionProposal` has no epoch field; freshness is enforced by live re-grounding at execute time. Produce `ValidatedAction`. |
-| 5 | **ACT LOCALLY** | Zone 1 (Content Script) | [`executor.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/execution/executor.ts) | Side Panel confirmation runs **before** execute when `approvedRiskLevel === 'HIGH'`. Content script re-grounds live semantics, then dispatches native DOM events. Token values resolve in the Side Panel **before** the execute message (resolved value never returns to the planner). |
+| 5 | **ACT LOCALLY** | Zone 1 (Content Script) | [`executor.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/execution/executor.ts) | Product-UI confirmation runs **before** execute when `approvedRiskLevel === 'HIGH'`. Content script re-grounds live semantics, then dispatches native DOM events. Token values resolve in the owner UI document **before** the execute message (resolved value never returns to the planner). |
 | 6 | **VERIFY LOCALLY** | Zone 3 (Local Processing) | [`verifier.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/verification/verifier.ts) | Re-observe after action. Compare pre vs post: URL, target consumption, control-set change. Epoch-only deltas return `AMBIGUOUS`, not success. TYPE_TOKEN may succeed without epoch change. |
 
 ---
@@ -109,8 +109,8 @@ These rules are enforced by code, tested by automated suites, and must never be 
 |---|---|---|---|---|---|
 | **0** | Webpage | Live Browser Tab DOM | Hostile third-party HTML, CSS, JS, canvas | None (untrusted external data) | Everything — N-Eye treats all page content as untrusted |
 | **1** | Content Script | Isolated webpage execution context | Opaque element registry, live DOM node references | Observe visible elements, dispatch validated native events, report `RawScene` | Access extension storage, make network requests, read passwords |
-| **2** | Privileged Core | Background service worker + Side Panel | Tab tracking state, task lifecycle | Coordinate messages, manage tab discovery, host UI | Access page DOM directly, store secrets |
-| **3** | Local Processing | Extension in-memory runtime (Side Panel JS) | Privacy findings, `PrivateTokenVault`, policy decisions, `ValidatedAction` | Detect PII, tokenize, build SafeContext, validate proposals, resolve tokens, verify deltas | Persist vault to disk, send raw findings over network |
+| **2** | Privileged Core | Background service worker + product UI | Tab tracking state, task lifecycle | Coordinate messages, manage tab discovery, host UI | Access page DOM directly, store secrets |
+| **3** | Local Processing | Extension in-memory runtime (owner UI document) | Privacy findings, `PrivateTokenVault`, policy decisions, `ValidatedAction` | Detect PII, tokenize, build SafeContext, validate proposals, resolve tokens, verify deltas | Persist vault to disk, send raw findings over network |
 | **4** | Network Boundary | Extension HTTP client (`RemotePlanner`) | Serialized egress-guarded `SafeContext` | POST to gateway, enforce timeout/retry/abort, reject stale responses | Send `RawScene`, bypass `EgressGuard`, include API keys |
 | **5** | Remote Planner | FastAPI Gateway + Gemini API | Sanitized prompt derived from `SafeContext` | Reason over abstract context, return structured `ActionProposal` | Execute browser commands, access user device, see raw secrets |
 
@@ -137,7 +137,7 @@ N-Eye/
 │   ├── TEST-STRATEGY.md                  # Testing strategy & canary proof matrix
 │   ├── RUNBOOK.md                        # Developer operational guide
 │   ├── RECOMMENDATIONS.md               # Backlog of proposed improvements outside current scope
-│   └── decisions/                        # Architecture Decision Records (ADR-0001 through ADR-0009)
+│   └── decisions/                        # Architecture Decision Records (ADR-0001 through ADR-0010)
 │
 ├── packages/
 │   └── protocol/                         # Shared contracts. Zone 2/3. NO runtime behavior.
@@ -158,13 +158,17 @@ N-Eye/
 │
 ├── apps/
 │   ├── extension/                        # Chrome MV3 Extension. Zones 1-4.
-│   │   ├── manifest.json                 # MV3: sidePanel, activeTab, tabs, scripting, <all_urls>
+│   │   ├── manifest.json                 # MV3: sidePanel, activeTab, tabs, scripting, <all_urls>; WAR for mark + More catcher
 │   │   ├── package.json                  # @n-eye/extension
-│   │   ├── vite.config.ts                # Vite build: content.js, background.js, sidepanel entry
+│   │   ├── vite.config.ts                # Vite build: content.js IIFE, background.js, sidepanel entry
 │   │   ├── vitest.config.ts              # happy-dom test environment
 │   │   └── src/
 │   │       ├── background/
-│   │       │   └── service-worker.ts     # Zone 2: Tab tracking, programmatic injection fallback, message router
+│   │       │   └── service-worker.ts     # Zone 2: Tab tracking, overlay toggle, Side Panel owner bus
+│   │       ├── overlay/                  # Isolated Shadow DOM quick card (view/control only)
+│   │       ├── sidepanel/               # Owner Trust Center (vault, OCR, TrustLoopController)
+│   │       ├── ui/                      # Design tokens, theme, shell, renderers, brand resolver
+│   │       ├── runtime/                  # TrustLoopController + ProductState
 │   │       ├── content/
 │   │       │   ├── content-script.ts     # Zone 1: Message listener, bridges observer↔executor
 │   │       │   ├── observer.ts           # Zone 1: DOM traversal, visibility check, TargetFingerprint
@@ -191,10 +195,8 @@ N-Eye/
 │   │       ├── perception/               # Zone 3: Adaptive OCR, ROI, Tesseract seam, grounding
 │   │       ├── assurance/                # Zone 2: Site-change, receipts, truthful states
 │   │       ├── ocr-assets/               # Vendored eng.traineddata + OCR PNG fixtures
-│   │       └── sidepanel/
-│   │           ├── index.html            # Side panel HTML structure with trust pipeline visualization
-│   │           ├── sidepanel.css          # Dark-mode styling, aperture animation, evidence drawer
-│   │           └── sidepanel.ts          # Zone 2: Trust loop coordinator + UI controller
+│   │       └── sidepanel/               # Rollback mount of the same product host (not auto-opened)
+│   │   ├── assets/brand/                # Canonical N-Eye mark + toolbar icons
 │   │
 │   ├── planner-api/                      # FastAPI Planner Gateway. Zone 5. Python.
 │   │   ├── pyproject.toml                # FastAPI, Pydantic, httpx, pytest, python-dotenv
@@ -233,7 +235,8 @@ N-Eye/
 | Component | File(s) | OWNS | DOES NOT OWN | Input | Output |
 |---|---|---|---|---|---|
 | **Protocol** | `packages/protocol/src/` | Branded type definitions, schema contracts, error taxonomy | Runtime behavior, network calls | N/A (compile-time) | TypeScript types used by all modules |
-| **Service Worker** | `service-worker.ts` | Tab tracking, side panel activation, content-script injection, message routing | DOM observation, privacy, planning | Chrome tab events, runtime messages | `TabInfo`, `TaskState`, injection results |
+| **Service Worker** | `service-worker.ts` | Tab tracking, overlay toggle, Side Panel owner bus, content-script injection, message routing | DOM observation, privacy, planning | Chrome tab events, runtime messages | `TabInfo`, `TaskState`, injection results |
+| **Product UI** | `overlay/`, `sidepanel/`, `ui/`, `runtime/trust-loop.ts` | Overlay quick card + Side Panel Trust Center, theme, owner-document trust loop | Privacy detection, planning, validation (delegates to modules) | User goal, mode, Chrome runtime messages | `ProductState` (no vault values) |
 | **Content Script** | `content-script.ts` | Message bridge between service worker/sidepanel and observer/executor | Privacy decisions, planning, validation | `OBSERVE_REQUEST`, `EXECUTE_ACTION_REQUEST` messages | `RawScene`, `ExecutionResult` |
 | **Observer** | `observer.ts` | DOM traversal, visibility filtering, label extraction, `TargetFingerprint` computation | Privacy detection, network egress | Live `document`, `ElementRegistry`, `PageEpoch` | `RawScene` with `RawElement[]` and `PrivacyFinding[]` |
 | **Registry** | `registry.ts` | Opaque ID allocation (`e1`, `e2`), live `HTMLElement` node storage, detached cleanup | Observation logic, action execution | Elements discovered by observer | `ElementId` ↔ live node lookup |
@@ -253,20 +256,20 @@ N-Eye/
 | **Re-grounding** | `regrounding.ts` | Live node or unique same-frame semantic candidate, TOCTOU re-check | Validation logic | `ElementId`, `ElementRegistry`, fingerprint, `frameId` | `RegroundResult { node, outcome }` |
 | **Executor** | `executor.ts` | Native DOM event dispatching after live authority check | Validation, token resolution | `ValidatedAction`, `ElementRegistry` | `ExecutionResult { success, error?, outcome? }` |
 | **Verifier** | `verifier.ts` | Pre/post `RawScene` comparison: URL, target consumption, control-set; epoch-only → AMBIGUOUS | Execution, re-observation | `ValidatedAction`, pre-scene, post-scene | `VerificationResult` with status and `observedDelta` |
-| **Side Panel** | `sidepanel.ts`, `index.html`, `sidepanel.css` | Trust loop visualization, task input, mode switching, privacy visualization, SafeContext evidence drawer, latency display, confirmation dialog, cancellation | Privacy detection, planning, validation (delegates to modules) | User goal input, mode selection, Chrome runtime messages | Visual pipeline state, network proof display |
+| **Product UI** | `overlay/`, `sidepanel/`, `ui/`, `runtime/trust-loop.ts` | Overlay quick card + Side Panel Trust Center, theme, owner-document trust loop | Privacy detection, planning, validation (delegates to modules) | User goal, mode, Chrome runtime messages | `ProductState` (no vault values) |
 | **Test Portal** | `apps/test-portal/` | Synthetic controlled scenarios for testing observer, privacy, adversarial, and trust loop | Production page handling | Static HTML served via file:// or local HTTP | Test pages with known elements, PII, and injections |
 
 ---
 
 ## 10. Complete Runtime Data Flow
 
-**START**: User opens a supported webpage and the N-Eye Chrome Side Panel.
+**START**: User opens a supported webpage and clicks the N-Eye toolbar icon (overlay quick card).
 
-1. **Tab Discovery** (`service-worker.ts`): `chrome.tabs.onActivated` fires → queries active tab → constructs `TabInfo { tabId, url, title, origin, isSupported }` → sends `TAB_CHANGED` message to side panel.
+1. **Tab Discovery** (`service-worker.ts`): `chrome.tabs.onActivated` fires → queries active tab → constructs `TabInfo { tabId, url, title, origin, isSupported }` → sends `TAB_CHANGED` to the product UI.
 
 2. **Content Script Activation** (`content-script.ts`): Either auto-injected by `manifest.json` `content_scripts` at `document_idle`, or programmatically injected via `chrome.scripting.executeScript()` by the service worker when tab pre-exists.
 
-3. **Side Panel Initialization** (`sidepanel.ts`): Receives `TabInfo`, displays origin/title, checks `isSupportedUrl()`. If supported, sends `OBSERVE_REQUEST` to content script.
+3. **Product UI Initialization** (`sidepanel/host.ts` + `TrustLoopController`): Side Panel owns the loop. Overlay is view/control only. Receives `TabInfo`, displays hostname, checks `isSupportedUrl()`. If supported, sends `OBSERVE_REQUEST` to content script.
 
 4. **Observation** (`observer.ts` via `content-script.ts`):
    - Traverses `document.querySelectorAll()` with expanded selectors (buttons, links, inputs, textareas, selects, checkboxes, radios, switches, comboboxes, contenteditable, shadow DOM).
@@ -354,11 +357,12 @@ N-Eye/
 - **Permissions**: `sidePanel`, `activeTab`, `tabs`, `scripting`
 - **Host Permissions**: `<all_urls>` (required for content script injection on any webpage)
 - **Content Script**: Auto-injected at `document_idle` via `manifest.json`. Also programmatically injectable via `chrome.scripting.executeScript()` when tabs pre-exist before extension install/reload.
-- **Service Worker**: Module-type background script. Tracks active tab via `chrome.tabs.onActivated` and `chrome.tabs.onUpdated`. Routes messages between side panel and content script.
-- **Side Panel**: Default path `src/sidepanel/index.html`. Opened via `chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true })`.
+- **Service Worker**: Module-type background script. Tracks active tab via `chrome.tabs.onActivated` and `chrome.tabs.onUpdated`. Routes messages between overlay, Side Panel owner, and content script. Toolbar click toggles the page overlay. Port `n-eye-owner` is the Side Panel session owner.
+- **Side Panel**: `default_path` is `src/sidepanel/index.html`. Owner of vault, OCR, and `TrustLoopController`. Opened by More / Details via `chrome.sidePanel.open({ tabId })`. Not opened on toolbar click (`openPanelOnActionClick: false`).
+- **Product overlay**: Toolbar click toggles a closed Shadow DOM card (`#n-eye-overlay-host`) over the current webpage (ADR-0010). No `chrome.windows.create`. No `action.default_popup`.
 - **Unsupported Pages**: `chrome://`, `chrome-extension://`, `devtools://`, `about:`, `data:`, `javascript:`, and Chrome Web Store URLs are detected and rejected with user-visible reason.
 - **SPA/Navigation**: `chrome.tabs.onUpdated` fires on URL changes and `status: 'complete'`, triggering re-observation. Within a single-page app, `MutationObserver` (via `PageEpochManager`) detects interactive DOM mutations.
-- **Recovery**: If the content script has no receiver (typical after extension Reload on an already-open tab), Side Panel PINGs, classifies the error, injects `content.js` at most once on supported URLs, waits for handshake (`CONTENT_SCRIPT_PROTOCOL`), then observes once. Failure stays **CONTENT SCRIPT DISCONNECTED** (or STALE / RESTRICTED). Never reports READY without a successful observe. `content.js` is a self-contained IIFE (ADR-0008).
+- **Recovery**: If the content script has no receiver (typical after extension Reload on an already-open tab), the owner UI PINGs, classifies the error, injects `content.js` at most once on supported URLs, waits for handshake (`CONTENT_SCRIPT_PROTOCOL`), then observes once. Failure stays **CONTENT SCRIPT DISCONNECTED** (or STALE / RESTRICTED). Never reports READY without a successful observe. `content.js` is a self-contained IIFE (ADR-0008).
 
 ---
 
@@ -582,39 +586,26 @@ Confirmation dialog is a native `<dialog>` element with `showModal()`. Displays 
 
 ## 26. Multi-Step Loop
 
-- **Maximum steps**: 8 (`MAX_STEPS` in `sidepanel.ts`)
+- **Maximum steps**: 8 (`MAX_STEPS` in `runtime/trust-loop.ts`)
 - **Prior outcome**: After each step's verification, result is stored as `priorOutcome { actionId, status, summary }` and included in the next step's `SafeContext`.
 - **Cycle detection**: Tracks `type:targetId:tokenId` signature for each executed proposal. If same signature appears 3+ times, throws loop safety error.
 - **Cancellation**: User can click Cancel button → `AbortController.abort()` → `AbortSignal` propagates to `RemotePlanner` → HTTP request aborted → task terminates.
 - **Stale responses**: Planner client includes `taskId` in requests. Responses from different tasks are not accepted (enforced by proposal flow, not explicit rejection).
 - **Timeouts**: 15-second HTTP timeout per planning request. 3-second timeout for health checks.
-- **Fallback**: If gateway is offline in REMOTE mode, the UI shows "Gateway: Offline" but does not silently fall back to mock. User must manually switch to Mock mode.
+- **Fallback**: If gateway is offline in REMOTE mode, the footer shows “Gateway unreachable” but does not silently fall back to mock. User must manually switch to Mock mode.
 
 ---
 
 ## 27. Product UI
 
-The Side Panel ([`sidepanel.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/sidepanel/sidepanel.ts), [`index.html`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/sidepanel/index.html), [`sidepanel.css`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/sidepanel/sidepanel.css)) provides:
+Primary surfaces are the **overlay quick card** (page-isolated Shadow DOM) and the **Side Panel Trust Center**. Compact overlay: status, site, Run/Cancel, Mock/Remote, More. Side Panel: Activity / Privacy / Action / Evidence. Canonical mark is upper-left. Theme control is upper-right (`dark` / `light` / `system`, Side Panel `localStorage` only; overlay never writes page `localStorage`).
 
-- **Connection status pill**: IDLE / CONNECTING / OBSERVING / READY / EXECUTING / UNSUPPORTED / FAILED / CANCELLED
-- **Target display**: Current tab origin and page title
-- **Planner mode toggle**: Mock (offline deterministic) ↔ Remote (real AI)
-- **Gateway status pill**: Online (provider: model) / Offline / Standby
-- **Task goal input**: Text field for natural language goal
-- **Trust Core pipeline**: SEE → PERCEIVE (only when OCR escalates; otherwise SKIP) → PROTECT → THINK → VALIDATE → ACT → VERIFY
-- **Protection strip**: Truthful states LOCAL_MONITORING / PROTECTING / REMOTE_REASONING / PROTECTED / BLOCKED / UNSUPPORTED — never claims PROTECTED without an egress event
-- **Site-change toast**: Hostname only (query parameters stripped; `file:` → “local file”)
-- **Privacy Receipt**: Human summary + technical evidence; no vault values or raw secrets
-- **Visual evidence stats**: OCR invoked?, ROI count, perception source (DOM/OCR/FUSED), raw screenshot outbound bytes (0)
-- **Privacy transformation view**: Empty until a real N-Eye protect/SafeContext step. Must not show demo `user@example.com` / `[EMAIL_1]` as current evidence.
-- **Latency timeline**: Per-stage timing including PERCEIVE when OCR ran
-- **Network Proof drawer** (collapsible): Request ID, planner mode, provider model, payload size, canary scan status, OCR reason, raw SafeContext JSON dump
-- **Step indicator**: "Step N of 8" with summary text
-- **Action/Verification card**: Displays proposed action type, risk badge, verification status
-- **Latency timeline**: Per-stage timing in milliseconds (SEE, PROTECT, PLAN, VALIDATE, ACT, VERIFY, TOTAL)
-- **Network Proof drawer** (collapsible): Request ID, planner mode, provider model, payload size, canary scan status, raw SafeContext JSON dump
-- **Confirmation dialog**: Native `<dialog>` for HIGH-risk action approval
-- **Cancel button**: In-flight task cancellation
+- **Compact:** site hostname, human status, optional privacy facts, Run/Cancel, Privacy Receipt after a real protected event
+- **Not compact by default:** PageEpoch, ROI, observed controls, request IDs, SafeContext JSON, seven-box pipeline — those are Details/Evidence
+- **Confirmation:** HIGH-risk `<dialog>` still required; presentation only
+- **Toasts:** PROTECTED / APPROVAL / BLOCKED / COMPLETED / DEGRADED — not every observation
+- **Provider copy:** gateway reachable ≠ “Gemini online”. Last plan metadata is shown after a real plan.
+- **More / Details:** opens the Chrome Side Panel. Overlay close does not cancel the loop. Closing the Side Panel during a task cancels (T011/T012). See ADR-0010.
 
 ---
 
@@ -622,13 +613,13 @@ The Side Panel ([`sidepanel.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps
 
 | Metric | Measurement Location | Unit | Classification |
 |---|---|---|---|
-| SEE (observation) latency | `sidepanel.ts` wrapping `requestObservation()` | ms | DEVELOPMENT MEASUREMENT |
-| PROTECT (privacy + egress) latency | `sidepanel.ts` wrapping detect→policy→vault→build→guard | ms | DEVELOPMENT MEASUREMENT |
-| PLAN latency | `sidepanel.ts` wrapping `plannerManager.propose()` / `metadata.planningLatencyMs` | ms | REAL NETWORK MEASUREMENT (remote) or DEVELOPMENT MEASUREMENT (mock) |
-| VALIDATE latency | `sidepanel.ts` wrapping `validateActionProposal()` | ms | DEVELOPMENT MEASUREMENT |
-| ACT latency | `sidepanel.ts` wrapping `EXECUTE_ACTION_REQUEST` message | ms | DEVELOPMENT MEASUREMENT |
-| VERIFY latency | `sidepanel.ts` wrapping re-observation + `verifyActionExecution()` | ms | DEVELOPMENT MEASUREMENT |
-| TOTAL latency | `sidepanel.ts` from loop start to loop end | ms | DEVELOPMENT MEASUREMENT |
+| SEE (observation) latency | `trust-loop.ts` wrapping `requestObservation()` | ms | DEVELOPMENT MEASUREMENT |
+| PROTECT (privacy + egress) latency | `trust-loop.ts` wrapping detect→policy→vault→build→guard | ms | DEVELOPMENT MEASUREMENT |
+| PLAN latency | `trust-loop.ts` wrapping `plannerManager.propose()` / `metadata.planningLatencyMs` | ms | REAL NETWORK MEASUREMENT (remote) or DEVELOPMENT MEASUREMENT (mock) |
+| VALIDATE latency | `trust-loop.ts` wrapping `validateActionProposal()` | ms | DEVELOPMENT MEASUREMENT |
+| ACT latency | `trust-loop.ts` wrapping `EXECUTE_ACTION_REQUEST` message | ms | DEVELOPMENT MEASUREMENT |
+| VERIFY latency | `trust-loop.ts` wrapping re-observation + `verifyActionExecution()` | ms | DEVELOPMENT MEASUREMENT |
+| TOTAL latency | `trust-loop.ts` from loop start to loop end | ms | DEVELOPMENT MEASUREMENT |
 | Observer benchmark | `benchmark.test.ts` (100 iterations × 100 elements) | ms | FORMAL DEVELOPMENT BENCHMARK |
 
 ---
@@ -693,33 +684,27 @@ Recorded from Cursor Genesis verification (2026-08-29, this-run). All figures ar
 
 ## 31. Current Fresh Test Results
 
-Run at T011/T012 (2026-08-29), this revision:
+Run at T013/T014 correction (2026-08-30), this revision:
 
 ```
 @n-eye/protocol:  15 passed (3 files)
-@n-eye/extension: 129 passed (33 files)
+@n-eye/extension: 159 passed (39 files)
 apps/planner-api: 18 passed, 1 skipped (live Gemini 429 rate limit; prompt canary assertions ran before skip)
 ─────────────────────────────────────
-TOTAL:            162 passed, 0 failed, 1 skipped (environment quota)
+TOTAL:            192 passed, 0 failed, 1 skipped (environment quota)
 ```
 
-T009/T010 baseline of 131 tests did not regress. Live Gemini E2E is UNVERIFIED on this run because the provider returned 429; mock planner path remains TESTED.
+T011/T012 behavioral tests and prior T013 UI tests did not regress. Overlay/surface tests are included in the 159.
 
 - **Lint**: 0 errors, 1 warning (console statement in `real-gemini-integration.test.ts`)
 - **Typecheck**: 0 errors across all packages
-- **Build**: `content.js` is a self-contained IIFE (no `import` of `./assets`). Identity `DEV • <sha>` after commit rebuild.
-- **Chrome unpacked Side Panel E2E**: UNVERIFIED — MANUAL VERIFICATION REQUIRED (`docs/evidence/T011-T012-MANUAL-CHECKLIST.md`)
+- **Build**: `content.js` is a self-contained IIFE (no `import` of `./assets`). Identity `DEV • de6df5e*` while the working tree is dirty. Rebuild after commit.
+- **Chrome unpacked capsule E2E**: UNVERIFIED — MANUAL VERIFICATION REQUIRED (`docs/evidence/T013-T014-MANUAL-CHECKLIST.md`)
 - **Test environment**: happy-dom (not jsdom) plus node for Tesseract fixtures
 
-T007/008 baseline of 111 tests did not regress. Live Gemini E2E is UNVERIFIED on this run because the provider returned 429; mock planner path remains TESTED.
+Popup JS gzip ~32.0 KB (development measurement, this machine). Previous Side Panel JS gzip ~25.9 KB (prior build). Build ~185 ms (development measurement).
 
-- **Lint**: 0 errors, 1 warning (console statement in `real-gemini-integration.test.ts`)
-- **Typecheck**: 0 errors across all packages
-- **Build**: `content.js` is a self-contained IIFE (no `import` of `./assets`). Identity `DEV • <sha>` after commit rebuild.
-- **Chrome unpacked Side Panel E2E**: UNVERIFIED — MANUAL VERIFICATION REQUIRED (content-script ES-module root cause is TESTED; live Chrome profile not operated by this agent)
-- **Test environment**: happy-dom (not jsdom) plus node for Tesseract fixtures
-
-Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness, n=7 after warmup): see `bench/visual/reports/t009-t010-latest.json`. Cold/warm from `ocr-fixture.test.ts` remains a separate development measurement. Not a SIH benchmark.
+Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness): see `bench/visual/reports/t009-t010-latest.json`. Cold/warm from `ocr-fixture.test.ts` remains a separate development measurement. Not a SIH benchmark.
 
 ---
 
@@ -817,7 +802,7 @@ Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness, n=7 after warmup):
 
 | Permission | Justification |
 |---|---|
-| `sidePanel` | Side panel UI for trust loop visualization and task control |
+| `sidePanel` | Full Trust Center owner document. Opened by More/Details, not by toolbar click (ADR-0010) |
 | `activeTab` | Access to the currently focused tab's URL and title |
 | `tabs` | Tab switching and update event listeners for active-tab tracking |
 | `scripting` | Programmatic content script injection into pre-existing tabs |
@@ -825,7 +810,7 @@ Real OCR DEVELOPMENT MEASUREMENT (this machine, eval harness, n=7 after warmup):
 
 **CSP (extension pages only)**: `script-src 'self' 'wasm-unsafe-eval'` so Tesseract WASM can compile. Not applied to web pages.
 
-**Not used**: `storage` (deliberately excluded — no secret persistence), `webRequest` (not needed; tracker blocking is REC-016 only), `cookies`, `history`, `offscreen` (OCR runs in the Side Panel document). No new host permission was added for T007/008.
+**Not used**: `storage` (deliberately excluded — no secret persistence), `webRequest` (not needed; tracker blocking is REC-016 only), `cookies`, `history`, `offscreen` (OCR runs in the owner product document). No new host permission was added for T007/008 or T013/T014.
 
 ---
 
@@ -881,15 +866,15 @@ pnpm build:extension
 # Enable "Developer mode"
 # Click "Load unpacked" → select apps/extension/dist/  (NOT apps/extension/)
 # Confirm the card shows DEV • <git-short-sha>
-# Click the N-Eye icon to open the side panel
-# After later source changes: rebuild (or keep pnpm dev:extension), then Reload the extension
+# Click the N-Eye icon to toggle the overlay card on the current page (More opens the Side Panel)
+# After later source changes: rebuild (or keep pnpm dev:extension), then Reload the extension, refresh the page, and toggle the overlay
 
 # 8. Run tests (in a new terminal)
 pnpm test
 
 # 9. Open test portal
 # Open apps/test-portal/index.html (or any scenario) in Chrome
-# The N-Eye side panel will observe the active tab
+# The N-Eye overlay will observe the active tab
 ```
 
 ---
@@ -897,20 +882,20 @@ pnpm test
 ## 40. How to Verify N-Eye Manually
 
 1. Open any supported webpage (e.g., `apps/test-portal/scenario-06-trust-loop.html`) in Chrome.
-2. Open the N-Eye side panel by clicking the extension icon.
-3. Verify the connection pill shows "TRUST LAYER READY" and the page origin is displayed.
-4. Select planner mode (Mock for offline, Remote for real Gemini — requires running gateway).
+2. Click the N-Eye toolbar icon to open the overlay card over the page.
+3. Verify the compact card shows a truthful status (Ready / Disconnected / Unsupported) and hostname only.
+4. Select planner mode (Mock for offline, Remote for the gateway — requires running gateway). Footer must not say “Gemini online” from a health ping alone.
 5. Type a goal containing private data: e.g., "Enter my email alice@example.com into the form".
-6. Click "Run Trust Loop".
-7. Observe the 6-stage pipeline animation progressing: SEE → PROTECT → PLAN → VALIDATE → ACT → VERIFY.
-8. Expand the "Network & Forensic Evidence" drawer.
+6. Click Run (opens the Side Panel if it is not already the owner).
+7. Compact status should move through truthful phases. More → Side Panel Activity shows the SEE…VERIFY rail.
+8. Open Side Panel → Evidence.
 9. Inspect the SafeContext JSON dump — verify that `alice@example.com` does NOT appear. Instead, `[EMAIL_1]` should appear.
-10. Verify the canary scan shows "PASS (0 Secrets Detected)".
-11. Check the provider model display matches your configured mode (mock or gemini).
+10. Verify egress shows PASS (or a truthful block).
+11. Provider/model appear only after a real plan, from last plan metadata.
 13. Inspect visual evidence: OCR invoked YES/NO, ROI count, perception source, raw screenshot outbound `0 B`.
 14. Open Scenario 07 (`apps/test-portal/scenario-07-visual.html`) for pixel-email / canvas / visual-only cases. Expect OCR only when DOM is insufficient.
 15. Confirm the Privacy Receipt human summary does not contain vault values or raw emails.
-16. Switch tabs: expect one hostname toast, not a toast per DOM mutation.
+16. Switch tabs: hostname updates in place. No toast for observation or site-change.
 
 ---
 
@@ -942,6 +927,7 @@ pnpm test
 | ADR-0007 | Local Adaptive Visual Perception | **ACCEPTED** | Structure-first OCR via Tesseract.js WASM; ROI-bounded capture; no extra host permission; no remote crops; OCR privacy uses existing engine |
 | ADR-0008 | Content-script IIFE + visual-model non-admission | **ACCEPTED** | `content.js` is IIFE; bounded handshake recovery; MODEL_ADMISSION=REJECTED |
 | ADR-0009 | Dynamic-state authority + frame provenance | **ACCEPTED** | Semantic PageEpoch; stale-action contract; namespaced frame IDs; no `all_frames`; opaque `frameId` only |
+| ADR-0010 | Overlay quick card + Side Panel Trust Center | **ACCEPTED** | Page overlay (closed Shadow DOM) is the compact surface; Side Panel owns vault/OCR; no `windows.create`; no `action.default_popup` |
 
 ---
 
@@ -1017,7 +1003,7 @@ These are **planning estimates**, not scientific metrics:
 ## 47. Remaining Capability Map
 
 ```
-COMPLETED (Gates 001-006):
+COMPLETED (Gates 001-014):
   ✅ Repository genesis & engineering constitution
   ✅ Protocol contracts & branded types
   ✅ Active web observation (DOM, visibility, epoch, fingerprint)
@@ -1027,32 +1013,34 @@ COMPLETED (Gates 001-006):
   ✅ Local action validator & re-grounding
   ✅ Native DOM executor
   ✅ Empirical state-delta verifier
-  ✅ Product Side Panel UI V2.5
-  ✅ Controlled test portal (Scenarios 01-07)
+  ✅ Overlay quick card + Side Panel Trust Center + theme (T013/T014)
+  ✅ Controlled test portal (Scenarios 01-10)
   ✅ Adaptive perception + on-device Tesseract OCR + OCR privacy + visual grounding
   ✅ Human assurance: site-change, Privacy Receipt, truthful protection states
   ✅ Content-script IIFE + bounded recovery + SIH visual eval harness (T009/T010)
+  ✅ SPA stale-action + frame provenance (T011/T012)
 
-NEXT (Gate 013 — Formal SIH privacy + resource evidence pack):
+NEXT (Gate 015/016 — previously planned T013/T014 security campaign):
+  ⏳ DOM/OCR/ARIA prompt-injection hardening + expanded adversarial suite
   ⏳ Broader privacy P/R/F1 (DOM+OCR) beyond the visual canary set
   ⏳ Formal client-resource / E2E latency benches (not only OCR-warm n=7)
-  ⏳ Human Chrome verification of T011/T012 SPA + frame checklist
+  ⏳ Human Chrome verification of T011/T012 SPA + frame checklist and T013/T014 overlay + Side Panel checklist
   ⏳ SELECT/SCROLL executor if a later task requires it (REC-011)
 ```
 
 ---
 
-## 48. NEXT GATE — T013
+## 48. NEXT GATE — T015/T016
 
-**Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack**
+**Previously planned T013/T014 security campaign:** DOM/OCR/ARIA prompt-injection hardening, expanded adversarial suite, formal SIH privacy P/R/F1, formal performance.
 
 Do **not** implement until a human opens that gate.
 
-T011/T012 closed SPA stale-action and frame-provenance contracts in code. Remaining SIH weight is measured privacy/resource/latency on a larger set, plus human Chrome of the T011/T012 checklist. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
+T013/T014 closed the product-interface transformation. Remaining SIH weight is measured privacy/resource/latency on a larger set, plus human Chrome of the T011/T012 and T013/T014 checklists. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
 
 ---
 
-## 49. T013 Prerequisites (T011/T012 already implemented)
+## 49. T015 Prerequisites (T013/T014 already implemented)
 
 | Prerequisite | Status |
 |---|---|
@@ -1062,7 +1050,8 @@ T011/T012 closed SPA stale-action and frame-provenance contracts in code. Remain
 | Working SafeContext & egress guard | **PASS** |
 | Working planner gateway with real AI | **PASS** |
 | Working validator, executor & verifier | **PASS** |
-| Adaptive OCR + pixel canary egress | **PASS** (this gate; Chrome UI still MANUAL) |
+| Adaptive OCR + pixel canary egress | **PASS** (Chrome UI still MANUAL) |
+| Overlay quick card + Side Panel Trust Center + theme | **PASS** (this gate; Chrome UI still MANUAL) |
 | Clean monorepo build | **PASS** |
 
 ---
@@ -1140,9 +1129,9 @@ Cursor Genesis (2026-08-29) completed the following against HEAD `1fe32f0` plus 
 - [x] Verified real/mock planner separation (`planner-manager.ts` + UI health provider)
 - [x] Independently confirmed T007/008 then T009/T010 — **opened by human and implemented this revision**
 - [x] Canonical Chrome path documented: `apps/extension/dist/` (watch ≠ hot reload)
-- [ ] Chrome unpacked Side Panel E2E on a live webpage (still required before claiming VERIFIED IN REAL RUNTIME for the extension UI)
+- [ ] Chrome unpacked overlay + Side Panel E2E on a live webpage (still required before claiming VERIFIED IN REAL RUNTIME for the extension UI). See `docs/evidence/T013-T014-MANUAL-CHECKLIST.md`.
 
-T013 remains **locked until a human approves that gate**. Do not start it from this document.
+T015/T016 remains **locked until a human approves that gate**. Do not start it from this document.
 
 ---
 
@@ -1167,11 +1156,11 @@ Primary engineering environment transferred from Antigravity to Cursor after ind
 
 **Chrome load path:** Default profile already points at `apps/extension/dist`. That is the canonical directory. Stale UI is caused by MV3 **not** picking up a new `dist/` until **Reload**. Chrome’s service-worker registration has been observed still at `0.1.0` while `dist/manifest.json` is `0.2.0`.
 
-**Build identity:** `dist/manifest.json` `version_name` + Side Panel `#build-identity` + `dist/build-identity.txt`. Label format `DEV • <short-sha>` (`*` if dirty).
+**Build identity:** `dist/manifest.json` `version_name` + capsule `#build-identity` + `dist/build-identity.txt`. Label format `DEV • <short-sha>` (`*` if dirty).
 
 **True hot reload: NO.** Use `pnpm build:extension` or `pnpm dev:extension` (watch rebuilds dist only), then Reload.
 
-**Next gate:** T013 Formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack. Do not implement until explicitly approved.
+**Next gate:** T015/T016 security + formal SIH privacy P/R/F1 + client-resource / E2E latency evidence pack. Do not implement until explicitly approved.
 
 ---
 
@@ -1186,7 +1175,7 @@ Primary engineering environment transferred from Antigravity to Cursor after ind
 | True hot reload | **NO** |
 | Chrome Reload required | **YES** after every runtime change |
 | Target page refresh after content-script change | **Preferred.** T009/T010 tries one programmatic inject; refresh remains the reliable fallback. |
-| Side Panel reopen | **YES** after Reload (or after panel-only HTML/JS change + Reload) |
+| Overlay close / Side Panel reopen | **YES** after Reload (or after overlay/sidepanel HTML/JS change + Reload) |
 | Identity | Manifest `version_name` `DEV • <sha>` |
 
 See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.md) section 2.
@@ -1199,7 +1188,7 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Architecture:** Structure first → pixels only when needed → min ROI → local Tesseract.js WASM → privacy engine (`source: 'ocr'`) → SafeContext → egress. Raw screenshots and raw OCR stay local by default. Remote crop transmission: **not implemented** (outbound screenshot bytes = 0).
 
-**OCR engine:** Tesseract.js v7, Apache-2.0, offline with vendored `eng.traineddata` (~3.9 MB) + WASM core copied at Vite `closeBundle` into `dist/ocr/`. Narrow `OcrEngine.recognize()` seam. Runs in Side Panel (DOM page), not the service worker. Worker reused (cold vs warm). `wasm-unsafe-eval` on extension pages only. No new Chrome host permission.
+**OCR engine:** Tesseract.js v7, Apache-2.0, offline with vendored `eng.traineddata` (~3.9 MB) + WASM core copied at Vite `closeBundle` into `dist/ocr/`. Narrow `OcrEngine.recognize()` seam. Runs in the owner product document (DOM page), not the service worker. Worker reused (cold vs warm). `wasm-unsafe-eval` on extension pages only. No new Chrome host permission.
 
 **ROI:** Max 800×600, 480k pixels, 4 simultaneous, 15s lifetime, min 12px side. Oversized banners are **fitted**, not dropped. Pathological sub-min sizes rejected. Prefer canvas `getImageData` / img `drawImage`; `captureVisibleTab` once for unresolved regions; crops only leave the SW.
 
@@ -1209,7 +1198,7 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Tracker blocking:** REC-016 only. Not implemented.
 
-**Known P2:** Tesseract UI-font accuracy unbenchmarked; `privacyMs` inside orchestrator is 0 (privacy timed in Side Panel PROTECT); Side Panel still orchestrates the trust loop (REC-009).
+**Known P2:** Tesseract UI-font accuracy unbenchmarked; `privacyMs` inside orchestrator is 0 (privacy timed in owner-document PROTECT). REC-009 adopted in T013/T014 (`TrustLoopController`).
 
 ---
 
@@ -1226,5 +1215,26 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 **SELECT/SCROLL executor:** still NOT_IMPLEMENTED (REC-011). Not required for this visual bench.
 
 **Human login on a website is not an N-Eye planner event.** Idle browsing remains LOCAL_MONITORING. REC-016 still deferred.
+
+---
+
+## 59. T013/T014 Product interface (corrected 2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED. Real Chrome overlay + Side Panel E2E: UNVERIFIED (MANUAL VERIFICATION REQUIRED: `docs/evidence/T013-T014-MANUAL-CHECKLIST.md`).
+
+**Decision:** Toolbar click toggles a closed Shadow DOM glass card over the current webpage (upper-right). More / Details opens the Chrome Side Panel Trust Center. No `chrome.windows.create`. No `action.default_popup`. Overlay is view/control only. Side Panel owns vault/OCR/`TrustLoopController` (T011/T012). ADR-0010.
+
+**Brand:** Canonical eye+N mark isolated to a transparent PNG. UI resolves paths only through `src/ui/brand.ts`. Mark is `web_accessible_resources` for the overlay `<img>` only. Identity was not redrawn.
+
+**KEEP on overlay:** logo, name, trust state, theme, hostname, human status, goal, Run/Cancel, Mock/Remote, More → Side Panel, compact facts after a real protect event, high-risk confirm, toasts for PROTECTED / APPROVAL / BLOCKED / COMPLETED / DEGRADED only.
+
+**KEEP in Side Panel:** Activity (SEE…VERIFY + timings + CS health), Privacy (boundary, policy, receipt), Action (proposal, frame, validation, confirm, verify), Evidence (full instrumentation, grouped).
+
+**Lifecycle:** Port `n-eye-owner` is the Side Panel. Overlay close does not cancel. Side Panel close during a task → fail-closed CANCELLED snapshot (no vault). Tab switch clears live evidence. Theme is `localStorage['n-eye.theme']` on the Side Panel only. No `storage` permission. No new Chrome permission.
+
+**Trust invariants:** SafeContext, EgressGuard, vault locality, validator/re-grounding/TOCTOU/frames, HIGH-risk confirm, OCR privacy, screenshot outbound 0 B, MV3 CSP, no `innerHTML` for planner/page text — unchanged.
+
+**Next gate:** T015/T016. Do not start until approved.
+
 
 

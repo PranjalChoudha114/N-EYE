@@ -25,6 +25,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '*.config.*', 'apps/test-portal/**'],
+    ignores: ['**/dist/**', '**/node_modules/**', '*.config.*', 'apps/test-portal/**', '**/theme-boot.js', '**/open-panel.js'],
   },
 );

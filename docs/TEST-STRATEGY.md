@@ -21,7 +21,8 @@ Testing is a parallel engineering track, not an afterthought. Invariants receive
 - SPA stale-action, mutation classification, TOCTOU, and frame-collision tests (`spa-dynamic.test.ts`, `frames-provenance.test.ts`).
 - SIH visual harness (`bench/visual/ground-truth` vs `bench/visual/reports`).
 - Content-script recovery state machine (inject bound = 1).
-- Extension loading remains MANUAL for unpacked Chrome.
+- Product UI: theme resolver, status/privacy/receipt mapping, evidence visibility, safe text, session interrupt, TrustLoopController mock runs (`theme.test.ts`, `status-map.test.ts`, `privacy-summary.test.ts`, `product-ui.test.ts`, `trust-loop.test.ts`).
+- Extension loading remains MANUAL for unpacked Chrome. Overlay + Side Panel checklist: `docs/evidence/T013-T014-MANUAL-CHECKLIST.md`.
 
 ### 2.4 Adversarial & Fault Injection Tests
 - Stale target replacement during plan-to-act transition.

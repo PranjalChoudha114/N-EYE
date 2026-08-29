@@ -87,6 +87,20 @@ export default defineConfig({
         writeFileSync('dist/manifest.json', `${JSON.stringify(manifest, null, 2)}\n`);
         writeFileSync('dist/build-identity.txt', `${identity.label}\n${identity.detail}\n`);
 
+        const brandDest = join('dist', 'brand');
+        mkdirSync(brandDest, { recursive: true });
+        for (const file of ['n-eye-mark.png', 'icon-16.png', 'icon-32.png', 'icon-48.png', 'icon-128.png']) {
+          cpSync(join('assets/brand', file), join(brandDest, file));
+        }
+        const themeBootDest = join('dist', 'src', 'ui');
+        mkdirSync(themeBootDest, { recursive: true });
+        cpSync(resolve(__dirname, 'src/ui/theme-boot.js'), join(themeBootDest, 'theme-boot.js'));
+
+        const overlayDest = join('dist', 'overlay');
+        mkdirSync(overlayDest, { recursive: true });
+        cpSync(resolve(__dirname, 'src/overlay/open-panel.html'), join(overlayDest, 'open-panel.html'));
+        cpSync(resolve(__dirname, 'src/overlay/open-panel.js'), join(overlayDest, 'open-panel.js'));
+
         const ocrDir = join('dist', 'ocr');
         mkdirSync(ocrDir, { recursive: true });
         const workerSrc = require.resolve('tesseract.js/dist/worker.min.js');

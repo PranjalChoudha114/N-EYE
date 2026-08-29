@@ -1,0 +1,938 @@
+/**
+ * Trust-loop coordinator (Zone 3).
+ * OWNS: Observe → perceive → protect → plan → validate → confirm → act → verify.
+ * TRUST: The overlay is a view. This module holds the vault in the Side Panel document's memory.
+ * MUST NOT: Persist vault values, put secrets in ProductState, or render HTML.
+ */
+
+import {
+  type ContentScriptErrorClass,
+  type ContentScriptHello,
+  type ElementId,
+  type PerceptionResult,
+  type PrivacyFinding,
+  type RawScene,
+  type SafeContext,
+  type TabInfo,
+  type ValidatedAction,
+  type VerificationResult,
+  CONTENT_SCRIPT_PROTOCOL,
+  createTaskId,
+} from '@n-eye/protocol';
+import { detectGoalPrivacy, detectOcrTextPrivacy } from '../privacy/detectors.js';
+import { evaluatePrivacyPolicy, resetTokenCounters } from '../privacy/policy.js';
+import { PrivateTokenVault } from '../privacy/vault.js';
+import { tokenizeDecisionsWithValues } from '../privacy/token-values.js';
+import { buildSafeContext } from '../privacy/safe-context-builder.js';
+import { validateSafeContextEgress } from '../privacy/egress-guard.js';
+import { PlannerManager } from '../planner/planner-manager.js';
+import type { GatewayHealth, PlannerMode } from '../planner/types.js';
+import { validateActionProposal } from '../authority/validator.js';
+import { verifyActionExecution } from '../verification/verifier.js';
+import { applyFusionLabels, runPerception } from '../perception/index.js';
+import type { OcrEngine } from '../perception/ocr-engine.js';
+import {
+  AssuranceBus,
+  blockedState,
+  buildAdvisoryRecommendations,
+  buildPrivacyReceipt,
+  disconnectedObservationState,
+  emptyVisualizerModel,
+  findingsHaveOcrSecrets,
+  localMonitoringState,
+  maybeSiteChangeEvent,
+  protectedState,
+  protectingState,
+  remoteReasoningState,
+  siteChangeHostname,
+  unsupportedState,
+  visualizerModel,
+} from '../assurance/index.js';
+import {
+  classifySendMessageError,
+  decideRecovery,
+  disconnectedLabel,
+  HANDSHAKE_POLL_MS,
+  HANDSHAKE_TIMEOUT_MS,
+} from './content-connection.js';
+import { classifySupportedUrl } from './supported-url.js';
+import { classifyPlannerFailure, statusCopy } from '../ui/status-map.js';
+import { buildPrivacySummary } from '../ui/privacy-summary.js';
+import { mapReceiptView } from '../ui/receipt-map.js';
+import { toastFromEvent, toastFromPhase } from '../ui/notification-map.js';
+import { describeAction } from '../ui/action-copy.js';
+import {
+  createIdleState,
+  emptyEvidence,
+  idlePipeline,
+  markSessionInterrupted,
+  stripQuery,
+  type PipelineId,
+  type ProductState,
+} from './ui-snapshot.js';
+import { delay, executeOnTab, type PagePorts } from './page-ports.js';
+
+export const MAX_STEPS = 8;
+
+export interface TrustLoopDeps {
+  ports: PagePorts;
+  planner: PlannerManager;
+  ocr: OcrEngine;
+  vault?: PrivateTokenVault;
+  delayFn?: (ms: number) => Promise<void>;
+}
+
+type Listener = (state: ProductState) => void;
+
+export class TrustLoopController {
+  private readonly ports: PagePorts;
+  private readonly planner: PlannerManager;
+  private readonly ocr: OcrEngine;
+  private readonly vault: PrivateTokenVault;
+  private readonly wait: (ms: number) => Promise<void>;
+  private readonly listeners = new Set<Listener>();
+  private readonly recoveryExhausted = new Set<string>();
+  private readonly assuranceBus = new AssuranceBus();
+  private state: ProductState = createIdleState();
+  private tab: TabInfo | null = null;
+  private abort: AbortController | null = null;
+  private observeGeneration = 0;
+  private lastHostname: string | null = null;
+  private confirmWait: { resolve: (approved: boolean) => void } | null = null;
+
+  constructor(deps: TrustLoopDeps) {
+    this.ports = deps.ports;
+    this.planner = deps.planner;
+    this.ocr = deps.ocr;
+    this.vault = deps.vault ?? new PrivateTokenVault();
+    this.wait = deps.delayFn ?? delay;
+    this.state.plannerMode = this.planner.getMode();
+  }
+
+  public subscribe(listener: Listener): () => void {
+    this.listeners.add(listener);
+    listener(this.getState());
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  public getState(): ProductState {
+    return this.state;
+  }
+
+  public getVaultSize(): number {
+    return this.vault.size();
+  }
+
+  public setMode(mode: PlannerMode): void {
+    this.planner.setMode(mode);
+    this.patch({ plannerMode: mode });
+    void this.refreshGateway();
+  }
+
+  public setGoal(goal: string): void {
+    this.patch({ goal });
+  }
+
+  public hydrate(snapshot: ProductState): void {
+    // WHY: Reopen must reconstruct the last serializable snapshot. Vault is gone with the old document.
+    let next: ProductState = {
+      ...snapshot,
+      running: false,
+      canCancel: false,
+      confirmation: undefined,
+    };
+    if (snapshot.running || snapshot.phase === 'AWAITING_CONFIRMATION') {
+      next = markSessionInterrupted(
+        next,
+        'The N-Eye Trust Center closed. The in-flight task was stopped.'
+      );
+    }
+    this.state = next;
+    this.lastHostname = next.siteHostname || null;
+    this.emit();
+  }
+
+  public bindTab(tab: TabInfo): void {
+    const hostname = siteChangeHostname(tab.url, tab.origin, tab.isSupported);
+    // WHY: T011 cleared live evidence on every TAB_CHANGED so tab B cannot inherit A's receipt.
+    if (this.tab !== null) {
+      this.clearLiveEvidence();
+    }
+    this.tab = tab;
+    const siteEvent = maybeSiteChangeEvent(
+      this.assuranceBus,
+      this.lastHostname,
+      tab.url,
+      tab.origin,
+      tab.isSupported
+    );
+    this.lastHostname = hostname;
+    this.patch({
+      siteHostname: hostname,
+      siteTitle: tab.title || '',
+      supported: tab.isSupported,
+      unsupportedReason: tab.unsupportedReason,
+      tabId: tab.tabId,
+      origin: tab.origin,
+      url: stripQuery(tab.url),
+    });
+    if (siteEvent && !this.state.running) {
+      // Site identity updates in-place. Observation/site-change is not a toast.
+    }
+  }
+
+  public async refreshGateway(): Promise<GatewayHealth | null> {
+    if (this.planner.getMode() === 'MOCK') {
+      this.patch({
+        plannerMode: 'MOCK',
+        gatewayReachable: null,
+        evidence: {
+          ...this.state.evidence,
+          plannerMode: 'MOCK (Deterministic)',
+          provider: this.state.lastPlannerProvider || '—',
+          model: this.state.lastPlannerModel || '—',
+        },
+      });
+      return null;
+    }
+    const health = await this.planner.checkGatewayHealth();
+    this.patch({
+      plannerMode: 'REMOTE',
+      gatewayReachable: health.healthy,
+      evidence: {
+        ...this.state.evidence,
+        plannerMode: health.healthy
+          ? health.provider === 'mock'
+            ? 'REMOTE (Server Mock)'
+            : 'REMOTE (gateway reachable)'
+          : 'REMOTE (gateway unreachable)',
+      },
+    });
+    return health;
+  }
+
+  public async idleObserve(): Promise<void> {
+    if (!this.tab) return;
+    if (!this.tab.isSupported) {
+      const view = unsupportedState(this.tab.unsupportedReason || 'This page cannot be observed.');
+      this.applyPhase('UNSUPPORTED', view.detail);
+      this.patch({ canRun: false, contentScriptHealth: 'UNSUPPORTED' });
+      return;
+    }
+    const scene = await this.requestObservation(this.tab.tabId, true);
+    if (this.state.running) return;
+    if (!scene) {
+      const view = disconnectedObservationState();
+      if (this.state.phase !== 'UNSUPPORTED') {
+        this.applyPhase(this.state.contentScriptHealth === 'UNSUPPORTED' ? 'UNSUPPORTED' : 'DISCONNECTED', view.detail);
+      }
+      this.patch({ canRun: false });
+      return;
+    }
+    const classes = scene.privacyFindings.map((f) => f.privacyClass);
+    const view = localMonitoringState(classes);
+    this.applyPhase('READY', view.detail);
+    this.patch({ canRun: true });
+    await this.refreshGateway();
+  }
+
+  public cancel(): void {
+    this.abort?.abort();
+    if (this.confirmWait) {
+      this.confirmWait.resolve(false);
+      this.confirmWait = null;
+    }
+  }
+
+  public confirm(approved: boolean): void {
+    if (!this.confirmWait) return;
+    const wait = this.confirmWait;
+    this.confirmWait = null;
+    this.patch({ confirmation: undefined });
+    wait.resolve(approved);
+  }
+
+  public async start(goal?: string): Promise<void> {
+    if (!this.tab || !this.tab.isSupported || this.state.running) return;
+    await this.executeClosedTrustLoop(goal ?? this.state.goal);
+  }
+
+  private emit(): void {
+    const snapshot = this.state;
+    for (const listener of this.listeners) {
+      listener(snapshot);
+    }
+  }
+
+  private patch(partial: Partial<ProductState>): void {
+    this.state = { ...this.state, ...partial };
+    this.emit();
+  }
+
+  private applyPhase(phase: ProductState['phase'], detail?: string): void {
+    const copy = statusCopy(phase, detail);
+    this.patch({
+      phase,
+      headline: copy.headline,
+      message: copy.message,
+      tone: copy.tone,
+    });
+  }
+
+  private setPipeline(id: PipelineId, visual: ProductState['pipeline'][PipelineId]): void {
+    this.patch({ pipeline: { ...this.state.pipeline, [id]: visual } });
+  }
+
+  private clearLiveEvidence(): void {
+    this.patch({
+      privacySummary: null,
+      visualizer: emptyVisualizerModel(),
+      receipt: undefined,
+      receiptView: undefined,
+      action: undefined,
+      confirmation: undefined,
+      advisories: [],
+      evidence: {
+        ...emptyEvidence(this.state.contentScriptHealth),
+        plannerMode: this.state.evidence.plannerMode,
+      },
+    });
+  }
+
+  private async requestObservation(tabId: number, allowRecovery = true): Promise<RawScene | null> {
+    const generation = ++this.observeGeneration;
+    this.applyPhase(this.state.running ? this.state.phase : 'OBSERVING');
+    if (!this.state.running) this.setPipeline('SEE', 'active');
+
+    const applyScene = (scene: RawScene): RawScene => {
+      this.recoveryExhausted.delete(`${tabId}:${this.tab?.url || ''}`);
+      this.patch({
+        contentScriptHealth: 'READY',
+        evidence: {
+          ...this.state.evidence,
+          pageEpoch: Number(scene.pageEpoch),
+          observedControls: scene.elements.length,
+          contentScriptHealth: 'READY',
+          frameNote: scene.inaccessibleFrames?.length
+            ? `${scene.inaccessibleFrames.length} inaccessible frame(s)`
+            : 'Top document',
+        },
+      });
+      if (!this.state.running) {
+        this.setPipeline('SEE', 'done');
+      }
+      return scene;
+    };
+
+    const failDisconnected = (errorClass: ContentScriptErrorClass): null => {
+      const health = errorClass === 'UNSUPPORTED_URL' ? 'UNSUPPORTED' : 'DISCONNECTED';
+      this.patch({ contentScriptHealth: health });
+      if (!this.state.running) {
+        this.applyPhase(health === 'UNSUPPORTED' ? 'UNSUPPORTED' : 'DISCONNECTED', disconnectedLabel(errorClass));
+        this.setPipeline('SEE', 'pending');
+      }
+      return null;
+    };
+
+    const ping = await this.ports.send<ContentScriptHello>(tabId, { type: 'PING' });
+    if (generation !== this.observeGeneration) return null;
+
+    if (ping.ok) {
+      if (ping.data.contentProtocol !== CONTENT_SCRIPT_PROTOCOL) {
+        return failDisconnected('VERSION_MISMATCH');
+      }
+      const observed = await this.ports.send<RawScene>(tabId, { type: 'OBSERVE_REQUEST' });
+      if (generation !== this.observeGeneration) return null;
+      if (observed.ok) return applyScene(observed.data);
+      this.patch({ contentScriptHealth: 'DISCONNECTED' });
+      return null;
+    }
+
+    if (!allowRecovery) {
+      return failDisconnected(classifySendMessageError(ping.lastError));
+    }
+
+    const url = this.tab?.url || '';
+    const exhaustedKey = `${tabId}:${url}`;
+    if (this.recoveryExhausted.has(exhaustedKey)) {
+      return failDisconnected('INJECTION_FAILED');
+    }
+
+    const supported = classifySupportedUrl(url).isSupported && Boolean(this.tab?.isSupported);
+    const errorClass = classifySendMessageError(ping.lastError);
+    const decision = decideRecovery({ urlSupported: supported, injectAttempts: 0, errorClass });
+    if (decision.action === 'UNSUPPORTED') {
+      this.patch({ contentScriptHealth: 'UNSUPPORTED' });
+      this.applyPhase('UNSUPPORTED', 'RESTRICTED PAGE');
+      return null;
+    }
+    if (decision.action !== 'INJECT') {
+      this.recoveryExhausted.add(exhaustedKey);
+      return failDisconnected(errorClass);
+    }
+
+    this.patch({ contentScriptHealth: 'INJECTING' });
+    this.applyPhase('RECOVERING', 'RECOVERING CONTENT SCRIPT');
+
+    const injectOk = await this.ports.inject(tabId);
+    if (generation !== this.observeGeneration) return null;
+    if (!injectOk) {
+      this.recoveryExhausted.add(exhaustedKey);
+      return failDisconnected('INJECTION_FAILED');
+    }
+
+    const hello = await this.waitForHandshake(tabId, generation);
+    if (generation !== this.observeGeneration) return null;
+    if (!hello) {
+      this.recoveryExhausted.add(exhaustedKey);
+      return failDisconnected('TIMEOUT');
+    }
+    if (hello.contentProtocol !== CONTENT_SCRIPT_PROTOCOL) {
+      this.recoveryExhausted.add(exhaustedKey);
+      return failDisconnected('VERSION_MISMATCH');
+    }
+
+    const observed = await this.ports.send<RawScene>(tabId, { type: 'OBSERVE_REQUEST' });
+    if (generation !== this.observeGeneration) return null;
+    if (observed.ok) return applyScene(observed.data);
+    this.recoveryExhausted.add(exhaustedKey);
+    return failDisconnected(classifySendMessageError(observed.lastError));
+  }
+
+  private async waitForHandshake(tabId: number, generation: number): Promise<ContentScriptHello | null> {
+    const deadline = Date.now() + HANDSHAKE_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      if (generation !== this.observeGeneration) return null;
+      const ping = await this.ports.send<ContentScriptHello>(tabId, { type: 'PING' });
+      if (ping.ok) return ping.data;
+      await this.wait(HANDSHAKE_POLL_MS);
+    }
+    return null;
+  }
+
+  private async executeClosedTrustLoop(rawGoalInput: string): Promise<void> {
+    const currentTab = this.tab;
+    if (!currentTab?.isSupported) return;
+    const tabId = currentTab.tabId;
+    const origin = currentTab.origin;
+    const rawGoal = rawGoalInput.trim() || 'Enter my email and continue';
+
+    resetTokenCounters();
+    this.vault.clear();
+    this.planner.reset();
+    this.clearLiveEvidence();
+
+    this.abort = new AbortController();
+    const signal = this.abort.signal;
+
+    const taskId = createTaskId(`task_${Date.now()}`);
+    this.patch({
+      running: true,
+      canRun: false,
+      canCancel: true,
+      goal: rawGoal,
+      pipeline: idlePipeline(),
+      toast: null,
+    });
+
+    let priorOutcome: SafeContext['priorOutcome'] | undefined;
+    const executedProposals: string[] = [];
+    const loopStart = performance.now();
+
+    try {
+      for (let step = 1; step <= MAX_STEPS; step++) {
+        if (signal.aborted) {
+          throw new DOMException('Task cancelled by user.', 'AbortError');
+        }
+
+        this.patch({
+          step: { index: step, max: MAX_STEPS, summary: `Executing step ${step}...` },
+        });
+
+        const seeStart = performance.now();
+        this.setPipeline('SEE', 'active');
+        this.applyPhase('OBSERVING', 'Reading this page on your device.');
+        const preScene = await this.requestObservation(tabId);
+        this.patch({
+          latency: { ...this.state.latency, see: `${(performance.now() - seeStart).toFixed(1)} ms` },
+        });
+        this.setPipeline('SEE', 'done');
+        if (!preScene) {
+          throw new Error('Failed to observe active page state.');
+        }
+
+        this.setPipeline('PERCEIVE', 'active');
+        this.applyPhase('PERCEIVING');
+        this.patch({ perceiveLabel: '…' });
+        const perception: PerceptionResult = await runPerception({
+          scene: preScene,
+          engine: this.ocr,
+          capture: (rois) => this.ports.captureRois(tabId, rois),
+          goal: rawGoal,
+          origin,
+        });
+        this.patch({
+          latency: {
+            ...this.state.latency,
+            perceive: perception.invoked ? `${perception.timings.totalMs.toFixed(1)} ms` : 'skipped',
+          },
+        });
+
+        if (perception.fallback === 'PAGE_CHANGED') {
+          this.setPipeline('PERCEIVE', 'pending');
+          this.patch({ perceiveLabel: 'STALE' });
+          throw new Error('Page changed during visual perception. Re-perceive required.');
+        }
+
+        let workingScene = preScene;
+        if (perception.invoked) {
+          this.setPipeline('PERCEIVE', 'done');
+          this.patch({ perceiveLabel: perception.fallback ? perception.fallback : 'OCR' });
+          workingScene = {
+            ...preScene,
+            elements: applyFusionLabels(preScene.elements, perception.candidates),
+          };
+        } else {
+          this.setPipeline('PERCEIVE', 'skipped');
+          this.patch({ perceiveLabel: 'SKIP' });
+        }
+
+        const perceptionSource = perception.invoked
+          ? perception.fusedElementIds.length > 0
+            ? 'FUSED'
+            : 'OCR'
+          : 'DOM';
+        this.patch({
+          evidence: {
+            ...this.state.evidence,
+            ocrInvoked: perception.invoked,
+            roiCount: perception.decision.roiSpecs.length,
+            perceptionSource,
+            screenshotOutBytes: 0,
+            ocrReason: perception.invoked
+              ? perception.decision.reasons.join(', ') || 'escalated'
+              : perception.decision.skippedReason || 'DOM sufficient',
+            cropOutbound: 'NO',
+          },
+        });
+
+        const protectStart = performance.now();
+        this.setPipeline('PROTECT', 'active');
+        const protecting = protectingState();
+        this.applyPhase('PROTECTING', protecting.detail);
+
+        const goalFindings = detectGoalPrivacy(rawGoal);
+        const blockToElement = new Map<string, ElementId>();
+        for (const grounding of perception.groundings) {
+          if (!grounding.elementId) continue;
+          for (const blockId of grounding.ocrBlockIds) {
+            blockToElement.set(blockId, grounding.elementId);
+          }
+        }
+        const ocrFindings = perception.ocrBlocks.flatMap((block) =>
+          detectOcrTextPrivacy(block.text, {
+            roiId: block.roiId,
+            blockId: block.blockId,
+            elementId: blockToElement.get(block.blockId),
+          })
+        );
+        const combinedFindings: PrivacyFinding[] = [
+          ...workingScene.privacyFindings,
+          ...goalFindings,
+          ...ocrFindings,
+        ];
+
+        const decisions = evaluatePrivacyPolicy(combinedFindings);
+        for (const { decision, realValue } of tokenizeDecisionsWithValues(decisions, combinedFindings)) {
+          if (!decision.tokenRole) continue;
+          this.vault.registerToken(
+            decision.tokenRole,
+            decision.privacyClass,
+            realValue,
+            taskId,
+            tabId,
+            origin,
+            ['text', 'textbox', 'email', 'tel']
+          );
+        }
+
+        const safeContext = buildSafeContext(
+          workingScene,
+          rawGoal,
+          decisions,
+          this.vault,
+          taskId,
+          combinedFindings,
+          { visualCandidates: perception.candidates }
+        );
+        if (priorOutcome) {
+          safeContext.priorOutcome = priorOutcome;
+        }
+
+        let serializedBytes: string;
+        try {
+          serializedBytes = validateSafeContextEgress(safeContext);
+        } catch (egressErr) {
+          const blocked = blockedState();
+          this.applyPhase('BLOCKED', blocked.detail);
+          this.setPipeline('PROTECT', 'pending');
+          const blockedReceipt = buildPrivacyReceipt({
+            hostname: siteChangeHostname(currentTab.url, origin, true),
+            protectionEvent: 'BLOCKED',
+            perceptionSource,
+            findings: combinedFindings,
+            decisions,
+            rawScreenshotSent: false,
+            safeCropSent: false,
+            safeContextBytes: 0,
+            egressResult: 'BLOCKED',
+            ocrInvoked: perception.invoked,
+            roiCount: perception.decision.roiSpecs.length,
+            ocrBlockCount: perception.ocrBlocks.length,
+            escalationReasons: perception.decision.reasons.join(', '),
+          });
+          const summary = buildPrivacySummary(combinedFindings, decisions, safeContext, {
+            screenshotBytes: 0,
+            protectedContextBytes: 0,
+          });
+          const blockedToast = this.assuranceBus.emit({
+            kind: 'BLOCKED',
+            hostname: blockedReceipt.hostname,
+            message: 'N-Eye blocked an unsafe AI request. Forbidden sensitive data was detected before network.',
+            severity: 'warning',
+            dedupeKey: `blocked:${blockedReceipt.hostname}`,
+          });
+          this.patch({
+            privacySummary: summary,
+            visualizer: visualizerModel(combinedFindings, safeContext),
+            receipt: blockedReceipt,
+            receiptView: mapReceiptView(blockedReceipt, summary),
+            toast: blockedToast ? toastFromEvent(blockedToast) : this.state.toast,
+            evidence: {
+              ...this.state.evidence,
+              findingsCount: combinedFindings.length,
+              vaultTokenCount: this.vault.size(),
+              egressResult: 'BLOCKED',
+            },
+          });
+          throw egressErr;
+        }
+
+        const summary = buildPrivacySummary(combinedFindings, decisions, safeContext, {
+          screenshotBytes: 0,
+          protectedContextBytes: serializedBytes.length,
+        });
+        this.patch({
+          privacySummary: summary,
+          visualizer: visualizerModel(combinedFindings, safeContext),
+          latency: { ...this.state.latency, protect: `${(performance.now() - protectStart).toFixed(1)} ms` },
+          evidence: {
+            ...this.state.evidence,
+            findingsCount: combinedFindings.length,
+            vaultTokenCount: this.vault.size(),
+            payloadBytes: serializedBytes.length,
+            egressResult: 'PASS (0 Secrets Detected)',
+            safeContextJson: JSON.stringify(JSON.parse(serializedBytes), null, 2),
+          },
+          advisories: buildAdvisoryRecommendations(combinedFindings, perception),
+        });
+        this.setPipeline('PROTECT', 'done');
+
+        const planStart = performance.now();
+        this.setPipeline('THINK', 'active');
+        const remoteView = remoteReasoningState();
+        this.applyPhase('PLANNING', remoteView.detail);
+
+        const planResult = await this.planner.propose(safeContext, { signal });
+        const proposal = planResult.proposal;
+        const metadata = planResult.metadata;
+        const planMs = metadata.planningLatencyMs || performance.now() - planStart;
+
+        this.patch({
+          lastRequestId: metadata.requestId,
+          lastPlannerProvider: metadata.provider,
+          lastPlannerModel: metadata.model,
+          latency: { ...this.state.latency, plan: `${planMs.toFixed(1)} ms` },
+          evidence: {
+            ...this.state.evidence,
+            requestId: metadata.requestId,
+            provider: metadata.provider,
+            model: metadata.model,
+            plannerLatency: `${planMs.toFixed(1)} ms`,
+          },
+        });
+        this.setPipeline('THINK', 'done');
+
+        const protectedView = protectedState(combinedFindings.length);
+        this.applyPhase('PROTECTED', protectedView.detail);
+        const receipt = buildPrivacyReceipt({
+          hostname: siteChangeHostname(currentTab.url, origin, true),
+          protectionEvent: 'PROTECTED',
+          perceptionSource,
+          findings: combinedFindings,
+          decisions,
+          rawScreenshotSent: false,
+          safeCropSent: false,
+          safeContextBytes: serializedBytes.length,
+          plannerProvider: metadata.provider,
+          plannerModel: metadata.model,
+          egressResult: 'PASS',
+          requestId: metadata.requestId,
+          latencyMs: planMs,
+          ocrInvoked: perception.invoked,
+          roiCount: perception.decision.roiSpecs.length,
+          ocrBlockCount: perception.ocrBlocks.length,
+          escalationReasons: perception.decision.reasons.join(', '),
+        });
+        const protectedToast = this.assuranceBus.emit({
+          kind: findingsHaveOcrSecrets(combinedFindings) ? 'OCR_PROTECTED' : 'PROTECTED',
+          hostname: receipt.hostname,
+          message: findingsHaveOcrSecrets(combinedFindings)
+            ? 'OCR found private text in this visual region. It was protected locally.'
+            : protectedView.detail,
+          severity: 'success',
+          dedupeKey: `protected:${receipt.hostname}:${metadata.requestId}`,
+        });
+        const targetEl = workingScene.elements.find((e) => e.id === proposal.targetId);
+        const targetLabel = targetEl?.ariaLabel || targetEl?.innerTextCandidate || proposal.targetId || '—';
+        const frameLabel = targetEl?.frameProvenance
+          ? `${targetEl.frameProvenance.frameKind} · ${targetEl.frameProvenance.frameId}`
+          : 'Top document';
+        const actionView = {
+          proposalText: describeAction(proposal, targetLabel),
+          targetLabel,
+          risk: proposal.riskLevel,
+          reasoning: proposal.reasoning,
+          proposalType: proposal.type,
+          targetId: String(proposal.targetId || '—'),
+          frame: frameLabel,
+          confirmationRequired: false,
+          validation: {
+            targetCurrent: null,
+            frameCurrent: null,
+            pageCurrent: null,
+            tokenScopeValid: null,
+            riskPolicy: null,
+          },
+        };
+        this.patch({
+          receipt,
+          receiptView: mapReceiptView(receipt, summary),
+          toast: protectedToast ? toastFromEvent(protectedToast) : this.state.toast,
+          action: actionView,
+        });
+
+        if (proposal.type === 'COMPLETE') {
+          this.applyPhase('COMPLETED', proposal.reasoning || 'Goal fully achieved on active page.');
+          this.patch({
+            toast: toastFromPhase('COMPLETED', 'Task completed.'),
+            action: {
+              ...actionView,
+              verification: 'VERIFIED_SUCCESS' as const,
+              verificationDelta: proposal.reasoning || 'Goal fully achieved on active page.',
+            },
+            step: { index: step, max: MAX_STEPS, summary: 'Task completed successfully.' },
+            evidence: { ...this.state.evidence, verificationResult: 'COMPLETED' },
+          });
+          break;
+        }
+
+        if (proposal.type === 'ASK_USER') {
+          this.applyPhase('AWAITING_CONFIRMATION', proposal.reasoning || 'Planner requires user input to proceed.');
+          this.patch({
+            toast: toastFromPhase('AWAITING_CONFIRMATION', 'N-Eye needs your next instruction.'),
+            step: { index: step, max: MAX_STEPS, summary: 'Awaiting user input.' },
+          });
+          break;
+        }
+
+        const proposalSignature = `${proposal.type}:${proposal.targetId || ''}:${proposal.tokenId || ''}`;
+        if (executedProposals.filter((p) => p === proposalSignature).length >= 2) {
+          throw new Error(
+            `Loop safety triggered: Action ${proposalSignature} was proposed repeatedly without progress.`
+          );
+        }
+        executedProposals.push(proposalSignature);
+
+        const validateStart = performance.now();
+        this.setPipeline('VALIDATE', 'active');
+        this.applyPhase('VALIDATING');
+
+        let validatedAction: ValidatedAction;
+        try {
+          validatedAction = validateActionProposal(proposal, workingScene, this.vault, taskId, origin);
+        } catch (err) {
+          this.setPipeline('VALIDATE', 'pending');
+          this.applyPhase('BLOCKED', (err as Error).message);
+          this.patch({
+            toast: toastFromEvent({
+              kind: 'BLOCKED',
+              hostname: this.state.siteHostname,
+              message: `Action blocked. ${(err as Error).message}`,
+              severity: 'warning',
+              dedupeKey: `blocked-val:${Date.now()}`,
+              timestamp: Date.now(),
+            }),
+            action: {
+              proposalText: `Rejected: ${(err as Error).message}`,
+              targetLabel,
+              risk: proposal.riskLevel,
+              reasoning: proposal.reasoning,
+              proposalType: proposal.type,
+              targetId: String(proposal.targetId || '—'),
+              frame: frameLabel,
+              confirmationRequired: false,
+              validation: {
+                targetCurrent: false,
+                frameCurrent: false,
+                pageCurrent: true,
+                tokenScopeValid: false,
+                riskPolicy: (err as Error).message,
+              },
+              blockedReason: (err as Error).message,
+            },
+            evidence: { ...this.state.evidence, validationResult: (err as Error).message },
+          });
+          throw err;
+        }
+
+        this.patch({
+          latency: { ...this.state.latency, validate: `${(performance.now() - validateStart).toFixed(1)} ms` },
+          action: {
+            proposalText: describeAction(proposal, targetLabel),
+            targetLabel,
+            risk: validatedAction.approvedRiskLevel,
+            reasoning: proposal.reasoning,
+            proposalType: proposal.type,
+            targetId: String(proposal.targetId || '—'),
+            frame: frameLabel,
+            confirmationRequired: validatedAction.approvedRiskLevel === 'HIGH',
+            validation: {
+              targetCurrent: true,
+              frameCurrent: true,
+              pageCurrent: true,
+              tokenScopeValid: proposal.type !== 'TYPE_TOKEN' || Boolean(validatedAction.resolvedTokenValue),
+              riskPolicy: validatedAction.approvedRiskLevel,
+            },
+          },
+          evidence: { ...this.state.evidence, validationResult: validatedAction.approvedRiskLevel },
+        });
+        this.setPipeline('VALIDATE', 'done');
+
+        if (validatedAction.approvedRiskLevel === 'HIGH') {
+          const stayedLocal = summary?.keptLocal ?? [];
+          const dataUsed = summary?.tokenized.map((t) => t.token) ?? [];
+          this.patch({
+            confirmation: {
+              actionName: describeAction(proposal, targetLabel),
+              targetLabel,
+              why: 'This action can submit or change an account. N-Eye will not continue without your confirmation.',
+              stayedLocal,
+              dataUsed,
+            },
+          });
+          this.applyPhase('AWAITING_CONFIRMATION', `Confirm: ${describeAction(proposal, targetLabel)}`);
+          this.patch({
+            toast: toastFromPhase('AWAITING_CONFIRMATION', `N-Eye needs approval. ${describeAction(proposal, targetLabel)}`),
+          });
+
+          const confirmed = await new Promise<boolean>((resolve) => {
+            this.confirmWait = { resolve };
+          });
+          if (!confirmed || signal.aborted) {
+            this.applyPhase('CANCELLED', 'Action cancelled by user.');
+            throw new DOMException('Action cancelled by user.', 'AbortError');
+          }
+        }
+
+        const actStart = performance.now();
+        this.setPipeline('ACT', 'active');
+        this.applyPhase('ACTING');
+        const execResult = await executeOnTab(this.ports, tabId, validatedAction);
+        this.patch({
+          latency: { ...this.state.latency, act: `${(performance.now() - actStart).toFixed(1)} ms` },
+          evidence: {
+            ...this.state.evidence,
+            executionResult: execResult.success ? 'OK' : execResult.error || 'FAILED',
+          },
+        });
+        this.setPipeline('ACT', 'done');
+
+        if (!execResult.success) {
+          const blocked = execResult.error || 'Execution failed';
+          this.applyPhase('BLOCKED', blocked);
+          this.patch({
+            action: {
+              ...(this.state.action as NonNullable<ProductState['action']>),
+              blockedReason: blocked,
+            },
+            toast: {
+              kind: 'BLOCKED',
+              message: blocked.toLowerCase().includes('page')
+                ? 'Action blocked. Page changed before execution.'
+                : blocked,
+            },
+          });
+          throw new Error(`Action execution failed: ${execResult.error}`);
+        }
+
+        const verifyStart = performance.now();
+        this.setPipeline('VERIFY', 'active');
+        this.applyPhase('VERIFYING');
+        await this.wait(120);
+        const postScene = await this.requestObservation(tabId, false);
+        if (postScene) {
+          const verification: VerificationResult = verifyActionExecution(validatedAction, preScene, postScene);
+          this.patch({
+            action: {
+              ...(this.state.action as NonNullable<ProductState['action']>),
+              verification: verification.status,
+              verificationDelta: verification.observedDelta,
+            },
+            evidence: { ...this.state.evidence, verificationResult: verification.status },
+          });
+          priorOutcome = {
+            actionId: proposal.actionId,
+            status: verification.status === 'VERIFIED_SUCCESS' ? 'VERIFIED' : 'FAILURE',
+            summary: verification.observedDelta,
+          };
+        }
+        this.patch({
+          latency: { ...this.state.latency, verify: `${(performance.now() - verifyStart).toFixed(1)} ms` },
+        });
+        this.setPipeline('VERIFY', 'done');
+      }
+
+      this.patch({
+        latency: { ...this.state.latency, total: `${(performance.now() - loopStart).toFixed(1)} ms` },
+      });
+      if (this.state.phase === 'PROTECTED' || this.state.phase === 'PLANNING') {
+        this.applyPhase('COMPLETED', 'The task finished.');
+      }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
+        this.applyPhase('CANCELLED', 'Task cancelled by user.');
+        this.clearLiveEvidence();
+      } else {
+        const message = (err as Error).message;
+        const phase = classifyPlannerFailure(message);
+        this.applyPhase(phase, message);
+        if (phase === 'GATEWAY_UNREACHABLE' || phase === 'RATE_LIMITED') {
+          this.patch({ toast: toastFromPhase(phase, this.state.message) });
+        }
+        this.patch({ step: { index: this.state.step?.index ?? 1, max: MAX_STEPS, summary: `Error: ${message}` } });
+      }
+    } finally {
+      this.abort = null;
+      this.confirmWait = null;
+      this.patch({
+        running: false,
+        canRun: Boolean(this.tab?.isSupported && this.state.contentScriptHealth === 'READY'),
+        canCancel: false,
+        confirmation: undefined,
+      });
+    }
+  }
+}

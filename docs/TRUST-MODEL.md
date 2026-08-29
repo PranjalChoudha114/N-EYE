@@ -9,7 +9,7 @@ Security authority is structured into 6 distinct zones:
             │ (Untrusted DOM / Scripts)
 [ Zone 1: Content Script (Observer + Executor) ]
             │ (Isolated World, No Privileged Secrets)
-[ Zone 2: Privileged Extension Core (Service Worker / Side Panel) ]
+[ Zone 2: Privileged Extension Core (Service Worker / Product UI) ]
             │ (Orchestration & State Management)
 [ Zone 3: Local Sensitive Processing (Privacy + Vault + Validator) ]
             │ (In-memory token vault, deterministic detectors)
@@ -31,7 +31,7 @@ Security authority is structured into 6 distinct zones:
 - **Rule**: Must NEVER store API keys, persistent vault records, or planner transport logic. Must NEVER tunnel into cross-origin iframe documents or expand host permissions to make a test pass.
 
 ### Zone 2 — Privileged Extension Core (Trusted Coordinator)
-- Service Worker & Side Panel.
+- Service Worker & product UI (overlay quick card + Side Panel Trust Center).
 - Coordinates message routing, task lifecycle, user confirmation dialogs, and UI display.
 - **Rule**: Ephemeral and resilient to service-worker suspension.
 

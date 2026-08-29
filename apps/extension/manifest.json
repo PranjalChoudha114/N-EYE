@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "N-Eye — Privacy Trust Layer for Browser Agents",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Privacy-preserving visual perception trust layer for browser agents. Observes locally, protects private data, validates actions.",
   "permissions": [
     "sidePanel",
@@ -26,10 +26,31 @@
       "run_at": "document_idle"
     }
   ],
+  "icons": {
+    "16": "brand/icon-16.png",
+    "32": "brand/icon-32.png",
+    "48": "brand/icon-48.png",
+    "128": "brand/icon-128.png"
+  },
   "side_panel": {
     "default_path": "src/sidepanel/index.html"
   },
   "action": {
-    "default_title": "Open N-Eye Trust Layer"
-  }
+    "default_title": "N-Eye",
+    "default_icon": {
+      "16": "brand/icon-16.png",
+      "32": "brand/icon-32.png",
+      "48": "brand/icon-48.png"
+    }
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "brand/n-eye-mark.png",
+        "overlay/open-panel.html",
+        "overlay/open-panel.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }

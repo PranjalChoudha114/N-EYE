@@ -1,0 +1,96 @@
+/**
+ * Page I/O ports (Zone 2).
+ * OWNS: Chrome tab messaging used by the trust loop.
+ * WHY: The overlay is a view. Tests inject fakes. Vault never travels these messages.
+ */
+
+import type { ExtensionMessage, ExtensionResponse, RoiSpec, ValidatedAction } from '@n-eye/protocol';
+import { discardWireRois, wireRoisToBuffers, type CapturedRoiWire } from '../perception/capture.js';
+import type { PixelBuffer } from '../perception/pixel-buffer.js';
+
+export type PortResult<T> = { ok: true; data: T } | { ok: false; lastError: string };
+
+export interface PagePorts {
+  send<T>(tabId: number, message: ExtensionMessage): Promise<PortResult<T>>;
+  inject(tabId: number): Promise<boolean>;
+  captureRois(tabId: number, rois: RoiSpec[]): Promise<PixelBuffer[]>;
+}
+
+export function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+export function chromePagePorts(): PagePorts {
+  return {
+    send<T>(tabId: number, message: ExtensionMessage): Promise<PortResult<T>> {
+      return new Promise((resolve) => {
+        chrome.tabs.sendMessage(tabId, message, (response: ExtensionResponse<T>) => {
+          if (chrome.runtime.lastError) {
+            resolve({ ok: false, lastError: chrome.runtime.lastError.message || 'unknown' });
+            return;
+          }
+          if (!response?.success || response.data === undefined) {
+            resolve({ ok: false, lastError: response?.error || 'empty response' });
+            return;
+          }
+          resolve({ ok: true, data: response.data });
+        });
+      });
+    },
+    async inject(tabId: number): Promise<boolean> {
+      try {
+        const injectRes: ExtensionResponse = await chrome.runtime.sendMessage({
+          type: 'INJECT_CONTENT_SCRIPT',
+          tabId,
+        });
+        return Boolean(injectRes?.success);
+      } catch {
+        return false;
+      }
+    },
+    async captureRois(tabId: number, rois: RoiSpec[]): Promise<PixelBuffer[]> {
+      const wires = await new Promise<CapturedRoiWire[]>((resolve) => {
+        chrome.tabs.sendMessage(
+          tabId,
+          {
+            type: 'CAPTURE_ROIS_REQUEST',
+            rois: rois.map((roi) => ({
+              roiId: roi.roiId,
+              x: roi.bbox.x,
+              y: roi.bbox.y,
+              width: roi.bbox.width,
+              height: roi.bbox.height,
+            })),
+          },
+          (response: ExtensionResponse<CapturedRoiWire[]>) => {
+            if (chrome.runtime.lastError || !response?.success || !response.data) {
+              resolve([]);
+              return;
+            }
+            resolve(response.data);
+          }
+        );
+      });
+      const buffers = wireRoisToBuffers(wires);
+      discardWireRois(wires);
+      return buffers;
+    },
+  };
+}
+
+export async function executeOnTab(
+  ports: PagePorts,
+  tabId: number,
+  action: ValidatedAction
+): Promise<{ success: boolean; error?: string }> {
+  const result = await ports.send<{ success: boolean; error?: string }>(tabId, {
+    type: 'EXECUTE_ACTION_REQUEST',
+    action,
+  });
+  if (!result.ok) {
+    return { success: false, error: result.lastError };
+  }
+  return result.data;
+}
