@@ -58,7 +58,7 @@ Chrome does **not** hot-reload this extension. Rebuilding `dist/` is necessary b
 5. Confirm **one** N-Eye card. Do not keep a second unpacked copy.
 6. Pin the icon / open the Side Panel
 7. Verify **build identity**:
-   - `chrome://extensions` version line shows `DEV • <git-short-sha>` (trailing `*` means uncommitted source)
+   - `chrome://extensions` version line shows `DEV • <git-short-sha>` (trailing `*` means **tracked** files have uncommitted edits; untracked files such as `scratch/` do not count)
    - Side Panel header next to “Trust Layer” shows the same label
    - `cat apps/extension/dist/build-identity.txt` matches
 

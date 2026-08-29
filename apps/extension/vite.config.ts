@@ -11,7 +11,7 @@ function readGitBuildIdentity(): { label: string; detail: string } {
   let dirty = false;
   try {
     shortSha = execSync('git rev-parse --short HEAD', { cwd: repoRoot, encoding: 'utf8' }).trim();
-    dirty = execSync('git status --porcelain', { cwd: repoRoot, encoding: 'utf8' }).trim().length > 0;
+    dirty = execSync('git status --porcelain --untracked-files=no', { cwd: repoRoot, encoding: 'utf8' }).trim().length > 0;
   } catch {
     // TRUST: identity is developer metadata only; unknown is safer than inventing a SHA.
   }
