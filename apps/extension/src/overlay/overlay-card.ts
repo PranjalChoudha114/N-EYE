@@ -25,6 +25,7 @@ export interface OverlayEls {
   run: HTMLButtonElement;
   cancel: HTMLButtonElement;
   extra: HTMLButtonElement;
+  askHint: HTMLElement;
   confirmBox: HTMLElement;
   confirmAction: HTMLElement;
   confirmTarget: HTMLElement;
@@ -63,7 +64,7 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
   closeBtn.append(iconClose());
   const siteHost = el('p', { class: 'nq-site' }, ['Connecting…']);
   const headline = el('h2', { class: 'nq-headline' }, ['Ready']);
-  const message = el('p', { class: 'nq-message' }, ['Page observed locally. No N-Eye AI request occurred.']);
+  const message = el('p', { class: 'nq-message' }, ['Looking at this page on your device. No AI request has been sent.']);
   const facts = el('ul', { class: 'nq-facts nq-hidden' });
   const unsupported = el('p', { class: 'nq-alert nq-hidden' });
   const goal = el('input', {
@@ -75,11 +76,12 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
   const run = el('button', { class: 'nq-btn nq-btn-primary', type: 'button' }, ['Run']);
   const cancel = el('button', { class: 'nq-btn nq-btn-danger nq-hidden', type: 'button' }, ['Cancel']);
   const extra = el('button', { class: 'nq-btn nq-hidden', type: 'button' }, ['Review']);
-  const confirmOk = el('button', { class: 'nq-btn nq-btn-danger', type: 'button' }, ['Confirm']);
-  const confirmCancel = el('button', { class: 'nq-btn', type: 'button' }, ['Cancel']);
+  const askHint = el('p', { class: 'nq-hint nq-hidden' });
+  const confirmOk = el('button', { class: 'nq-btn nq-btn-danger', type: 'button' }, ['Allow once']);
+  const confirmCancel = el('button', { class: 'nq-btn', type: 'button' }, ["Don't allow"]);
   // Truthful confirmation: the user must see the action, the target, and the local risk.
   // Cancel is first and nothing is preselected — no dark patterns, no auto-confirm timer.
-  const confirmAction = el('p', { class: 'nq-message' }, ['Approval required for a high-risk action.']);
+  const confirmAction = el('p', { class: 'nq-message' }, ['N-Eye needs your approval for a high-risk action.']);
   const confirmTarget = el('p', { class: 'nq-confirm-line' });
   const confirmRisk = el('p', { class: 'nq-confirm-line' });
   const confirmWhy = el('p', { class: 'nq-confirm-line' });
@@ -122,6 +124,7 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
     message,
     facts,
     goal,
+    askHint,
     el('div', { class: 'nq-row-btns' }, [run, cancel, extra]),
     confirmBox,
     el('div', { class: 'nq-mode', role: 'group', 'aria-label': 'Planner mode' }, [modeMock, modeRemote]),
@@ -144,6 +147,7 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
     run,
     cancel,
     extra,
+    askHint,
     confirmBox,
     confirmAction,
     confirmTarget,
@@ -174,10 +178,18 @@ export function paintOverlayCard(
   els.unsupported.classList.toggle('nq-hidden', state.supported);
   setSafeText(els.unsupported, state.unsupportedReason || 'This page cannot be observed.');
   if (document.activeElement !== els.goal) els.goal.value = state.goal;
+  const asking = state.phase === 'ASK_USER';
   els.goal.disabled = state.running;
+  els.goal.placeholder = asking
+    ? 'Rewrite your request, then continue'
+    : 'Describe what N-Eye should do';
   els.run.classList.toggle('nq-hidden', state.running);
-  els.cancel.classList.toggle('nq-hidden', !state.running);
+  els.cancel.classList.toggle('nq-hidden', !(state.running || asking));
   els.run.disabled = !state.canRun;
+  setSafeText(els.run, asking ? state.askUser?.continueLabel || 'Continue' : 'Run');
+  setSafeText(els.cancel, asking && !state.running ? state.askUser?.dismissLabel || 'Cancel' : 'Cancel');
+  els.askHint.classList.toggle('nq-hidden', !asking);
+  setSafeText(els.askHint, asking ? state.askUser?.hint || 'Rewrite your request below, then continue. This is not an approval.' : '');
   const extraLabel =
     state.phase === 'AWAITING_CONFIRMATION' ? 'Review' : state.receipt ? 'View result' : '';
   els.extra.classList.toggle(
@@ -196,7 +208,7 @@ export function paintOverlayCard(
   if (confirmation) {
     setSafeText(els.confirmAction, `Action: ${confirmation.actionName}`);
     setSafeText(els.confirmTarget, `Target: ${confirmation.targetLabel}`);
-    setSafeText(els.confirmRisk, `Risk: ${confirmation.risk} (classified locally)`);
+    setSafeText(els.confirmRisk, `Risk: ${confirmation.risk} (classified on this device)`);
     setSafeText(els.confirmWhy, confirmation.why);
   }
 
@@ -205,15 +217,15 @@ export function paintOverlayCard(
   const summary = state.privacySummary;
   if (summary) {
     if (summary.sensitiveCount > 0) {
-      facts.push(['Sensitive data', `${summary.sensitiveCount} handled locally`]);
+      facts.push(['Personal information', `${summary.sensitiveCount} found`]);
     }
-    facts.push(['Screenshot', `${summary.screenshotBytes} B sent`]);
+    facts.push(['Screenshot', summary.screenshotBytes === 0 ? 'No screenshot was sent' : `${summary.screenshotBytes} B sent`]);
   }
   if (state.evidence.ocrInvoked) {
-    facts.push(['Perception', state.evidence.perceptionSource]);
+    facts.push(['On this device', 'Read visible text locally']);
   }
   if (state.lastRequestId) {
-    facts.push(['AI', state.plannerMode === 'REMOTE' ? 'Remote' : 'Mock']);
+    facts.push(['AI connection', state.plannerMode === 'REMOTE' ? 'Remote' : 'Local']);
   }
   if (facts.length === 0) {
     els.facts.classList.add('nq-hidden');

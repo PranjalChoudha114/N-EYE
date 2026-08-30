@@ -135,7 +135,7 @@ describe('Human assurance: site-change, receipts, truthful states', () => {
     });
     expect(receipt.rawScreenshotSent).toBe(false);
     expect(receipt.safeCropSent).toBe(false);
-    expect(receipt.humanSummary).toMatch(/email was represented by a private token/i);
+    expect(receipt.humanSummary).toMatch(/hidden from the AI/i);
     expect(receipt.humanSummary).toMatch(/password was not included in the AI request/i);
     expect(receipt.humanSummary).not.toMatch(/never left your device/i);
     expect(receiptContainsForbiddenSecret(receipt, ['OCR_EMAIL_T007@example.com', 'SuperSecretVaultValue'])).toBe(
@@ -146,7 +146,7 @@ describe('Human assurance: site-change, receipts, truthful states', () => {
   it('does not claim PROTECTED for manual browsing with no AI request', () => {
     const local = localMonitoringState(['PII_EMAIL', 'SECRET_PASSWORD']);
     expect(local.state).toBe('LOCAL_MONITORING');
-    expect(local.detail).toMatch(/No N-Eye AI request occurred/);
+    expect(local.detail).toMatch(/No AI request was sent/);
     expect(local.detail).toMatch(/Email/);
     expect(local.detail).toMatch(/Password/);
     const blocked = blockedState();

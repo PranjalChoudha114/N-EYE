@@ -52,8 +52,8 @@ describe('privacy summary mapping', () => {
     expect(summary.tokenized[0]?.token).toBe('[EMAIL_1]');
     expect(summaryContainsRawValue(summary, ['alice.secret@example.com', 'SuperSecretVaultValue'])).toBe(false);
     const boundary = boundaryVisualization(summary);
-    expect(boundary.local.join(' ')).toContain('[EMAIL_1]');
-    expect(boundary.cloud.join(' ')).toContain('0 B');
+    expect(boundary.local.join(' ')).toMatch(/hidden from the AI/i);
+    expect(boundary.cloud.join(' ')).toMatch(/No screenshot was sent/);
   });
 
   it('is empty until a real protect step provided context', () => {

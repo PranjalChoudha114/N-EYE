@@ -3,12 +3,12 @@ import { classifyPlannerFailure, statusCopy } from '../ui/status-map.js';
 
 describe('status mapping', () => {
   it('maps phases to truthful human copy', () => {
-    expect(statusCopy('READY').message).toMatch(/No N-Eye AI request occurred/);
+    expect(statusCopy('READY').message).toMatch(/No AI request has been sent/);
     expect(statusCopy('PROTECTED').headline).toMatch(/protected/i);
     expect(statusCopy('AWAITING_CONFIRMATION').tone).toBe('warning');
     expect(statusCopy('BLOCKED').tone).toBe('danger');
     expect(statusCopy('PROVIDER_UNAVAILABLE').tone).toBe('warning');
-    expect(statusCopy('ASK_USER').headline).toMatch(/Need your input/i);
+    expect(statusCopy('ASK_USER').headline).toMatch(/I need your help/i);
     expect(statusCopy('OCR_UNAVAILABLE').message).toMatch(/screenshot stayed/i);
     expect(statusCopy('COMPLETED', 'Goal already satisfied. No action was required.').message).toMatch(
       /already satisfied/i

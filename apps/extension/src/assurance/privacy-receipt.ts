@@ -105,24 +105,24 @@ function humanSummary(
   ocrInvoked: boolean
 ): string {
   if (event === 'LOCAL_ONLY') {
-    return 'N-Eye active. Page observed locally. No N-Eye AI request occurred.';
+    return 'Looking at this page on your device. No AI request has been sent.';
   }
   if (event === 'BLOCKED') {
-    return 'N-Eye blocked an unsafe AI request. Forbidden sensitive data was detected before network.';
+    return 'N-Eye blocked an unsafe AI request. Forbidden personal or secret data was found before sending.';
   }
-  const parts: string[] = ['N-Eye detected private information locally before this AI request.'];
+  const parts: string[] = ['N-Eye found private information on this page before asking AI for help.'];
   const tok = unique(tokenized);
   const nev = unique(neverSend);
-  if (tok.includes('Email')) {
-    parts.push('Your email was represented by a private token.');
+  if (tok.length > 0) {
+    parts.push(`${tok.join(' and ')} ${tok.length === 1 ? 'was' : 'were'} hidden from the AI.`);
   }
   if (nev.includes('Password')) {
     parts.push('Your password was not included in the AI request.');
   } else if (nev.length > 0) {
-    parts.push(`${nev.join(' and ')} was not sent to the AI planner.`);
+    parts.push(`${nev.join(' and ')} ${nev.length === 1 ? 'was' : 'were'} not sent to the AI.`);
   }
   if (ocrInvoked) {
-    parts.push('Visual text in this region was processed locally.');
+    parts.push('Visible text in this region was read on this device.');
   }
   return parts.join(' ');
 }

@@ -55,16 +55,16 @@ export function boundaryVisualization(summary: PrivacySummary): {
 } {
   const browser = unique([...summary.keptLocal, ...summary.tokenized.map((t) => t.label)]);
   const local = [
-    ...summary.tokenized.map((t) => `${t.label} → ${t.token}`),
-    ...summary.keptLocal.map((name) => `${name} stayed local`),
+    ...summary.tokenized.map((t) => `${t.label} hidden from the AI`),
+    ...summary.keptLocal.map((name) => `${name} stayed on your device`),
   ];
   const cloud = [
-    `Protected context · ${summary.protectedContextBytes} B`,
-    `Screenshot ${summary.screenshotBytes} B`,
+    `Protected information sent to AI · ${summary.protectedContextBytes} B`,
+    summary.screenshotBytes === 0 ? 'No screenshot was sent' : `Screenshot ${summary.screenshotBytes} B`,
   ];
   return {
     browser: browser.length > 0 ? browser : ['Public page structure'],
-    local: local.length > 0 ? local : ['No tokenization in this request'],
+    local: local.length > 0 ? local : ['No personal details were hidden in this request'],
     cloud,
   };
 }

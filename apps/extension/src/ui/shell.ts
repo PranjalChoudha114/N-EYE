@@ -5,6 +5,7 @@
 
 import { brandUrl } from './brand.js';
 import { iconChevron, iconMoon } from './icons.js';
+import { pipelineRailLabel, pipelineStageHelp } from './pipeline-copy.js';
 
 export interface ProductEls {
   root: HTMLElement;
@@ -21,6 +22,7 @@ export interface ProductEls {
   run: HTMLButtonElement;
   cancel: HTMLButtonElement;
   extra: HTMLButtonElement;
+  askHint: HTMLElement;
   receipt: HTMLElement;
   center: HTMLElement;
   tabs: HTMLElement;
@@ -99,7 +101,7 @@ export function mountProductShell(doc: Document): ProductEls {
   const siteHost = h('p', { id: 'n-site', class: 'n-site' }, ['Connecting…']);
   const headline = h('h2', { id: 'n-headline', class: 'n-headline' }, ['Ready']);
   const message = h('p', { id: 'n-message', class: 'n-message', 'aria-live': 'polite' }, [
-    'Page observed locally. No N-Eye AI request occurred.',
+    'Looking at this page on your device. No AI request has been sent.',
   ]);
   const quickPrivacy = h('ul', { id: 'n-quick-privacy', class: 'n-facts hidden' });
   const goal = h('input', {
@@ -113,6 +115,7 @@ export function mountProductShell(doc: Document): ProductEls {
   const run = h('button', { id: 'n-run', class: 'n-btn n-btn-primary', type: 'button' }, ['Run']);
   const cancel = h('button', { id: 'n-cancel', class: 'n-btn n-btn-danger hidden', type: 'button' }, ['Cancel']);
   const extra = h('button', { id: 'n-extra', class: 'n-btn n-btn-quiet hidden', type: 'button' }, ['View result']);
+  const askHint = h('p', { id: 'n-ask-hint', class: 'n-caption hidden' });
   const receipt = h('section', { id: 'n-receipt', class: 'n-receipt hidden', 'aria-label': 'Privacy Receipt' });
 
   const pipeline = h('ol', { id: 'n-pipeline', class: 'n-rail', 'aria-label': 'Trust loop' });
@@ -121,7 +124,9 @@ export function mountProductShell(doc: Document): ProductEls {
     pipeline.append(
       h('li', { class: 'n-rail-step is-pending', 'data-stage': stage }, [
         h('span', { class: 'n-rail-dot' }),
-        h('span', { class: 'n-rail-name' }, [stage]),
+        h('span', { class: 'n-rail-name', title: `${stage} · ${pipelineStageHelp(stage)}` }, [
+          pipelineRailLabel(stage),
+        ]),
       ])
     );
   }
@@ -169,11 +174,13 @@ export function mountProductShell(doc: Document): ProductEls {
   const confirmWhy = h('p', { id: 'n-confirm-why' });
   const confirmLocal = h('p', { id: 'n-confirm-local' });
   const confirmData = h('p', { id: 'n-confirm-data' });
-  const confirmCancel = h('button', { id: 'n-confirm-cancel', class: 'n-btn n-btn-quiet', type: 'button' }, ['Cancel']);
-  const confirmOk = h('button', { id: 'n-confirm-ok', class: 'n-btn n-btn-danger', type: 'button' }, ['Confirm']);
+  const confirmCancel = h('button', { id: 'n-confirm-cancel', class: 'n-btn n-btn-quiet', type: 'button' }, [
+    "Don't allow",
+  ]);
+  const confirmOk = h('button', { id: 'n-confirm-ok', class: 'n-btn n-btn-danger', type: 'button' }, ['Allow once']);
   const confirm = h('dialog', { id: 'n-confirm', class: 'n-dialog' }, [
     h('div', { class: 'n-modal' }, [
-      h('h3', {}, ['Approval required']),
+      h('h3', {}, ['N-Eye needs your approval']),
       confirmWhat,
       confirmTarget,
       confirmWhy,
@@ -185,7 +192,7 @@ export function mountProductShell(doc: Document): ProductEls {
 
   const modeMock = h('button', { id: 'n-mode-mock', class: 'n-chip is-active', type: 'button' }, ['Mock']);
   const modeRemote = h('button', { id: 'n-mode-remote', class: 'n-chip', type: 'button' }, ['Remote']);
-  const gateway = h('p', { id: 'n-gateway', class: 'n-caption' }, ['Local mock planner']);
+  const gateway = h('p', { id: 'n-gateway', class: 'n-caption' }, ['Planning locally (no cloud AI)']);
   const identity = h('span', { id: 'build-identity', class: 'n-identity' }, ['DEV • …']);
   const unsupported = h('p', { id: 'n-unsupported', class: 'n-alert hidden', role: 'alert' });
   const viewHint = h('p', { id: 'n-view-hint', class: 'n-caption hidden' }, [
@@ -208,6 +215,7 @@ export function mountProductShell(doc: Document): ProductEls {
     receipt,
     h('section', { class: 'n-card n-task' }, [
       goal,
+      askHint,
       h('div', { class: 'n-actions' }, [run, cancel, extra]),
     ]),
     center,
@@ -235,6 +243,7 @@ export function mountProductShell(doc: Document): ProductEls {
     run,
     cancel,
     extra,
+    askHint,
     receipt,
     center,
     tabs,

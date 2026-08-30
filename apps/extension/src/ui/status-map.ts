@@ -19,15 +19,15 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
     case 'READY':
       return {
         headline: 'Ready',
-        message: detail || 'Page observed locally. No N-Eye AI request occurred.',
+        message: detail || 'Looking at this page on your device. No AI request has been sent.',
         tone: 'ok',
       };
     case 'OBSERVING':
-      return { headline: 'Observing locally', message: detail || 'Reading this page on your device.', tone: 'info' };
+      return { headline: 'Looking at this page', message: detail || 'Reading this page on your device.', tone: 'info' };
     case 'RECOVERING':
       return {
-        headline: 'Recovering',
-        message: detail || 'Reconnecting the local content script.',
+        headline: 'Reconnecting',
+        message: detail || 'Reconnecting to this page.',
         tone: 'warning',
       };
     case 'UNSUPPORTED':
@@ -35,33 +35,53 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
     case 'DISCONNECTED':
       return {
         headline: 'Disconnected',
-        message: detail || 'Content script is not running on this page.',
+        message: detail || 'N-Eye is not connected to this page.',
         tone: 'warning',
       };
     case 'PERCEIVING':
-      return { headline: 'Perceiving locally', message: detail || 'Reading visual text on-device.', tone: 'info' };
+      return {
+        headline: 'Understanding what matters',
+        message: detail || 'Reading visible text on this device.',
+        tone: 'info',
+      };
     case 'PROTECTING':
-      return { headline: 'Protecting', message: detail || 'Sensitive values are being handled locally.', tone: 'info' };
+      return {
+        headline: 'Protecting your information',
+        message: detail || 'Personal information is being handled on this device.',
+        tone: 'info',
+      };
     case 'PLANNING':
       return {
-        headline: 'Planning',
-        message: detail || 'Only protected context is being sent to the configured planner.',
+        headline: 'Asking AI for the next step',
+        message: detail || 'Only protected page information is being sent to the AI.',
         tone: 'info',
       };
     case 'VALIDATING':
-      return { headline: 'Validating', message: detail || 'Checking the proposal against this page.', tone: 'info' };
+      return {
+        headline: 'Checking the proposed action',
+        message: detail || 'Checking the proposed action against this page.',
+        tone: 'info',
+      };
     case 'AWAITING_CONFIRMATION':
       return {
-        headline: 'Approval required',
-        message: detail || 'N-Eye needs your confirmation before a high-risk action.',
+        headline: 'N-Eye needs your approval',
+        message: detail || 'This action needs your approval before N-Eye will do it.',
         tone: 'warning',
       };
     case 'ACTING':
-      return { headline: 'Acting', message: detail || 'Executing a locally validated action.', tone: 'info' };
+      return { headline: 'Doing the action', message: detail || 'Carrying out a locally checked action.', tone: 'info' };
     case 'VERIFYING':
-      return { headline: 'Verifying', message: detail || 'Checking that the page actually changed.', tone: 'info' };
+      return {
+        headline: 'Making sure it worked',
+        message: detail || 'Checking that the page actually changed.',
+        tone: 'info',
+      };
     case 'PROTECTED':
-      return { headline: 'AI request protected', message: detail || 'A protected planner request completed.', tone: 'ok' };
+      return {
+        headline: 'AI request protected',
+        message: detail || 'N-Eye protected your information before asking AI for help.',
+        tone: 'ok',
+      };
     case 'COMPLETED':
       return { headline: 'Completed', message: detail || 'The task finished.', tone: 'ok' };
     case 'BLOCKED':
@@ -70,38 +90,40 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
       return { headline: 'Cancelled', message: detail || 'The task was stopped.', tone: 'neutral' };
     case 'RATE_LIMITED':
       return {
-        headline: 'Planner rate limited',
-        message: detail || 'The planner provider rejected this request. Try again in a moment.',
+        headline: 'AI service is temporarily busy',
+        message: detail || 'The AI service rejected this request. Try again in a moment.',
         tone: 'warning',
       };
     case 'GATEWAY_UNREACHABLE':
       return {
-        headline: 'Gateway unreachable',
-        message: detail || 'The local planner gateway did not respond. This is not a Gemini health claim.',
+        headline: "Can't connect to the AI service",
+        message: detail || 'The local AI gateway did not respond. This is not a claim about a specific cloud model.',
         tone: 'warning',
       };
     case 'PROVIDER_UNAVAILABLE':
       return {
-        headline: 'Planner provider unavailable',
-        message: detail || 'The planner provider is unavailable or misconfigured. The gateway may still be reachable.',
+        headline: 'AI service is unavailable',
+        message: detail || 'The AI service is unavailable or misconfigured. The local gateway may still be reachable.',
         tone: 'warning',
       };
     case 'RETRYING':
       return {
-        headline: 'Retrying planner',
-        message: detail || 'Retrying a bounded planner request with the same protected context.',
+        headline: 'Trying again',
+        message: detail || 'Retrying the same protected request. Privacy rules have not been relaxed.',
         tone: 'info',
       };
     case 'OCR_UNAVAILABLE':
       return {
-        headline: 'On-device perception unavailable',
-        message: detail || 'Visual text could not be read locally. The screenshot stayed on this device.',
+        headline: 'Could not read visible text',
+        message: detail || 'Visible text could not be read on this device. The screenshot stayed here.',
         tone: 'warning',
       };
     case 'ASK_USER':
       return {
-        headline: 'Need your input',
-        message: detail || 'N-Eye needs the next instruction. This is not a high-risk confirmation.',
+        headline: 'I need your help',
+        message:
+          detail ||
+          'I cannot safely decide the next step. Rewrite your request below, then continue. This is not an approval.',
         tone: 'warning',
       };
     case 'ERROR':

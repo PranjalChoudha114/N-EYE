@@ -15,6 +15,7 @@ import type { PlannerMode } from '../planner/types.js';
 import type { PrivacySummary } from '../ui/privacy-summary.js';
 import type { ProductToast } from '../ui/notification-map.js';
 import type { ReceiptViewModel } from '../ui/receipt-map.js';
+import type { AskUserView } from '../ui/ask-user.js';
 import type { VisualizerModel } from '../assurance/privacy-visualizer.js';
 
 export type ProductPhase =
@@ -170,6 +171,8 @@ export interface ProductState {
   visualizer: VisualizerModel;
   action?: ActionViewModel;
   confirmation?: ConfirmationView;
+  /** Clarification pause. Never a confirmation capability. */
+  askUser?: AskUserView | null;
   evidence: EvidenceViewModel;
   receipt?: PrivacyReceipt;
   receiptView?: ReceiptViewModel;
@@ -296,10 +299,11 @@ export function createIdleState(): ProductState {
       mode: 'empty',
       caption: 'No N-Eye privacy transformation has occurred for this task.',
       local: [{ tag: 'NONE', value: 'No N-Eye privacy transformation has occurred for this task.', kind: 'empty' }],
-      safe: [{ tag: 'NONE', value: 'No SafeContext was built for a planner request.', kind: 'empty' }],
+      safe: [{ tag: 'NONE', value: 'No protected AI context was built for a request.', kind: 'empty' }],
     },
     evidence: emptyEvidence(),
     toast: null,
+    askUser: null,
     advisories: [],
     latency: emptyLatency(),
     goal: 'Enter my email and continue',

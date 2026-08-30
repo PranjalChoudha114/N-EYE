@@ -67,6 +67,7 @@ import {
 } from './content-connection.js';
 import { classifySupportedUrl } from './supported-url.js';
 import { classifyPlannerFailure, statusCopy } from '../ui/status-map.js';
+import { buildAskUserView } from '../ui/ask-user.js';
 import { buildPrivacySummary } from '../ui/privacy-summary.js';
 import { mapReceiptView } from '../ui/receipt-map.js';
 import { toastFromEvent, toastFromPhase } from '../ui/notification-map.js';
@@ -283,6 +284,39 @@ export class TrustLoopController {
       this.confirmWait.resolve(false);
       this.confirmWait = null;
     }
+    // ASK_USER is already terminal. Cancel here dismisses clarification, it does not deny a capability.
+    if (!this.state.running && this.state.phase === 'ASK_USER') {
+      this.dismissAskUser();
+    }
+  }
+
+  /**
+   * Clarification recovery. TRUST: never mints confirmation or executes a stale proposal.
+   */
+  private dismissAskUser(): void {
+    this.applyPhase('READY', 'Looking at this page on your device. No new AI request was sent.');
+    this.patch({
+      askUser: null,
+      confirmation: undefined,
+      toast: null,
+      canRun: Boolean(this.tab?.isSupported && this.state.contentScriptHealth === 'READY'),
+      canCancel: false,
+    });
+  }
+
+  /**
+   * Enter ASK_USER with human copy and a rewrite/continue path.
+   * TRUST: confirmation stays empty. Continue later calls start() → fresh observe/validate.
+   */
+  private enterAskUser(detail: string, extra?: Partial<ProductState>): void {
+    const view = buildAskUserView(detail);
+    this.applyPhase('ASK_USER', view.message);
+    this.patch({
+      askUser: view,
+      confirmation: undefined,
+      toast: toastFromPhase('ASK_USER', view.message),
+      ...extra,
+    });
   }
 
   /**
@@ -357,10 +391,7 @@ export class TrustLoopController {
       });
       if (completedStageContradiction('COMPLETED', this.state.pipeline, decision.alreadySatisfied)) {
         this.patch({ pipeline: pipelineForUnprovenComplete(this.state.pipeline) });
-        this.applyPhase(
-          'ASK_USER',
-          'Completion evidence was inconsistent with VALIDATE/ACT/VERIFY. This is not success.'
-        );
+        this.enterAskUser('Completion evidence was inconsistent with VALIDATE/ACT/VERIFY. This is not success.');
         return;
       }
       this.applyPhase('COMPLETED', decision.message);
@@ -389,11 +420,8 @@ export class TrustLoopController {
       return;
     }
     this.patch({ pipeline: pipelineForUnprovenComplete(this.state.pipeline) });
-    this.applyPhase('ASK_USER', decision.message);
-    this.patch({
-      toast: toastFromPhase('ASK_USER', decision.message),
+    this.enterAskUser(decision.message, {
       step: { index: step, max: MAX_STEPS, summary: decision.message },
-      confirmation: undefined,
       action: this.state.action
         ? { ...this.state.action, verification: 'AMBIGUOUS', verificationDelta: decision.message }
         : this.state.action,
@@ -583,6 +611,7 @@ export class TrustLoopController {
       goal: rawGoal,
       pipeline: idlePipeline(),
       toast: null,
+      askUser: null,
     });
 
     let priorOutcome: SafeContext['priorOutcome'] | undefined;
@@ -970,11 +999,8 @@ export class TrustLoopController {
         }
 
         if (proposal.type === 'ASK_USER') {
-          this.applyPhase('ASK_USER', proposal.reasoning || 'Planner requires the next instruction.');
-          this.patch({
-            toast: toastFromPhase('ASK_USER', 'N-Eye needs your next instruction. This is not a confirmation.'),
-            step: { index: step, max: MAX_STEPS, summary: 'Awaiting user input.' },
-            confirmation: undefined,
+          this.enterAskUser(proposal.reasoning || 'Planner requires the next instruction.', {
+            step: { index: step, max: MAX_STEPS, summary: 'Awaiting a clearer request.' },
           });
           break;
         }
@@ -1114,9 +1140,12 @@ export class TrustLoopController {
             },
             evidence: { ...this.state.evidence, securityReason: 'CONFIRMATION_REQUIRED' },
           });
-          this.applyPhase('AWAITING_CONFIRMATION', `Confirm: ${describeAction(proposal, targetLabel)}`);
+          this.applyPhase('AWAITING_CONFIRMATION', describeAction(proposal, targetLabel));
           this.patch({
-            toast: toastFromPhase('AWAITING_CONFIRMATION', `N-Eye needs approval. ${describeAction(proposal, targetLabel)}`),
+            toast: toastFromPhase(
+              'AWAITING_CONFIRMATION',
+              `N-Eye needs your approval. ${describeAction(proposal, targetLabel)}`
+            ),
           });
 
           const confirmed = await new Promise<boolean>((resolve) => {
@@ -1211,10 +1240,7 @@ export class TrustLoopController {
 
         if (!execResult.success) {
           if (execResult.outcome === 'ASK_USER') {
-            this.applyPhase('ASK_USER', execResult.error || 'N-Eye needs you to complete this step.');
-            this.patch({
-              toast: toastFromPhase('ASK_USER', execResult.error || 'Ask the user to complete this step.'),
-            });
+            this.enterAskUser(execResult.error || 'N-Eye needs you to complete this step.');
             break;
           }
           const blocked = execResult.error || 'Execution failed';
@@ -1276,26 +1302,18 @@ export class TrustLoopController {
             evidence: { ...this.state.evidence, verificationResult: verification.status },
           });
           if (shouldStopAfterUnverifiedHighRisk(actionToExecute.approvedRiskLevel, verification.status)) {
-            this.applyPhase(
-              'ASK_USER',
+            this.enterAskUser(
               'This high-risk action could not be verified. N-Eye will not repeat it automatically.'
             );
-            this.patch({
-              toast: toastFromPhase('ASK_USER', 'Verification was ambiguous after a high-risk action.'),
-            });
             break;
           }
           if (
             (actionToExecute.proposal.type === 'TYPE_TEXT' || actionToExecute.proposal.type === 'TYPE_TOKEN') &&
             (verification.status === 'VERIFIED_FAILURE' || verification.status === 'AMBIGUOUS')
           ) {
-            this.applyPhase(
-              'ASK_USER',
+            this.enterAskUser(
               verification.observedDelta || 'The field did not keep the intended text. This is not completion.'
             );
-            this.patch({
-              toast: toastFromPhase('ASK_USER', 'Typed text could not be verified on the live control.'),
-            });
             break;
           }
           priorOutcome = {

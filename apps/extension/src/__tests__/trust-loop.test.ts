@@ -105,6 +105,39 @@ describe('TrustLoopController', () => {
     expect(controller.getVaultSize()).toBeGreaterThanOrEqual(0);
   });
 
+  it('treats ASK_USER as clarification: no confirmation, Cancel dismisses, Continue is a fresh start', async () => {
+    const controller = new TrustLoopController({
+      ports: mockPorts(),
+      planner: new PlannerManager('MOCK'),
+      ocr: new MockOcrEngine(),
+      delayFn: async () => undefined,
+    });
+    controller.bindTab(tab);
+    await controller.idleObserve();
+    await controller.start('Open UPESSEM1 Repositories');
+    const asked = controller.getState();
+    expect(asked.phase).toBe('ASK_USER');
+    expect(asked.confirmation).toBeUndefined();
+    expect(asked.askUser?.continueLabel).toBe('Continue');
+    expect(asked.askUser?.dismissLabel).toBe('Cancel');
+    expect(asked.askUser?.reason).toBe('UNKNOWN_GOAL');
+    expect(asked.running).toBe(false);
+    expect(asked.canRun).toBe(true);
+    expect(asked.message).not.toMatch(/Mock planner grammar/i);
+    expect(asked.headline).toBe('I need your help');
+
+    controller.cancel();
+    const dismissed = controller.getState();
+    expect(dismissed.phase).toBe('READY');
+    expect(dismissed.askUser).toBeNull();
+    expect(dismissed.confirmation).toBeUndefined();
+    expect(dismissed.canRun).toBe(true);
+
+    await controller.start('Open UPESSEM1 Repositories');
+    expect(controller.getState().phase).toBe('ASK_USER');
+    expect(controller.getState().confirmation).toBeUndefined();
+  });
+
   it('high-risk confirmation can be cancelled without executing', async () => {
     const submitScene = (): RawScene => ({
       ...scene(),

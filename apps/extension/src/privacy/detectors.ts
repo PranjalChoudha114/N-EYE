@@ -130,25 +130,11 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
       });
     }
 
-    // Phone regex match
-    if (PHONE_REGEX.test(text) && !text.includes('CANARY_')) {
-      const match = text.match(PHONE_REGEX);
-      findings.push({
-        findingId: createFindingId(),
-        privacyClass: 'PII_PHONE',
-        confidence: 0.85,
-        source: 'pattern',
-        elementId: element.id,
-        fieldLocation: field,
-        textSpan: match ? match[0] : text,
-        detector: 'regex_phone',
-        reason: 'Found telephone number pattern in element text candidate',
-      });
-    }
-
-    // API Key patterns
+    // API keys before phone: digit runs inside keys are not telephone numbers.
+    let matchedApiKey = false;
     for (const pattern of API_KEY_PATTERNS) {
       if (pattern.test(text)) {
+        matchedApiKey = true;
         findings.push({
           findingId: createFindingId(),
           privacyClass: 'SECRET_API_KEY',
@@ -163,8 +149,25 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
       }
     }
 
+    // Phone regex match
+    if (PHONE_REGEX.test(text) && !text.includes('CANARY_') && !matchedApiKey) {
+      const match = text.match(PHONE_REGEX);
+      findings.push({
+        findingId: createFindingId(),
+        privacyClass: 'PII_PHONE',
+        confidence: 0.85,
+        source: 'pattern',
+        elementId: element.id,
+        fieldLocation: field,
+        textSpan: match ? match[0] : text,
+        detector: 'regex_phone',
+        reason: 'Found telephone number pattern in element text candidate',
+      });
+    }
+
     // JWT pattern
     if (JWT_REGEX.test(text)) {
+      const match = text.match(JWT_REGEX);
       findings.push({
         findingId: createFindingId(),
         privacyClass: 'SECRET_AUTH_TOKEN',
@@ -172,6 +175,7 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
         source: 'pattern',
         elementId: element.id,
         fieldLocation: field,
+        textSpan: match ? match[0] : text,
         detector: 'regex_jwt',
         reason: 'Found JWT structure in element text candidate',
       });
@@ -293,6 +297,20 @@ export function detectGoalPrivacy(goalText: string): PrivacyFinding[] {
       });
       break;
     }
+  }
+
+  const jwtMatch = goalText.match(JWT_REGEX);
+  if (jwtMatch) {
+    findings.push({
+      findingId: createFindingId(),
+      privacyClass: 'SECRET_AUTH_TOKEN',
+      confidence: 0.99,
+      source: 'pattern',
+      fieldLocation: 'task.goal',
+      textSpan: jwtMatch[0],
+      detector: 'regex_jwt',
+      reason: 'User task goal contains a JWT structure',
+    });
   }
 
   return findings;

@@ -10,6 +10,16 @@ import { setSafeText } from './safe-text.js';
 import { iconMoon, iconSun, iconSystem, replaceIcon } from './icons.js';
 import type { ProductEls } from './shell.js';
 import { themeControlLabel, type ThemePref } from './theme.js';
+import { pipelineRailLabel, pipelineStageHelp } from './pipeline-copy.js';
+import {
+  AI_CONNECTION_HINT,
+  HIDDEN_FROM_AI_HINT,
+  STAYED_ON_DEVICE_HINT,
+  protectedContextHint,
+  protectedContextLabel,
+  screenshotOutboundHint,
+  screenshotOutboundLabel,
+} from './human-copy.js';
 
 export interface ProductUi {
   els: ProductEls;
@@ -25,7 +35,7 @@ function show(el: HTMLElement, visible: boolean): void {
   el.classList.toggle('hidden', !visible);
 }
 
-function row(label: string, value: string, extraClass?: string): HTMLElement {
+function row(label: string, value: string, extraClass?: string, hint?: string): HTMLElement {
   const item = document.createElement('div');
   item.className = extraClass ? `n-row ${extraClass}` : 'n-row';
   const k = document.createElement('span');
@@ -34,6 +44,10 @@ function row(label: string, value: string, extraClass?: string): HTMLElement {
   const v = document.createElement('span');
   v.className = 'n-row-v';
   v.textContent = value;
+  if (hint) {
+    item.title = hint;
+    k.title = hint;
+  }
   item.append(k, v);
   return item;
 }
@@ -117,30 +131,46 @@ export function bindProductUi(els: ProductEls): ProductUi {
     els.quickPrivacy.replaceChildren();
     if (facts) {
       for (const name of facts.keptLocal) {
-        els.quickPrivacy.append(row(name, 'Kept local'));
+        els.quickPrivacy.append(row(name, 'Stayed on your device', undefined, STAYED_ON_DEVICE_HINT));
       }
       for (const token of facts.tokenized) {
-        const chip = row(token.label, token.token, 'is-token');
+        const chip = row(token.label, 'Hidden from the AI', 'is-token', HIDDEN_FROM_AI_HINT);
         chip.classList.add('n-token-live');
+        chip.title = `${HIDDEN_FROM_AI_HINT} Technical reference: ${token.token}`;
         els.quickPrivacy.append(chip);
       }
-      els.quickPrivacy.append(row('Screenshot', `${facts.screenshotBytes} B sent`));
+      els.quickPrivacy.append(
+        row('Screenshot', screenshotOutboundLabel(facts.screenshotBytes), undefined, screenshotOutboundHint(facts.screenshotBytes))
+      );
     }
 
     if (document.activeElement !== els.goal) {
       els.goal.value = state.goal;
     }
+    const asking = state.phase === 'ASK_USER';
     els.goal.disabled = role === 'view' || state.running;
+    els.goal.placeholder = asking
+      ? 'Rewrite your request, then continue'
+      : 'Describe what N-Eye should do';
     show(els.run, !state.running && role === 'owner');
-    show(els.cancel, state.running && role === 'owner');
+    show(els.cancel, (state.running || asking) && role === 'owner');
     els.run.disabled = !state.canRun || role === 'view';
+    setSafeText(els.run, asking ? state.askUser?.continueLabel || 'Continue' : 'Run');
+    setSafeText(els.cancel, asking && !state.running ? state.askUser?.dismissLabel || 'Cancel' : 'Cancel');
+    show(els.askHint, asking);
+    setSafeText(
+      els.askHint,
+      asking ? state.askUser?.hint || 'Rewrite your request below, then continue. This is not an approval.' : ''
+    );
 
     const extraLabel =
       state.phase === 'AWAITING_CONFIRMATION'
         ? 'Review'
-        : state.receipt
-          ? 'View result'
-          : '';
+        : asking
+          ? 'Details'
+          : state.receipt
+            ? 'View result'
+            : '';
     show(els.extra, Boolean(extraLabel) && !state.running);
     setSafeText(els.extra, extraLabel || 'View result');
 
@@ -152,15 +182,30 @@ export function bindProductUi(els: ProductEls): ProductUi {
       title.textContent = `${view.title} receipt`;
       const body = document.createElement('p');
       body.textContent = view.humanSummary;
-      const meta = document.createElement('ul');
-      meta.className = 'n-facts';
-      meta.append(row('Sensitive values', String(view.sensitiveCount)));
-      meta.append(row('Kept local', String(view.keptLocalCount)));
-      meta.append(row('Tokenized', String(view.tokenizedCount)));
-      meta.append(row('Screenshot', `${view.screenshotBytes < 0 ? 'unknown' : `${view.screenshotBytes} B`}`));
-      meta.append(row('Provider / model', view.providerLine));
-      meta.append(row('Protected context', `${view.protectedContextBytes} B`));
-      els.receipt.append(title, body, meta);
+      const protectedHead = document.createElement('h4');
+      protectedHead.textContent = 'What N-Eye protected';
+      const protectedList = document.createElement('div');
+      protectedList.className = 'n-facts';
+      for (const line of view.protectedLines) {
+        protectedList.append(row('Protected', line));
+      }
+      const receivedHead = document.createElement('h4');
+      receivedHead.textContent = 'What the AI received';
+      const receivedList = document.createElement('div');
+      receivedList.className = 'n-facts';
+      for (const line of view.receivedLines) {
+        receivedList.append(row('Received', line));
+      }
+      const tech = document.createElement('details');
+      tech.className = 'n-accordion';
+      const techSummary = document.createElement('summary');
+      techSummary.textContent = 'View technical details';
+      const techBody = document.createElement('div');
+      for (const line of view.technicalLines) {
+        techBody.append(row(line.label, line.value));
+      }
+      tech.append(techSummary, techBody);
+      els.receipt.append(title, body, protectedHead, protectedList, receivedHead, receivedList, tech);
     }
 
     if (state.toast) {
@@ -186,10 +231,10 @@ export function bindProductUi(els: ProductEls): ProductUi {
       setSafeText(els.stepLine, `Step ${state.step.index} of ${state.step.max} · ${state.step.summary}`);
     }
     els.activityMeta.replaceChildren();
-    els.activityMeta.append(row('Overall', state.headline));
+    els.activityMeta.append(row('What N-Eye is doing', state.headline));
     els.activityMeta.append(row('Site', state.siteHostname));
-    els.activityMeta.append(row('Planner mode', state.plannerMode));
-    els.activityMeta.append(row('Content script', state.contentScriptHealth));
+    els.activityMeta.append(row('AI connection', state.plannerMode === 'REMOTE' ? 'Remote' : 'Local', undefined, AI_CONNECTION_HINT));
+    els.activityMeta.append(row('Page connection', state.contentScriptHealth));
     els.activityMeta.append(row('Task', state.goal || '—'));
     for (const id of PIPELINE_IDS) {
       const visual = state.pipeline[id];
@@ -207,8 +252,14 @@ export function bindProductUi(els: ProductEls): ProductUi {
                   : id === 'ACT'
                     ? state.latency.act
                     : state.latency.verify;
-      const reason = id === 'PERCEIVE' ? state.perceiveLabel : visual;
-      els.activityMeta.append(row(id, `${visual} · ${reason} · ${timing}`));
+      els.activityMeta.append(
+        row(
+          pipelineRailLabel(id),
+          `${pipelineStageHelp(id)} · ${visual} · ${timing}`,
+          undefined,
+          `${id} · ${pipelineStageHelp(id)}`
+        )
+      );
     }
     els.activityMeta.append(row('TOTAL', state.latency.total));
 
@@ -224,28 +275,28 @@ export function bindProductUi(els: ProductEls): ProductUi {
         for (const item of items) {
           const p = document.createElement('p');
           p.textContent = item;
-          if (item.includes('→')) p.className = 'n-token-live';
+          if (item.includes('hidden from the AI') || item.includes('stayed on your device')) p.className = 'n-token-live';
           wrap.append(p);
         }
         return wrap;
       };
       els.privacyViz.append(
         col('Your browser', boundary.browser),
-        col('N-Eye local protection', boundary.local, true),
-        col('Privacy boundary', ['Only SafeContext may cross']),
+        col('On this device', boundary.local, true),
+        col('Privacy boundary', ['Only protected page information may be sent to AI']),
         col('AI', boundary.cloud)
       );
     } else {
       const empty = document.createElement('p');
       empty.className = 'n-caption';
-      empty.textContent = 'No N-Eye privacy transformation has occurred for this task.';
+      empty.textContent = 'No privacy protection has occurred for this task yet.';
       els.privacyViz.append(empty);
     }
     if (state.receipt) {
       const rec = state.receipt;
       els.privacyViz.append(row('Privacy Receipt', rec.receiptId));
       els.privacyViz.append(row('Event', rec.protectionEvent));
-      els.privacyViz.append(row('Findings', String(rec.sensitiveClasses.length)));
+      els.privacyViz.append(row('Personal details found', String(rec.sensitiveClasses.length)));
       els.privacyViz.append(row('Categories', rec.sensitiveClasses.join(', ') || 'none'));
       els.privacyViz.append(
         row(
@@ -253,30 +304,46 @@ export function bindProductUi(els: ProductEls): ProductUi {
           rec.transformations.map((item) => `${item.privacyClass}:${item.action}`).join(', ') || 'none'
         )
       );
-      els.privacyViz.append(row('SafeContext bytes', String(rec.safeContextBytes)));
-      els.privacyViz.append(row('Screenshot outbound', rec.rawScreenshotSent ? 'YES' : '0 B'));
-      els.privacyViz.append(row('Egress', rec.egressResult));
+      els.privacyViz.append(
+        row(protectedContextLabel(rec.safeContextBytes), `${rec.safeContextBytes} B`, undefined, protectedContextHint(rec.safeContextBytes))
+      );
+      els.privacyViz.append(
+        row(
+          screenshotOutboundLabel(rec.rawScreenshotSent ? -1 : 0),
+          rec.rawScreenshotSent ? 'YES' : '0 B',
+          undefined,
+          screenshotOutboundHint(rec.rawScreenshotSent ? -1 : 0)
+        )
+      );
+      els.privacyViz.append(row('Privacy check', rec.egressResult, undefined, 'Technical: EgressGuard result'));
     }
 
     els.actionView.replaceChildren();
     if (state.action) {
       const a = state.action;
       els.actionView.append(row('AI proposes', a.proposalText));
-      if (a.proposalType) els.actionView.append(row('Proposal', a.proposalType));
+      if (a.proposalType) els.actionView.append(row('Proposal type', a.proposalType));
       els.actionView.append(row('Target', a.targetLabel));
       if (a.targetId) els.actionView.append(row('Target id', a.targetId));
       if (a.frame) els.actionView.append(row('Frame', a.frame));
       els.actionView.append(row('Risk', a.risk));
       if (a.confirmationRequired !== undefined) {
-        els.actionView.append(row('Confirmation', a.confirmationRequired ? 'Required' : 'Not required'));
+        els.actionView.append(row('Your approval', a.confirmationRequired ? 'Required' : 'Not required'));
       }
-      els.actionView.append(row('Target current', yn(a.validation.targetCurrent)));
-      els.actionView.append(row('Frame current', yn(a.validation.frameCurrent)));
-      els.actionView.append(row('Page current', yn(a.validation.pageCurrent)));
-      els.actionView.append(row('Token scope', yn(a.validation.tokenScopeValid)));
+      els.actionView.append(row('Target still current', yn(a.validation.targetCurrent)));
+      els.actionView.append(row('Frame still current', yn(a.validation.frameCurrent)));
+      els.actionView.append(row('Page still current', yn(a.validation.pageCurrent)));
+      els.actionView.append(row('Private reference still valid', yn(a.validation.tokenScopeValid)));
       els.actionView.append(row('Risk policy', a.validation.riskPolicy || '—'));
-      els.actionView.append(row('Semantic re-grounding', a.validation.targetCurrent === true ? 'Live target matched' : '—'));
-      if (a.verification) els.actionView.append(row('Verification', a.verification));
+      els.actionView.append(
+        row(
+          'Checked the page again',
+          a.validation.targetCurrent === true ? 'Live target matched' : '—',
+          undefined,
+          'N-Eye rechecked the control before acting because webpages can change.'
+        )
+      );
+      if (a.verification) els.actionView.append(row('Did it work?', a.verification));
       if (a.verificationDelta) els.actionView.append(row('Delta', a.verificationDelta));
       if (a.blockedReason) els.actionView.append(row('Blocked', a.blockedReason));
       // Reason code, not the attacker's payload. Safe to show in the compact Action tab.
@@ -293,8 +360,8 @@ export function bindProductUi(els: ProductEls): ProductUi {
     els.evidenceView.replaceChildren();
     els.evidenceView.append(
       group('Session', [
-        row('Content script', ev.contentScriptHealth),
-        row('PageEpoch', String(ev.pageEpoch)),
+        row('Page connection', ev.contentScriptHealth),
+        row('Page version', String(ev.pageEpoch), undefined, 'Technical: PageEpoch'),
         row('Frame', ev.frameNote),
         row('Observed controls', String(ev.observedControls)),
       ])
@@ -302,11 +369,11 @@ export function bindProductUi(els: ProductEls): ProductUi {
     els.evidenceView.append(
       group('Planner', [
         row('Request ID', ev.requestId),
-        row('Planner mode', ev.plannerMode),
+        row('AI connection', ev.plannerMode, undefined, AI_CONNECTION_HINT),
         row('Provider', ev.provider),
         row('Model', ev.model),
-        row('SafeContext bytes', String(ev.payloadBytes)),
-        row('Egress', ev.egressResult),
+        row(protectedContextLabel(ev.payloadBytes), `${ev.payloadBytes} B`, undefined, protectedContextHint(ev.payloadBytes)),
+        row('Privacy check', ev.egressResult, undefined, 'Technical: EgressGuard result'),
         row('Planner latency', ev.plannerLatency),
         row('Planner attempts', String(ev.plannerAttempts)),
         row('Recovery path', ev.recoveryPath),
@@ -314,21 +381,26 @@ export function bindProductUi(els: ProductEls): ProductUi {
     );
     els.evidenceView.append(
       group('Perception', [
-        row('Screenshot outbound', `${ev.screenshotOutBytes} B`),
+        row(screenshotOutboundLabel(ev.screenshotOutBytes), `${ev.screenshotOutBytes} B`, undefined, screenshotOutboundHint(ev.screenshotOutBytes)),
         row('Crop outbound', ev.cropOutbound),
-        row('OCR invoked', ev.ocrInvoked ? 'YES' : 'NO'),
-        row('OCR reason', ev.ocrReason),
-        row('ROI count', String(ev.roiCount)),
+        row(
+          ev.ocrInvoked ? 'Read visible text locally' : 'Did not read pixels',
+          ev.ocrInvoked ? 'YES' : 'NO',
+          undefined,
+          `Technical: OCR invoked · ROI ${ev.roiCount}`
+        ),
+        row('Why pixels were used', ev.ocrReason),
+        row('Regions read', String(ev.roiCount)),
         row('Perception source', ev.perceptionSource),
       ])
     );
     els.evidenceView.append(
       group('Authority', [
-        row('Validation', ev.validationResult),
+        row('Action checked', ev.validationResult),
         row('Security reason', ev.securityReason),
         row('Execution', ev.executionResult),
-        row('Verification', ev.verificationResult),
-        row('Vault tokens', String(ev.vaultTokenCount)),
+        row('Confirmed that it worked', ev.verificationResult),
+        row('Private references', String(ev.vaultTokenCount)),
         row('Privacy findings', String(ev.findingsCount)),
       ])
     );
@@ -347,7 +419,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
     const jsonBlock = document.createElement('details');
     jsonBlock.className = 'n-accordion';
     const jsonSummary = document.createElement('summary');
-    jsonSummary.textContent = 'SafeContext JSON';
+    jsonSummary.textContent = 'Protected AI context JSON';
     const code = document.createElement('pre');
     const dump = document.createElement('code');
     dump.textContent = ev.safeContextJson;
@@ -372,10 +444,10 @@ export function bindProductUi(els: ProductEls): ProductUi {
       setSafeText(els.confirmWhat, `What: ${state.confirmation.actionName}`);
       setSafeText(els.confirmTarget, `Target: ${state.confirmation.targetLabel}`);
       // Risk shown is the locally classified level, never the planner's self-declared one.
-      setSafeText(els.confirmWhy, `Risk: ${state.confirmation.risk} (classified locally). ${state.confirmation.why}`);
+      setSafeText(els.confirmWhy, `Risk: ${state.confirmation.risk} (classified on this device). ${state.confirmation.why}`);
       setSafeText(
         els.confirmLocal,
-        `Stayed local: ${state.confirmation.stayedLocal.join(', ') || 'No secrets in this step'}`
+        `Stayed on your device for this AI request: ${state.confirmation.stayedLocal.join(', ') || 'No secrets in this step'}`
       );
       setSafeText(
         els.confirmData,
@@ -393,25 +465,27 @@ export function bindProductUi(els: ProductEls): ProductUi {
     els.modeRemote.disabled = role === 'view' || state.running;
 
     if (state.plannerMode === 'MOCK') {
-      setSafeText(els.gateway, 'Local mock planner');
+      setSafeText(els.gateway, 'Planning locally (no cloud AI)');
     } else if (state.gatewayReachable === true) {
-      setSafeText(els.gateway, 'Gateway reachable · provider is reported only after a real plan');
+      setSafeText(els.gateway, 'AI service is reachable. The specific model is shown after a real request.');
     } else if (state.gatewayReachable === false) {
-      setSafeText(els.gateway, 'Gateway unreachable');
+      setSafeText(els.gateway, "Can't connect to the AI service");
     } else {
-      setSafeText(els.gateway, 'Remote mode · gateway not probed yet');
+      setSafeText(els.gateway, 'Remote mode · AI service not probed yet');
     }
     if (state.lastPlannerProvider) {
       setSafeText(
         els.gateway,
-        `Last plan: ${state.lastPlannerProvider}${state.lastPlannerModel ? ` · ${state.lastPlannerModel}` : ''}`
+        `AI connection: ${state.lastPlannerProvider}${state.lastPlannerModel ? ` · ${state.lastPlannerModel}` : ''}`
       );
     }
   };
 
   els.extra.addEventListener('click', () => {
     setDetailsOpen(true);
-    setTab(els.extra.textContent === 'Review' ? 'action' : 'evidence');
+    setTab(
+      els.extra.textContent === 'Review' ? 'action' : els.extra.textContent === 'Details' ? 'privacy' : 'evidence'
+    );
   });
 
   return { els, update, setDetailsOpen, detailsOpen: () => details, setTab };

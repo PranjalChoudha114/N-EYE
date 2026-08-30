@@ -266,6 +266,11 @@ html[data-theme='light'] .n-mark {
   font: var(--n-type-heading);
 }
 
+.n-receipt h4 {
+  margin: 12px 0 4px;
+  font: var(--n-type-label);
+}
+
 @keyframes n-rise {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }

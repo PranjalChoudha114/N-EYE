@@ -22,9 +22,9 @@ export function describeAction(proposal: ActionProposal | null, targetLabel?: st
     case 'WAIT':
       return 'Wait for the page to settle';
     case 'ASK_USER':
-      return 'Ask you for the next instruction';
+      return 'Ask you what to do next';
     case 'COMPLETE':
-      return 'Planner suggested completion (untrusted)';
+      return 'AI suggested the task is done (unverified until N-Eye checks)';
     default:
       return proposal.type;
   }

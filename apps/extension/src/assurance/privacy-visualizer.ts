@@ -28,7 +28,7 @@ export function emptyVisualizerModel(): VisualizerModel {
     mode: 'empty',
     caption: EMPTY_VISUALIZER_CAPTION,
     local: [{ tag: 'NONE', value: EMPTY_VISUALIZER_CAPTION, kind: 'empty' }],
-    safe: [{ tag: 'NONE', value: 'No SafeContext was built for a planner request.', kind: 'empty' }],
+    safe: [{ tag: 'NONE', value: 'No protected AI context was built for a request.', kind: 'empty' }],
   };
 }
 
@@ -42,7 +42,7 @@ export function visualizerModel(
 
   const local: VisualizerItem[] = [];
   if (findings.length === 0) {
-    local.push({ tag: 'PUBLIC', value: 'No PII candidates in this task', kind: 'local' });
+    local.push({ tag: 'PUBLIC', value: 'No personal details in this task', kind: 'local' });
   } else {
     for (const finding of findings.slice(0, 4)) {
       const isSecret = finding.privacyClass.startsWith('SECRET_');
@@ -58,20 +58,20 @@ export function visualizerModel(
   for (const token of safeContext.availableTokens) {
     safe.push({
       tag: token.tokenSymbol,
-      value: `Scoped ${token.privacyClass}`,
+      value: `Hidden from the AI as ${token.tokenSymbol}`,
       kind: 'token',
     });
   }
   if (findings.some((f) => f.privacyClass.startsWith('SECRET_'))) {
-    safe.push({ tag: 'SECRETS', value: 'NEVER_SEND', kind: 'blocked' });
+    safe.push({ tag: 'SECRETS', value: 'Not sent to the AI', kind: 'blocked' });
   }
   if (safe.length === 0) {
-    safe.push({ tag: 'CLEAN', value: 'No tokenized or blocked values in this task', kind: 'empty' });
+    safe.push({ tag: 'CLEAN', value: 'No hidden or blocked values in this task', kind: 'empty' });
   }
 
   return {
     mode: 'live',
-    caption: 'Current task evidence (not an example).',
+    caption: 'What N-Eye protected in this request (not an example).',
     local,
     safe,
   };

@@ -33,17 +33,23 @@ function sanitizeGoal(
     decisions.find((d) => d.privacyClass === 'PII_PHONE' && d.tokenRole)?.tokenRole;
 
   for (const decision of decisions) {
+    const span = findingById.get(decision.findingId)?.textSpan;
+    if (!span || !cleanGoal.includes(span)) continue;
+    // NEVER_SEND must not remain in sanitizedGoal. Egress blocking is last-line, not the only line.
+    if (decision.decision === 'NEVER_SEND') {
+      cleanGoal = cleanGoal.split(span).join('[REDACTED_SECRET]');
+      continue;
+    }
     if (decision.decision !== 'TOKENIZE' || !decision.tokenRole) continue;
     if (decision.privacyClass === 'PII_EMAIL' || decision.privacyClass === 'PII_PHONE') continue;
-    const span = findingById.get(decision.findingId)?.textSpan;
-    if (span && cleanGoal.includes(span)) {
-      cleanGoal = cleanGoal.split(span).join(decision.tokenRole);
-    }
+    cleanGoal = cleanGoal.split(span).join(decision.tokenRole);
   }
 
   cleanGoal = cleanGoal.replace(EMAIL_REGEX, emailToken || '[REDACTED_PII]');
   cleanGoal = cleanGoal.replace(PHONE_REGEX, phoneToken || '[REDACTED_PII]');
   cleanGoal = cleanGoal.replace(/(?:password|passcode|secret)[:=\s]+([^\s,]+)/gi, 'password [REDACTED_SECRET]');
+  cleanGoal = cleanGoal.replace(/sk_live_[0-9a-zA-Z]{16,}/g, '[REDACTED_SECRET]');
+  cleanGoal = cleanGoal.replace(/eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g, '[REDACTED_SECRET]');
   cleanGoal = cleanGoal.replace(/CANARY_[A-Z0-9_]+/gi, '[REDACTED_CANARY]');
 
   return cleanGoal.trim().slice(0, 300);
@@ -68,6 +74,8 @@ function sanitizePublicText(
   return clean
     .replace(EMAIL_REGEX, '[REDACTED_PII]')
     .replace(PHONE_REGEX, '[REDACTED_PII]')
+    .replace(/sk_live_[0-9a-zA-Z]{16,}/g, '[PROTECTED_FIELD]')
+    .replace(/eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g, '[PROTECTED_FIELD]')
     .replace(/CANARY_[A-Z0-9_]+/gi, '[PROTECTED_FIELD]')
     .replace(/OCR_(API|OTP|SESSION|PASSWORD|EMAIL|PHONE)_T007[A-Z0-9_@.]*/gi, '[PROTECTED_FIELD]')
     .replace(/\s+/g, ' ')

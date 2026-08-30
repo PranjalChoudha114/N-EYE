@@ -14,8 +14,8 @@ export function localMonitoringState(sensitiveClasses: string[]): ProtectionStat
   const classes = uniqueClasses(sensitiveClasses);
   const detail =
     classes.length > 0
-      ? `Sensitive fields detected locally: ${classes.join(', ')}. No N-Eye AI request occurred.`
-      : 'Page observed locally. No N-Eye AI request occurred.';
+      ? `Personal information found locally: ${classes.join(', ')}. No AI request was sent.`
+      : 'Looking at this page on your device. No AI request has been sent.';
   return {
     state: 'LOCAL_MONITORING',
     headline: 'N-Eye active',
@@ -26,16 +26,16 @@ export function localMonitoringState(sensitiveClasses: string[]): ProtectionStat
 export function protectingState(): ProtectionStateView {
   return {
     state: 'PROTECTING',
-    headline: 'Protecting',
-    detail: 'Sensitive context is being processed locally.',
+    headline: 'Protecting your information',
+    detail: 'Personal information is being handled on this device.',
   };
 }
 
 export function remoteReasoningState(): ProtectionStateView {
   return {
     state: 'REMOTE_REASONING',
-    headline: 'Remote reasoning',
-    detail: 'Only approved SafeContext is being processed by the configured planner.',
+    headline: 'Asking AI for the next step',
+    detail: 'Only protected page information is being sent to the AI.',
   };
 }
 
@@ -45,8 +45,8 @@ export function protectedState(sensitiveCount: number): ProtectionStateView {
     headline: 'Protected AI request',
     detail:
       sensitiveCount > 0
-        ? `N-Eye protected an AI request. ${sensitiveCount} sensitive value(s) handled locally.`
-        : 'N-Eye protected an AI request. SafeContext passed local egress policy.',
+        ? `N-Eye protected ${sensitiveCount} personal detail${sensitiveCount === 1 ? '' : 's'} before asking AI for help.`
+        : 'N-Eye protected this AI request. The privacy check passed.',
   };
 }
 
@@ -54,7 +54,7 @@ export function blockedState(): ProtectionStateView {
   return {
     state: 'BLOCKED',
     headline: 'Request blocked',
-    detail: 'N-Eye blocked an unsafe AI request. Forbidden sensitive data was detected before network.',
+    detail: 'N-Eye blocked an unsafe AI request. Forbidden personal or secret data was found before sending.',
   };
 }
 
@@ -70,7 +70,7 @@ export function disconnectedObservationState(): ProtectionStateView {
   return {
     state: 'DEGRADED',
     headline: 'Observation unavailable',
-    detail: 'Content script is disconnected. This page was not observed. No N-Eye AI request occurred.',
+    detail: 'N-Eye is not connected to this page. No AI request was sent.',
   };
 }
 
@@ -78,10 +78,13 @@ export function humanClassName(privacyClass: string): string {
   if (privacyClass.includes('EMAIL')) return 'Email';
   if (privacyClass.includes('PHONE')) return 'Phone';
   if (privacyClass.includes('PASSWORD')) return 'Password';
-  if (privacyClass.includes('OTP')) return 'OTP';
+  if (privacyClass.includes('OTP')) return 'One-time code';
   if (privacyClass.includes('API')) return 'API key';
-  if (privacyClass.includes('SESSION') || privacyClass.includes('AUTH')) return 'Session token';
-  return 'Sensitive data';
+  if (privacyClass.includes('SESSION') || privacyClass.includes('AUTH')) return 'Sign-in token';
+  if (privacyClass.includes('NAME')) return 'Name';
+  if (privacyClass.includes('ADDRESS')) return 'Address';
+  if (privacyClass.includes('ACCOUNT')) return 'Account ID';
+  return 'Personal information';
 }
 
 function uniqueClasses(privacyClasses: string[]): string[] {
