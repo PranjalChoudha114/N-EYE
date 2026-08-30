@@ -1,8 +1,8 @@
 {
   "gate": "T021-T022",
-  "identity": "DEV • dc182a3*\nBuilt 2026-08-30T14:08:11.480Z (uncommitted source)",
+  "identity": "DEV • f25453a\nBuilt 2026-08-30T14:16:07.525Z",
   "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "startedAt": "2026-08-30T14:11:42.062Z",
+  "startedAt": "2026-08-30T14:16:31.522Z",
   "cases": [
     {
       "id": "load-extension",
@@ -10,13 +10,13 @@
       "expected": "service worker or extension target present",
       "actual": "chrome-extension://fignfifoniblkonapihmkfakmlgkbkcf/service_worker.js",
       "status": "PASS",
-      "notes": "DEV • dc182a3*\nBuilt 2026-08-30T14:08:11.480Z (uncommitted source)"
+      "notes": "DEV • f25453a\nBuilt 2026-08-30T14:16:07.525Z"
     },
     {
       "id": "A-portal",
       "goal": "Portal page loaded in fresh profile",
       "expected": "http 127.0.0.1 scenario-14",
-      "actual": "http://127.0.0.1:59022/scenario-14-text-input.html",
+      "actual": "http://127.0.0.1:59277/scenario-14-text-input.html",
       "status": "PASS",
       "notes": "Content-script READY is proven via SW PING, not page-world window"
     },
