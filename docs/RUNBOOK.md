@@ -108,3 +108,29 @@ PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests
 pnpm lint
 pnpm typecheck
 ```
+
+Held-out templates (does not rewrite T019 benches):
+
+```bash
+pnpm bench:hidden
+```
+
+T019 benches (explicit write):
+
+```bash
+N_EYE_BENCH_WRITE=1 pnpm bench:all
+```
+
+Fresh-profile Chrome helper (extension load + portal navigation; Side Panel still needs a click):
+
+```bash
+pnpm build:extension
+node scripts/chrome-e2e.mjs
+```
+
+Secret scan (production source only):
+
+```bash
+bash scripts/secret-scan.sh
+```
+

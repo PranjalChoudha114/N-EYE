@@ -34,13 +34,13 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T019/T020 forensic sweep: privacy sibling repaired; Chrome identity proof still required. Do not start T021/T022. |
+| **Current Phase** | T021–T024 final software gate: held-out templates + packaging + red-team automated; full Chrome owner-loop and 10-demo rehearsal remain MANUAL. |
 | **Branch** | `main` |
-| **HEAD Commit** | See `git log -1`. Sweep started at `333631f`. Privacy sibling repair may be uncommitted. |
-| **Latest Verified Gate** | Gate 019/020 source+tests. Chrome unpacked UI: UNVERIFIED on current identity. |
-| **Next Eligible Gate** | Remain in T019/T020 until human Chrome identity matches HEAD. Then T021/T022. |
-| **SIH Prototype Completion** | ~92% (planning estimate; formal P/R/F1 pack exists; Chrome E2E and hidden-site remain) |
-| **Core Architecture Completion** | ~93% (planning estimate; measurement harness exists; hidden generalization remains) |
+| **HEAD Commit** | See `git log -1`. Incoming sealed privacy repair `dc182a3`. |
+| **Latest Verified Gate** | T021 hidden templates TESTED; Chrome load PARTIALLY_PROVEN; owner-loop UNVERIFIED in this environment. |
+| **Next Eligible Gate** | Human Chrome checklist + demo rehearsal. No further feature gates unless P0/P1. |
+| **SIH Prototype Completion** | ~95% (planning estimate; hidden templates exist; Chrome owner-loop still MANUAL) |
+| **Core Architecture Completion** | ~95% (planning estimate) |
 | **Company-Product Completion** | ~26% (planning estimate) |
 
 ---
@@ -1360,6 +1360,23 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 **Operational safeguard:** `docs/RUNBOOK.md` and `docs/evidence/T019-T020-MANUAL-CHECKLIST.md` now require HEAD / dist / Side Panel identity to match before accepting Chrome screenshots.
 
 **Evidence:** `docs/evidence/T019-T020-FORENSIC-SWEEP.md`
+
+---
+
+## 64. T021–T024 final software completion (2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED for held-out templates, unique Mock click, final canary channels, red-team ledger, packaging scans. Chrome unpacked **owner loop**: UNVERIFIED (user-gesture). 10-run demo: UNVERIFIED (human rehearsal).
+
+**Incoming HEAD:** `dc182a3` (`fix(privacy): keep NEVER_SEND secrets out of titles and visual hints`), clean, pushed.
+
+**Held-out:** HELD-OUT TEMPLATE EVALUATION (not a blind lab). First-pass sealed: N=20, wrongAction=2, falseComplete=0, privacy 20/20. Post-repair unique click: wrongAction=0.
+
+**Live Gemini unit test:** prompt privacy runs; 429/503 skip (environment).
+
+**Do not claim:** universal websites, perfect privacy, Chrome E2E latency, 10 consecutive demos executed by this agent.
+
+**Evidence:** `docs/evidence/T021-T024-*.md`, `bench/hidden/`, `bench/chrome/`.
+
 
 
 

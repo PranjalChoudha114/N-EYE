@@ -12,7 +12,7 @@ and verifies results.
 
 ## Project Status
 
-**Gate:** T009/T010 real-Chrome content-script closure + visual-only hardening + SIH visual eval harness. Chrome Side Panel click-through remains **MANUAL VERIFICATION REQUIRED**. Local visual model / ONNX / WebGPU: **REJECTED** (not currently justified).
+**Gate:** T021–T024 software completion. Held-out templates are TESTED. Chrome owner-loop and 10-run demo rehearsal remain **MANUAL**. Local visual model / ONNX / WebGPU: **REJECTED**.
 
 ## Architecture Overview
 

@@ -1,0 +1,59 @@
+{
+  "gate": "T021-T022",
+  "identity": "DEV • dc182a3*\nBuilt 2026-08-30T14:08:11.480Z (uncommitted source)",
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "startedAt": "2026-08-30T14:11:42.062Z",
+  "cases": [
+    {
+      "id": "load-extension",
+      "goal": "Unpacked dist loads",
+      "expected": "service worker or extension target present",
+      "actual": "chrome-extension://fignfifoniblkonapihmkfakmlgkbkcf/service_worker.js",
+      "status": "PASS",
+      "notes": "DEV • dc182a3*\nBuilt 2026-08-30T14:08:11.480Z (uncommitted source)"
+    },
+    {
+      "id": "A-portal",
+      "goal": "Portal page loaded in fresh profile",
+      "expected": "http 127.0.0.1 scenario-14",
+      "actual": "http://127.0.0.1:59022/scenario-14-text-input.html",
+      "status": "PASS",
+      "notes": "Content-script READY is proven via SW PING, not page-world window"
+    },
+    {
+      "id": "sw-attach",
+      "goal": "Service worker CDP",
+      "expected": "attach",
+      "actual": "Error: Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'executeScript')",
+      "status": "INCONCLUSIVE",
+      "notes": "MV3 SW may not expose Runtime"
+    },
+    {
+      "id": "privacy-page",
+      "goal": "Open privacy fixture",
+      "expected": "HTTP 200 page",
+      "actual": "navigated",
+      "status": "PASS",
+      "notes": "synthetic canaries on page"
+    },
+    {
+      "id": "high-risk-page",
+      "goal": "Open high-risk fixture",
+      "expected": "page loads",
+      "actual": "navigated",
+      "status": "PASS",
+      "notes": "confirmation surface requires Side Panel owner"
+    },
+    {
+      "id": "public-example",
+      "goal": "Public-site smoke (example.com)",
+      "expected": "page title present",
+      "actual": "Example Domain",
+      "status": "PASS",
+      "notes": "date 2026-08-30 — no purchase/submit"
+    }
+  ],
+  "pass": 5,
+  "fail": 0,
+  "inconclusive": 1
+}

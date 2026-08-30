@@ -79,12 +79,22 @@ export function captureManifest(repoRoot: string): BenchManifest {
   };
 }
 
+/**
+ * Unit `pnpm test` must not rewrite evidence files (that dirties SHA identity).
+ * `pnpm bench:all` sets N_EYE_BENCH_WRITE=1.
+ */
+export function shouldWriteBench(): boolean {
+  return process.env['N_EYE_BENCH_WRITE'] === '1';
+}
+
 export function writeJson(path: string, value: unknown): void {
+  if (!shouldWriteBench()) return;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
 }
 
 export function writeText(path: string, value: string): void {
+  if (!shouldWriteBench()) return;
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, value.endsWith('\n') ? value : `${value}\n`, 'utf8');
 }

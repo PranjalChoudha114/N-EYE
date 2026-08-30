@@ -30,6 +30,7 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-024 | Chrome E2E SIH measurement | **Proposed** (T021/T022) | Evaluation | T019 latency/resource is Node/happy-dom RESULT plus OCR on fixtures. Formal Chrome RSS/CPU and live HTTP canary remain UNVERIFIED. |
 | REC-025 | Mock-dialect arbiter coverage | **Proposed** | Completion | `arbitratePlannerComplete` uses `parseMockGoal`. Goals outside that dialect can COMPLETE after any verified actionable type. Expanding the dialect is a product change, not a silent forensic patch. |
 | REC-026 | Stale unpacked identity | **Documented** (T019 forensic) | DX | Chrome MV3 has no HMR. Accept screenshots only when HEAD / `dist/build-identity.txt` / Side Panel footer match. |
+| REC-027 | Unique Mock click targets | **Adopted** (T021) | Mock planner | First-match CLICK on duplicate labels is a guess. `pickUniqueClickTarget` abstains. Not a site-specific patch. |
 
 ## 2. REC-016 — Third-Party Network Privacy Guard (not implemented)
 

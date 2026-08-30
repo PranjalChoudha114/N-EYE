@@ -43,3 +43,6 @@ pnpm-debug.log*
 
 # Local scratch notes (not product evidence)
 scratch/
+
+# Release tarballs (rebuild from SHA)
+dist-release/

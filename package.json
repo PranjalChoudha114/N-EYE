@@ -12,10 +12,11 @@
     "lint": "pnpm -r run lint",
     "test": "pnpm -r run test && PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests",
     "test:api": "PYTHONPATH=apps/planner-api .venv/bin/pytest apps/planner-api/tests",
-    "bench:privacy": "pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t019.test.ts",
-    "bench:visual": "pnpm --filter @n-eye/extension exec vitest run src/__tests__/sih-visual-eval.test.ts src/__tests__/bench-t019.test.ts",
-    "bench:performance": "pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t019.test.ts src/__tests__/benchmark.test.ts",
-    "bench:all": "pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t019.test.ts",
+    "bench:privacy": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t019.test.ts",
+    "bench:visual": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/sih-visual-eval.test.ts src/__tests__/bench-t019.test.ts",
+    "bench:performance": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t019.test.ts src/__tests__/benchmark.test.ts",
+    "bench:all": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t019.test.ts",
+    "bench:hidden": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/hidden-generalization.test.ts",
     "clean": "pnpm -r run clean"
   },
   "engines": {

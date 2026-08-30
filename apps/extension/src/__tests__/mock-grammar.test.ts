@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createActionId, createElementId, createPageEpoch, createTaskId, type SafeContext } from '@n-eye/protocol';
-import { parseMockGoal, pickUniqueTypeTextTarget } from '../planner/mock-grammar.js';
+import { parseMockGoal, pickUniqueClickTarget, pickUniqueTypeTextTarget } from '../planner/mock-grammar.js';
 import { DeterministicPlanner } from '../planner/deterministic-planner.js';
 
 function context(goal: string, elements: SafeContext['safeElements']): SafeContext {
@@ -123,5 +123,17 @@ describe('Mock bounded grammar', () => {
     });
     expect(second.proposal.type).toBe('COMPLETE');
     expect(second.proposal.reasoning).toMatch(/Local proof still required/);
+  });
+
+  it('abstains when two Continue buttons score equally', () => {
+    const picked = pickUniqueClickTarget(
+      [
+        { id: 'e1', role: 'button', safeLabel: 'Continue', inputType: 'button', isEnabled: true },
+        { id: 'e2', role: 'button', safeLabel: 'Continue', inputType: 'button', isEnabled: true },
+      ],
+      ['continue']
+    );
+    expect(picked.ok).toBe(false);
+    if (!picked.ok) expect(picked.reason).toBe('ambiguous');
   });
 });

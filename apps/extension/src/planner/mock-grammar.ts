@@ -164,3 +164,48 @@ export function pickUniqueTypeTextTarget<T extends { id: string; isEnabled?: boo
   if (winners.length !== 1 || !winners[0]) return { ok: false, reason: 'ambiguous' };
   return { ok: true, target: winners[0].el };
 }
+
+function isClickCapable(el: { role?: string | null; inputType?: string | null; isEnabled?: boolean }): boolean {
+  if (el.isEnabled === false) return false;
+  const role = (el.role || '').toLowerCase();
+  const t = el.inputType || '';
+  return role === 'button' || role === 'link' || t === 'submit' || t === 'button';
+}
+
+/**
+ * Duplicate same-label clicks are guesses. ASK_USER rather than first-match.
+ * WHY: First-match is nearest-control authority. Held-out duplicate/iframe cases proved it.
+ */
+export function scoreClickTarget(
+  el: {
+    ariaLabel?: string | null;
+    innerTextCandidate?: string | null;
+    role?: string | null;
+    inputType?: string | null;
+    safeLabel?: string | null;
+    isEnabled?: boolean;
+  },
+  hints: string[]
+): number {
+  if (!isClickCapable(el)) return -1;
+  const hay = fieldHaystack(el);
+  let score = 0;
+  for (const hint of hints) {
+    if (hay.includes(hint)) score += 3;
+  }
+  return score;
+}
+
+export function pickUniqueClickTarget<T extends { id: string; isEnabled?: boolean }>(
+  elements: T[],
+  hints: string[]
+): { ok: true; target: T } | { ok: false; reason: 'none' | 'ambiguous' } {
+  const capable = elements.filter((el) => isClickCapable(el) && el.isEnabled !== false);
+  const scored = capable.map((el) => ({ el, score: scoreClickTarget(el, hints) }));
+  const positive = scored.filter((s) => s.score > 0);
+  if (positive.length === 0) return { ok: false, reason: 'none' };
+  const max = Math.max(...positive.map((s) => s.score));
+  const winners = positive.filter((s) => s.score === max);
+  if (winners.length !== 1 || !winners[0]) return { ok: false, reason: 'ambiguous' };
+  return { ok: true, target: winners[0].el };
+}

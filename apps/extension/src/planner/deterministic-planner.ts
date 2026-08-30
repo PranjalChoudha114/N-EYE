@@ -12,7 +12,7 @@ import {
   createActionId,
 } from '@n-eye/protocol';
 import type { Planner, PlannerOptions, PlannerProposalResult } from './types.js';
-import { parseMockGoal, pickUniqueTypeTextTarget } from './mock-grammar.js';
+import { parseMockGoal, pickUniqueClickTarget, pickUniqueTypeTextTarget } from './mock-grammar.js';
 
 export class DeterministicPlanner implements Planner {
   private stepCount = 0;
@@ -190,13 +190,12 @@ export class DeterministicPlanner implements Planner {
       intent.kind === 'click_labeled'
         ? intent.labelHints
         : ['submit', 'continue', 'login', 'sign'];
-    const clickBtn = context.safeElements.find((e) => {
-      if (!e.isEnabled) return false;
-      if (!(e.role === 'button' || e.inputType === 'submit')) return false;
-      const label = e.safeLabel.toLowerCase();
-      return labelHints.some((h) => label.includes(h));
-    });
-    if (clickBtn && (intent.kind === 'click_labeled' || /submit|continue|login|sign in/i.test(goal))) {
+    const clickPick = pickUniqueClickTarget(context.safeElements, labelHints);
+    if (
+      clickPick.ok &&
+      (intent.kind === 'click_labeled' || /submit|continue|login|sign in/i.test(goal))
+    ) {
+      const clickBtn = clickPick.target;
       const isHighRisk =
         clickBtn.safeLabel.toLowerCase().includes('submit') ||
         clickBtn.safeLabel.toLowerCase().includes('login') ||
@@ -205,9 +204,21 @@ export class DeterministicPlanner implements Planner {
         actionId: id(),
         type: 'CLICK',
         targetId: clickBtn.id,
-        reasoning: `Found action button "${clickBtn.safeLabel}".`,
+        reasoning: `Found unique action button "${clickBtn.safeLabel}".`,
         expectedOutcome: 'Control is activated.',
         riskLevel: isHighRisk ? 'HIGH' : 'LOW',
+      };
+    }
+    if (!clickPick.ok && intent.kind === 'click_labeled') {
+      return {
+        actionId: id(),
+        type: 'ASK_USER',
+        reasoning:
+          clickPick.reason === 'ambiguous'
+            ? 'Multiple matching click targets. N-Eye will not guess which control to activate.'
+            : 'No unique supported control matched this click goal.',
+        expectedOutcome: 'User indicates the target or clicks locally.',
+        riskLevel: 'LOW',
       };
     }
 
