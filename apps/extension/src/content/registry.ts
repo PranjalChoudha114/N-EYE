@@ -89,6 +89,10 @@ export class ElementRegistry {
     return purged;
   }
 
+  /**
+   * WHY: Every observation is a new census. Opaque ids are reminted from e1 in document
+   * order; they are not stable node identity across autocomplete/re-render.
+   */
   public clear(): void {
     this.entries.clear();
     this.counters.clear();

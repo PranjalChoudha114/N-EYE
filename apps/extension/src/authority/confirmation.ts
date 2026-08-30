@@ -1,10 +1,13 @@
 import {
   computeSemanticIdentity,
   TOP_FRAME_ID,
+  type ActionProposal,
   type ConfirmationBinding,
   type ConfirmationCheck,
   type ConfirmationGrant,
   type ConfirmationRequest,
+  type RawElement,
+  type RawScene,
   type SecurityReasonCode,
   type TargetFingerprint,
   type TaskId,
@@ -79,18 +82,97 @@ export function buildConfirmationBinding(
   };
 }
 
-const BOUND_FIELDS: Array<keyof ConfirmationBinding> = [
+/**
+ * Security identity compared after a fresh post-confirm observation.
+ *
+ * TRUST: Opaque `targetElementId` is intentionally excluded. `observePage` remints eN by
+ * document order, so the same handle can name a different control after autocomplete
+ * inserts extra interactives. Identity is unique `targetSemanticKey` plus action/context/risk.
+ * Geometry, neighborhood, focus, and aria-expanded are not in this key (volatile, non-authority).
+ */
+const BINDING_IDENTITY_FIELDS: Array<keyof ConfirmationBinding> = [
   'taskId',
   'actionId',
   'origin',
   'routeKey',
   'frameId',
   'actionType',
-  'targetElementId',
   'targetSemanticKey',
   'riskLevel',
   'tokenId',
 ];
+
+export class ConfirmationStaleError extends Error {
+  readonly reasonCode: SecurityReasonCode;
+
+  constructor(message: string, reasonCode: SecurityReasonCode = 'CONFIRMATION_STALE') {
+    super(message);
+    this.name = 'ConfirmationStaleError';
+    this.reasonCode = reasonCode;
+  }
+}
+
+function frameIdOf(element: RawElement): ConfirmationBinding['frameId'] {
+  return element.frameProvenance?.frameId ?? TOP_FRAME_ID;
+}
+
+/**
+ * Unique live element that still carries the approved semantic identity in the approved frame.
+ * WHY: After registry remint, the pre-confirm eN is a positional alias, not a capability.
+ * FAIL-CLOSED: zero or 2+ matches are not a guess.
+ */
+export function findUniqueApprovedTarget(
+  scene: RawScene,
+  approved: Pick<ConfirmationBinding, 'targetSemanticKey' | 'frameId'>
+): { ok: true; element: RawElement } | { ok: false; reason: 'none' | 'ambiguous' } {
+  const matches = scene.elements.filter(
+    (el) =>
+      el.isEnabled &&
+      frameIdOf(el) === approved.frameId &&
+      semanticKeyOfFingerprint(el.fingerprint) === approved.targetSemanticKey
+  );
+  if (matches.length === 1 && matches[0]) {
+    return { ok: true, element: matches[0] };
+  }
+  if (matches.length === 0) {
+    return { ok: false, reason: 'none' };
+  }
+  return { ok: false, reason: 'ambiguous' };
+}
+
+/**
+ * Rewrites the untrusted proposal onto the unique approved live target after re-observation.
+ *
+ * A: same semantics + unique replacement (including reminted eN / DOM reorder) may proceed.
+ * B: meaning/frame mismatch, missing target, or two plausible replacements fail closed.
+ * Never uses a still-present stale id whose semantic key no longer matches the grant.
+ */
+export function retargetProposalToApprovedBinding(
+  proposal: ActionProposal,
+  scene: RawScene,
+  approved: ConfirmationBinding
+): ActionProposal {
+  if (!proposal.targetId) {
+    return proposal;
+  }
+
+  const unique = findUniqueApprovedTarget(scene, approved);
+  if (!unique.ok) {
+    throw new ConfirmationStaleError(
+      unique.reason === 'ambiguous'
+        ? 'Approved target is ambiguous after re-observation. Refusing to execute.'
+        : 'Approved target is no longer uniquely present in the live page. Refusing to execute.'
+    );
+  }
+
+  const byId = scene.elements.find((el) => el.id === proposal.targetId);
+  if (byId && byId.id === unique.element.id) {
+    return proposal;
+  }
+
+  // Unique equivalent after remint/replacement. Keep actionId/type/risk claims; validator re-derives risk.
+  return { ...proposal, targetId: unique.element.id };
+}
 
 /**
  * Re-verifies an approved request against the authority derived from freshly observed state.
@@ -111,7 +193,7 @@ export function verifyConfirmationBinding(
     };
   }
 
-  for (const field of BOUND_FIELDS) {
+  for (const field of BINDING_IDENTITY_FIELDS) {
     if (approved[field] === live[field]) continue;
     const reasonCode: SecurityReasonCode = field === 'riskLevel' ? 'RISK_ESCALATED' : 'CONFIRMATION_STALE';
     return {

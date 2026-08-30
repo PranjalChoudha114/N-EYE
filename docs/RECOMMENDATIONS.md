@@ -35,6 +35,7 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-029 | Self-host Orbitron (OFL) | **Proposed** | Product UI | Display stack currently uses Orbitron only if already installed; otherwise geometric system fallbacks. Bundling OFL Orbitron would need a license-file decision. No CDN. |
 | REC-030 | Compact-card trust-rail glance | **Proposed** | Product UI | Overlay has no Look…Prove rail today. A tiny 7-dot glance on the card would be presentation-only if it bound to existing `pipeline` visuals. Not built. |
 | REC-032 | Enter key as search submit | **Proposed** | Execution | Some pages submit search only via Enter in the field. Architecture has no PRESS_ENTER action. Unique search/submit CLICK is the supported path; otherwise ASK_USER. Do not add a new action type until explicitly gated. |
+| REC-033 | Map `HTMLButtonElement.type` into fingerprint inputType | **Proposed** | Observation / identity | `inputTypeOf` returns null for `<button type="submit">`; form-submit HIGH risk uses `formSubmitting` instead. Not the post-confirm remint bug. Changing this would alter semantic keys; do not mix into identity repair. |
 
 ## 2. REC-016 — Third-Party Network Privacy Guard (not implemented)
 

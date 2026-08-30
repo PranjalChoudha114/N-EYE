@@ -35,6 +35,7 @@ import { validateActionProposal } from '../authority/validator.js';
 import {
   buildConfirmationBinding,
   ConfirmationBroker,
+  retargetProposalToApprovedBinding,
   verifyConfirmationBinding,
 } from '../authority/confirmation.js';
 import { SecurityLog } from '../authority/security-log.js';
@@ -1198,7 +1199,8 @@ export class TrustLoopController {
           }
 
           // TOCTOU: the page may have mutated while the dialog was open. Re-observe and
-          // re-validate rather than trusting the authority captured before the user read it.
+          // uniquely re-ground the approved semantic identity. Opaque eN is reminted each
+          // observe and must not be treated as the granted target.
           const freshScene = await this.requestObservation(tabId, false);
           if (!freshScene) {
             this.failClosed(
@@ -1212,7 +1214,8 @@ export class TrustLoopController {
 
           let revalidated: ValidatedAction;
           try {
-            revalidated = validateActionProposal(proposal, freshScene, this.vault, taskId, origin);
+            const liveProposal = retargetProposalToApprovedBinding(proposal, freshScene, consumed.request);
+            revalidated = validateActionProposal(liveProposal, freshScene, this.vault, taskId, origin);
           } catch (err) {
             const reasonCode =
               err instanceof Error && 'reasonCode' in err

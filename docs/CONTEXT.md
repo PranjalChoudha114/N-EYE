@@ -34,11 +34,11 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | Sealed: premium UI, visual-action click, SEARCH outcome proof, ASK_USER Continue live-MATCHED. YouTube Continue: HUMAN REQUIRED. |
+| **Current Phase** | Forensic P1: post-confirm unique semantic re-ground. Wikipedia-like Allow once Chrome retest: HUMAN REQUIRED. |
 | **Branch** | `main` |
-| **HEAD Commit** | This seal commit. Rebuild `apps/extension/dist/` so Side Panel identity matches `git rev-parse --short HEAD` with no dirty `*` if the tree is clean. |
-| **Latest Verified Gate** | SEARCH typing ≠ search proof. Continue adopts live MATCHED. TESTED. YouTube: HUMAN REQUIRED. |
-| **Next Eligible Gate** | Human Chrome: youtube.com `Search for OpenAI in YouTube search bar`; if ASK_USER, Continue once. Scenario 08 visual-only Chrome still UNVERIFIED. |
+| **HEAD Commit** | This identity-repair commit. Rebuild `apps/extension/dist/` so Side Panel identity matches `git rev-parse --short HEAD` with no dirty `*` if the tree is clean. |
+| **Latest Verified Gate** | Post-confirm target identity: reminted eN is not a capability. TESTED. Real Chrome Allow once on search-submit: HUMAN REQUIRED. |
+| **Next Eligible Gate** | Human Chrome: wikipedia.org `Search for artificial intelligence` — Allow once after HIGH search-submit must click the live Search control. YouTube Continue still HUMAN REQUIRED. Scenario 08 visual-only Chrome still UNVERIFIED. |
 | **SIH Prototype Completion** | ~95% (planning estimate; hidden templates exist; Chrome owner-loop still MANUAL) |
 | **Core Architecture Completion** | ~95% (planning estimate) |
 | **Company-Product Completion** | ~26% (planning estimate) |
@@ -96,7 +96,7 @@ These rules are enforced by code, tested by automated suites, and must never be 
 7. **Local validation is mandatory**: `validateActionProposal()` must produce a `ValidatedAction` before the executor accepts any action.
 8. **Re-grounding is mandatory**: `regroundTarget()` verifies the node remains `.isConnected` **or** finds a unique semantic equivalent in the same frame. Live role/tag/inputType/label must match. Bounding-box digest drift from scroll does not fail the action. Duplicate candidates abstain. Semantic swap fail-closes. Executor re-checks immediately before native dispatch.
 9. **Token resolution is strictly local**: `vault.resolve()` dereferences `[EMAIL_1]` → `user@example.com` in volatile memory at the moment of execution.
-10. **High-risk actions require explicit human confirmation**: A confirmation *capability* (ADR-0011) bound to task/origin/route/frame/action/target/risk, not a bare boolean. Planner-declared `riskLevel` cannot downgrade a locally HIGH action. After approval the live scene is re-observed and re-validated before execute.
+10. **High-risk actions require explicit human confirmation**: A confirmation *capability* (ADR-0011) bound to task/origin/route/frame/action/semantic target/risk, not a bare boolean or reminted `eN`. Planner-declared `riskLevel` cannot downgrade a locally HIGH action. After approval the live scene is re-observed, uniquely re-grounded by approved `targetSemanticKey`, and re-validated before execute.
 11. **Verification is empirical**: Success requires measurable evidence (epoch progression, URL change, target consumption). Not model claims.
 12. **Failure cannot increase authority**: Errors and fallbacks do not bypass privacy guards or expand execution scope.
 13. **Failure cannot reduce privacy**: Network errors do not cause raw secrets to be sent in retry payloads.
@@ -334,7 +334,7 @@ N-Eye/
     - Copies `expectedFingerprint` from the scene element for live semantic re-grounding.
     - Returns `ValidatedAction { _isValidated: true, proposal, targetElementId, resolvedTokenValue, approvedRiskLevel, expectedFingerprint, timestamp }`.
 
-16. **High-Risk Confirmation** (`ConfirmationBroker` + overlay/Side Panel): If `validatedAction.approvedRiskLevel === 'HIGH'`: mint a scoped confirmation capability. User Confirm/Cancel. Cancellation aborts the task. Post-confirm re-observe + re-validate is mandatory (ADR-0011).
+16. **High-Risk Confirmation** (`ConfirmationBroker` + overlay/Side Panel): If `validatedAction.approvedRiskLevel === 'HIGH'`: mint a scoped confirmation capability. User Confirm/Cancel. Cancellation aborts the task. Post-confirm re-observe + unique semantic re-ground + re-validate is mandatory (ADR-0011). Opaque ids reminted by `observePage` are not the granted target.
 
 17. **Execution** (`executor.ts`): `executeValidatedAction()`:
     - Guards on `action._isValidated === true`.
@@ -1473,4 +1473,30 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 **YouTube Continue retest:** HUMAN REQUIRED after reload of the sealed dist.
 
 **Tests:** `composite-search.test.ts` Continue A–F; `ask-user.test.ts` PARTIAL_GOAL / not Allow once.
+
+---
+
+## 70. Post-confirm target identity / semantic stability (2026-08-30)
+
+**Incoming (human Chrome, wikipedia.org, not patched as a site):** Goal `Search for artificial intelligence`. TYPE_TEXT succeeded. Unique Search button grounded. Local HIGH → Allow once. Mandatory post-confirm re-observe then:
+
+`Approval no longer matches the live action (targetSemanticKey changed). Refusing to execute.`
+
+The Search control still looked like the approved target.
+
+**Root cause (code, not Wikipedia):**
+1. `observePage` always `registry.clear()` and remints opaque `eN` in document order.
+2. Autocomplete/`[role=option]` (and any extra interactive) inserted while the dialog is open shifts that order. The pre-confirm id still exists in the fresh scene but now names a different control.
+3. Post-confirm `validateActionProposal(proposal, freshScene)` looked up that stale id. The first mismatched confirmation field was `targetSemanticKey` because `targetElementId` still "matched" the positional alias.
+4. Sibling: even a correct unique equivalent (new eN, same semantics) would have failed `targetElementId` equality. Opaque ids are not capabilities across re-observation.
+
+**Repair (general, no site selectors):** After Allow once, uniquely re-ground by approved `targetSemanticKey` + frame. Unique equivalent replacement may execute. Meaning/action/risk/origin/frame change, missing target, or two plausible replacements fail closed. Fresh observe remains mandatory. Binding compare no longer treats reminted `targetElementId` as identity.
+
+**Not claimed:** Wikipedia Allow once VERIFIED IN REAL RUNTIME until the human reloads this dist and retests the one case.
+
+**Tests:** `post-confirm-identity.test.ts` cases 1–11 + trust-loop remint/hostile-swap; `confirmation-binding.test.ts` reminted id does not revoke.
+
+**This-run evidence:** protocol 27 passed; extension 362 passed (0 failed); planner-api 39 passed + 1 skipped (live Gemini); lint 0 errors / 1 pre-existing warning (`real-gemini-integration.test.ts` console); typecheck PASS; `pnpm build:extension` PASS. Automated tests do **not** prove the real-Chrome Wikipedia case.
+
+**Build:** Reload unpacked `apps/extension/dist/` after this commit so Side Panel identity matches HEAD with no dirty `*`.
 

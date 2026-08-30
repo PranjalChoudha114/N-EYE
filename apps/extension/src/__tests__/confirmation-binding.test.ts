@@ -131,6 +131,24 @@ describe('Confirmation capability binding', () => {
     expect(vsFrame.changedField).toBe('frameId');
   });
 
+  it('does not revoke approval when only the reminted opaque targetElementId changed', () => {
+    const broker = new ConfirmationBroker();
+    const submit = action('Submit Application');
+    const request = broker.issue(buildConfirmationBinding(submit, { taskId: TASK, origin: ORIGIN }), {
+      pageEpoch: createPageEpoch(1),
+    });
+    broker.resolve(request.confirmationId, true);
+    const consumed = broker.consume(request.confirmationId);
+    if (!('request' in consumed)) throw new Error('expected grant');
+
+    const reminted = action('Submit Application', { targetElementId: createElementId('e9') });
+    const check = verifyConfirmationBinding(
+      consumed.request,
+      buildConfirmationBinding(reminted, { taskId: TASK, origin: ORIGIN })
+    );
+    expect(check.ok).toBe(true);
+  });
+
   it('expires a stale unanswered confirmation', () => {
     const broker = new ConfirmationBroker();
     const request = broker.issue(buildConfirmationBinding(action('Submit Application'), { taskId: TASK, origin: ORIGIN }), {

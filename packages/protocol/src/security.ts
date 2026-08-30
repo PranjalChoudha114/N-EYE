@@ -38,6 +38,11 @@ export interface ConfirmationRequest {
   readonly routeKey: string;
   readonly frameId: FrameId;
   readonly actionType: ActionType;
+  /**
+   * Observation-local handle at issue time. Evidence only after a fresh observe:
+   * `observePage` clears the registry and remints eN by document order, so this id is
+   * not a stable capability. Post-confirm authority is `targetSemanticKey` uniqueness.
+   */
   readonly targetElementId?: ElementId;
   /** Semantic identity of the target at approval time (role/tag/inputType/label). */
   readonly targetSemanticKey: string;
