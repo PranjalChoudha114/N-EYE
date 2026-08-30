@@ -19,6 +19,27 @@ const API_KEY_PATTERNS = [
 ];
 const JWT_REGEX = /eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/;
 
+/**
+ * Clone a pattern with a global flag so replace() can strip every copy.
+ * WHY: Detection uses non-global regexes; derived-string redaction must not leave a second secret.
+ */
+function globalPattern(pattern: RegExp): RegExp {
+  return new RegExp(pattern.source, pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`);
+}
+
+/**
+ * Last-line redaction for every derived string that may leave the device.
+ * PRIVACY: Classification without a textSpan must still not leak known secret shapes.
+ */
+export function redactKnownSecretPatterns(text: string, replacement: string): string {
+  let out = text;
+  for (const pattern of API_KEY_PATTERNS) {
+    out = out.replace(globalPattern(pattern), replacement);
+  }
+  out = out.replace(globalPattern(JWT_REGEX), replacement);
+  return out;
+}
+
 let findingCounter = 0;
 
 function createFindingId(): string {
@@ -133,7 +154,8 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
     // API keys before phone: digit runs inside keys are not telephone numbers.
     let matchedApiKey = false;
     for (const pattern of API_KEY_PATTERNS) {
-      if (pattern.test(text)) {
+      const keyMatch = text.match(pattern);
+      if (keyMatch?.[0]) {
         matchedApiKey = true;
         findings.push({
           findingId: createFindingId(),
@@ -142,6 +164,7 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
           source: 'pattern',
           elementId: element.id,
           fieldLocation: field,
+          textSpan: keyMatch[0],
           detector: 'regex_api_key',
           reason: 'Matched high-entropy API key or bearer credential pattern',
         });
@@ -195,6 +218,7 @@ export function detectElementPrivacy(element: RawElement): PrivacyFinding[] {
         source: 'context',
         elementId: element.id,
         fieldLocation: field,
+        textSpan: text,
         detector: 'label_semantics',
         reason: 'Found session/auth token reference',
       });

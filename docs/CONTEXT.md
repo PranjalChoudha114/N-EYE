@@ -34,11 +34,11 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T019/T020: human-first ASK_USER + formal SIH measurement. T017/T018 completion arbiter preserved. |
+| **Current Phase** | T019/T020 forensic sweep: privacy sibling repaired; Chrome identity proof still required. Do not start T021/T022. |
 | **Branch** | `main` |
-| **HEAD Commit** | See `git log -1`. Incoming repair was `8024af6`. T019/T020 commits follow. |
-| **Latest Verified Gate** | Gate 019/020: ASK_USER recovery + human-first copy + formal measurement pack. Chrome UI MANUAL. |
-| **Next Eligible Gate** | Gate 021/022: hidden generalization + clean-profile real Chrome E2E + reproducibility/release engineering. |
+| **HEAD Commit** | See `git log -1`. Sweep started at `333631f`. Privacy sibling repair may be uncommitted. |
+| **Latest Verified Gate** | Gate 019/020 source+tests. Chrome unpacked UI: UNVERIFIED on current identity. |
+| **Next Eligible Gate** | Remain in T019/T020 until human Chrome identity matches HEAD. Then T021/T022. |
 | **SIH Prototype Completion** | ~92% (planning estimate; formal P/R/F1 pack exists; Chrome E2E and hidden-site remain) |
 | **Core Architecture Completion** | ~93% (planning estimate; measurement harness exists; hidden generalization remains) |
 | **Company-Product Completion** | ~26% (planning estimate) |
@@ -1341,7 +1341,25 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Not claimed:** weighted SIH winner score, Chrome E2E latency, hidden-site generalization, universal zero leakage, PII_NAME/ADDRESS/ACCOUNT detection.
 
-**Next eligible combined gate:** T021/T022 Hidden Generalization + Full Real-Chrome E2E + Reproducibility/Release Engineering.
+**Next eligible combined gate:** T021/T022 Hidden Generalization + Full Real-Chrome E2E + Reproducibility/Release Engineering. Remain in T019/T020 until a human reloads identity matching HEAD after the forensic sweep.
+
+---
+
+## 63. T019/T020 final forensic verification sweep (2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED for a confirmed privacy sibling leak. Chrome on current HEAD: **UNVERIFIED**.
+
+**Incoming HEAD at sweep start:** `333631f` (`feat(evaluation): add formal SIH measurement evidence`). Dist identity was **`DEV • 8024af6*`** (built 2026-08-30T08:27:32.205Z). Human YouTube screenshot used that stale identity. That screenshot is **not** evidence about `333631f` / `771b51c` source.
+
+**YouTube “Completed + empty search field”:** classified **STALE BUILD** (identity mismatch proven) plus **INCONCLUSIVE** for field emptiness (timing/SPA/screenshot). On current Mock grammar, `Search For OpenAi In Youtube Search Bar` is `search-for` with `requiresSearchSubmit`. Type-only MATCHED → ASK_USER PARTIAL, not COMPLETED. Regression: `completion-arbiter.test.ts`, `mock-grammar.test.ts`.
+
+**Confirmed P0 sibling (repaired, not YouTube):** NEVER_SEND API-key shapes could survive in **page title** and **OCR visual hints** when `textSpan` was missing and last-line regexes only covered `sk_live_` / JWT / `CANARY_`. Also: EgressGuard did not scan `AIza` / `ghp_` / bearer. Repair: API-key `textSpan`, shared `redactKnownSecretPatterns`, title via `sanitizePublicText`, EgressGuard + security-log pattern siblings. Tests: `privacy.test.ts`, `egress.test.ts`.
+
+**T019 measurement artifacts:** Full `bench-t019` re-ran during this sweep’s extension tests. Reports are stamped SHA `333631f` **dirty=true** (includes this uncommitted privacy sibling repair). Residual NEVER_SEND leak remains 0 on the corpus. Historical T009/T010 visual files were restored and are not this gate’s RESULT. Rerun `pnpm bench:privacy` after commit so SHA matches a clean tree.
+
+**Operational safeguard:** `docs/RUNBOOK.md` and `docs/evidence/T019-T020-MANUAL-CHECKLIST.md` now require HEAD / dist / Side Panel identity to match before accepting Chrome screenshots.
+
+**Evidence:** `docs/evidence/T019-T020-FORENSIC-SWEEP.md`
 
 
 

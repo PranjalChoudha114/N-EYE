@@ -82,4 +82,31 @@ describe('Egress Guard & Byte-Level Canary Proof', () => {
       validateSafeContextEgress(invalidContext);
     }).toThrow(EgressViolationError);
   });
+
+  it('blocks Google and GitHub API-key shapes in any serialized field', () => {
+    const google: SafeContext = {
+      protocolVersion: '1.0.0',
+      taskId: createTaskId('task-aiza'),
+      pageEpoch: createPageEpoch(1),
+      sanitizedGoal: 'Continue',
+      pageMetadata: {
+        origin: 'https://example.com',
+        sanitizedTitle: 'AIzaSyAabcdefghijklmnopqrstuvwxyz012345',
+        viewport: { width: 100, height: 100 },
+      },
+      safeElements: [],
+      availableTokens: [],
+    };
+    const github: SafeContext = {
+      ...google,
+      taskId: createTaskId('task-ghp'),
+      pageMetadata: {
+        origin: 'https://example.com',
+        sanitizedTitle: 'ghp_abcdefghijklmnopqrstuvwxyz0123456789',
+        viewport: { width: 100, height: 100 },
+      },
+    };
+    expect(() => validateSafeContextEgress(google)).toThrow(EgressViolationError);
+    expect(() => validateSafeContextEgress(github)).toThrow(EgressViolationError);
+  });
 });

@@ -2,6 +2,14 @@
 
 Rebuild `apps/extension/dist/` then Reload the unpacked extension. True hot reload: **NO**.
 
+**Identity gate (required before treating a screenshot as current source):**
+
+1. `git rev-parse --short HEAD`
+2. `cat apps/extension/dist/build-identity.txt`
+3. Side Panel / overlay footer (`DEV • <sha>`)
+
+These three must match. If the footer is older than HEAD (example: source `333631f` vs UI `8024af6*`), the screenshot is a **stale build**. Rebuild, Reload, refresh the page, reopen the Side Panel. Do not file a source bug from that capture.
+
 Cursor IDE browser cannot load this MV3 extension. These steps are for a human Chrome profile.
 
 ## ASK_USER recovery (not confirmation)
@@ -20,7 +28,10 @@ Cursor IDE browser cannot load this MV3 extension. These steps are for a human C
 
 ## Completion truth (8024af6 must not regress)
 
-1. Repeat YouTube: type OpenAI in search. Must not show Completed while VALIDATE/ACT/VERIFY are pending.
+1. Repeat YouTube with a **current** identity. Preferred Mock phrasing: `Type OpenAI in the YouTube search box` (type-only) or `Search for OpenAI` (type + submit).
+2. Naturalistic `Search For OpenAi In Youtube Search Bar` is a **search-submit** goal: Completed requires a verified type **and** a verified search click. Type-only is ASK_USER (partial), not green Completed.
+3. Must not show Completed while VALIDATE/ACT/VERIFY are pending.
+4. If the search box looks empty while the panel says Completed, first confirm identity and screenshot timing (YouTube may navigate). Do not assume a source regression.
 
 ## Privacy receipt
 

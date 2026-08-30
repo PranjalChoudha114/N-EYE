@@ -4,7 +4,7 @@
 COMPLETE (product corrections + formal measurement pack). Chrome unpacked UI: UNVERIFIED until human reload.
 
 ## 2. STARTING BASELINE
-Incoming HEAD `771b51c16ca88d994869c369920516c93749bebc` on `main`. Reports below are generated from this run.
+Incoming HEAD `333631f1460188e29bc7eaaf38cb88f60b67c363` on `main`. Reports below are generated from this run.
 Dirty at generation: true. Manifest: bench/manifests/t019-t020-manifest.json
 
 ## 3–6. PRODUCT CORRECTIONS
@@ -13,7 +13,7 @@ See docs/evidence/T019-T020-HUMAN-FIRST-UX.md. ASK_USER is clarification, not co
 ## 7. BENCHMARK METHODOLOGY
 - Dataset privacy: t019-pii-corpus.v1 hash 765fbc9eb89fde53 N=55 split=eval
 - Visual: bench/visual/ground-truth development + held-out (not T021 hidden)
-- Hardware: Apple M5 arm64 RAM 25769803776 B; Darwin 25.6.0; Node v26.7.0; pnpm 11.24.0
+- Hardware: unknown arm64 RAM 25769803776 B; Darwin 25.6.0; Node v26.7.0; pnpm 11.24.0
 - Commands: pnpm bench:privacy | pnpm bench:visual | pnpm bench:performance | pnpm bench:all
 - Provider: MOCK for task/planner. Live Gemini not required for this pack.
 
@@ -56,9 +56,9 @@ ASK_USER is not success. Planner COMPLETE is not success.
 DOM-only 2/7; escalate 5/7; unnecessary OCR on DOM-sufficient 0
 
 ## 15–16. LATENCY / RESOURCE
-observe N=40 p50=3.21 p95=3.61
-OCR N=7 p50=10.19 p95=28.63 cold=67.75
-SafeContext 10264 B; screenshot 0 B; product JS+CSS 213912 B / gzip PROXY 67054 B; OCR assets 8123867 B
+observe N=40 p50=3.27 p95=3.51
+OCR N=7 p50=10.38 p95=28.86 cold=71.16
+SafeContext 10268 B; screenshot 0 B; product JS+CSS 213912 B / gzip PROXY 67054 B; OCR assets 8123867 B
 
 ## 17. SIH SCORECARD
 See docs/evidence/T019-T020-SCORECARD.md. No weighted winner score.

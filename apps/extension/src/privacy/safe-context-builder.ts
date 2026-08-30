@@ -9,6 +9,7 @@ import type {
   VisualCandidate,
 } from '@n-eye/protocol';
 import { sanitizeUnicodeDeep } from '@n-eye/protocol';
+import { redactKnownSecretPatterns } from './detectors.js';
 import type { PrivateTokenVault } from './vault.js';
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -45,11 +46,10 @@ function sanitizeGoal(
     cleanGoal = cleanGoal.split(span).join(decision.tokenRole);
   }
 
+  cleanGoal = redactKnownSecretPatterns(cleanGoal, '[REDACTED_SECRET]');
   cleanGoal = cleanGoal.replace(EMAIL_REGEX, emailToken || '[REDACTED_PII]');
   cleanGoal = cleanGoal.replace(PHONE_REGEX, phoneToken || '[REDACTED_PII]');
   cleanGoal = cleanGoal.replace(/(?:password|passcode|secret)[:=\s]+([^\s,]+)/gi, 'password [REDACTED_SECRET]');
-  cleanGoal = cleanGoal.replace(/sk_live_[0-9a-zA-Z]{16,}/g, '[REDACTED_SECRET]');
-  cleanGoal = cleanGoal.replace(/eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g, '[REDACTED_SECRET]');
   cleanGoal = cleanGoal.replace(/CANARY_[A-Z0-9_]+/gi, '[REDACTED_CANARY]');
 
   return cleanGoal.trim().slice(0, 300);
@@ -71,11 +71,11 @@ function sanitizePublicText(
       clean = clean.split(span).join(decision.tokenRole);
     }
   }
+  // Keys before phone: digit runs inside API keys must not be treated as telephone numbers.
+  clean = redactKnownSecretPatterns(clean, '[PROTECTED_FIELD]');
   return clean
     .replace(EMAIL_REGEX, '[REDACTED_PII]')
     .replace(PHONE_REGEX, '[REDACTED_PII]')
-    .replace(/sk_live_[0-9a-zA-Z]{16,}/g, '[PROTECTED_FIELD]')
-    .replace(/eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/g, '[PROTECTED_FIELD]')
     .replace(/CANARY_[A-Z0-9_]+/gi, '[PROTECTED_FIELD]')
     .replace(/OCR_(API|OTP|SESSION|PASSWORD|EMAIL|PHONE)_T007[A-Z0-9_@.]*/gi, '[PROTECTED_FIELD]')
     .replace(/\s+/g, ' ')
@@ -173,7 +173,8 @@ export function buildSafeContext(
     sanitizedGoal,
     pageMetadata: {
       origin: rawScene.origin,
-      sanitizedTitle: (rawScene.title || '').replace(/CANARY_[A-Z0-9_]+/gi, 'Page').slice(0, 100),
+      // Title is page-derived text. CANARY_ replace-only was not a privacy proof.
+      sanitizedTitle: sanitizePublicText(rawScene.title || 'Page', decisions, findings).slice(0, 100) || 'Page',
       viewport: {
         width: rawScene.viewport.width,
         height: rawScene.viewport.height,

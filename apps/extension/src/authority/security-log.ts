@@ -26,6 +26,9 @@ const SCRUB_PATTERNS: RegExp[] = [
   /CANARY_[A-Z0-9_]+/gi,
   /sk_live_[0-9a-zA-Z]{8,}/g,
   /AKIA[0-9A-Z]{16}/g,
+  /ghp_[0-9a-zA-Z]{36}/g,
+  /AIza[0-9A-Za-z-_]{35}/g,
+  /bearer\s+[a-zA-Z0-9_.-]{20,}/gi,
   /eyJ[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{6,}/g,
   /\b\d{6,}\b/g,
 ];

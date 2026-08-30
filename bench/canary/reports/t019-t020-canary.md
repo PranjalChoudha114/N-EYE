@@ -1,6 +1,6 @@
 # T019/T020 canary leakage red-team
 
-SHA: `771b51c16ca88d994869c369920516c93749bebc`
+SHA: `333631f1460188e29bc7eaaf38cb88f60b67c363`
 
 Claim form: **No tested forbidden canary appeared in the tested outbound/log/storage channels.**
 This is not a proof of zero leakage everywhere.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { detectElementPrivacy, detectGoalPrivacy } from '../privacy/detectors.js';
+import { detectElementPrivacy, detectGoalPrivacy, detectOcrTextPrivacy } from '../privacy/detectors.js';
 import { evaluatePrivacyPolicy, resetTokenCounters } from '../privacy/policy.js';
 import { PrivateTokenVault } from '../privacy/vault.js';
 import { buildSafeContext } from '../privacy/safe-context-builder.js';
@@ -119,5 +119,113 @@ describe('NEVER_SEND secrets stay out of sanitizedGoal', () => {
     expect(safe.sanitizedGoal).not.toContain('sk_live_');
     expect(safe.sanitizedGoal).not.toContain('eyJhbGciOiJIUzI1NiJ9');
     expect(() => validateSafeContextEgress(safe)).not.toThrow();
+  });
+
+  it('attaches a textSpan for API-key findings so derived labels can be stripped', () => {
+    const el: RawElement = {
+      id: createElementId('akia'),
+      tagName: 'div',
+      role: 'button',
+      ariaLabel: null,
+      innerTextCandidate: 'key AKIAIOSFODNN7EXAMPLE',
+      inputType: null,
+      isEnabled: true,
+      bbox: { x: 0, y: 0, width: 100, height: 30 },
+    };
+    const findings = detectElementPrivacy(el);
+    const api = findings.find((f) => f.privacyClass === 'SECRET_API_KEY');
+    expect(api?.textSpan).toBe('AKIAIOSFODNN7EXAMPLE');
+  });
+
+  it('redacts NEVER_SEND material from page title, not only CANARY_ tokens', () => {
+    resetTokenCounters();
+    const titleKey = 'sk_live_titleleak9918237482910394';
+    const titleJwt = 'eyJhbGciOiJIUzI1NiJ9.eyJ0aXRsZSI6InQwMTkifQ.sigvaluehere';
+    const titleEmail = 'title.leak@example.com';
+    const scene = {
+      _isLocalOnly: true as const,
+      pageEpoch: createPageEpoch(1),
+      url: 'https://bench.example/title',
+      origin: 'https://bench.example',
+      title: `Dashboard ${titleKey} ${titleJwt} ${titleEmail}`,
+      viewport: { width: 800, height: 600 },
+      elements: [],
+      privacyFindings: [],
+      timestamp: Date.now(),
+    };
+    const safe = buildSafeContext(
+      scene,
+      'Continue',
+      evaluatePrivacyPolicy([]),
+      new PrivateTokenVault(),
+      createTaskId('title-secret'),
+      []
+    );
+    const serialized = validateSafeContextEgress(safe);
+    expect(safe.pageMetadata.sanitizedTitle).not.toContain('sk_live_');
+    expect(safe.pageMetadata.sanitizedTitle).not.toContain('eyJhbGciOiJIUzI1NiJ9');
+    expect(safe.pageMetadata.sanitizedTitle).not.toContain(titleEmail);
+    expect(serialized).not.toContain(titleKey);
+    expect(serialized).not.toContain(titleJwt);
+    expect(serialized).not.toContain(titleEmail);
+  });
+
+  it('redacts non-Stripe API keys from OCR visual hints even without a matching DOM element', () => {
+    resetTokenCounters();
+    const googleKey = 'AIzaSyAabcdefghijklmnopqrstuvwxyz012345';
+    const githubKey = 'ghp_abcdefghijklmnopqrstuvwxyz0123456789';
+    const el: RawElement = {
+      id: createElementId('canvas'),
+      tagName: 'canvas',
+      role: 'canvas',
+      ariaLabel: null,
+      innerTextCandidate: 'Chart',
+      inputType: null,
+      isEnabled: true,
+      bbox: { x: 0, y: 0, width: 200, height: 40 },
+    };
+    const scene = {
+      _isLocalOnly: true as const,
+      pageEpoch: createPageEpoch(1),
+      url: 'https://bench.example/ocr',
+      origin: 'https://bench.example',
+      title: 'Chart',
+      viewport: { width: 800, height: 600 },
+      elements: [el],
+      privacyFindings: [],
+      timestamp: Date.now(),
+    };
+    const findings = [
+      ...detectOcrTextPrivacy(googleKey, { roiId: 'roi_1', blockId: 'b1' }),
+      ...detectOcrTextPrivacy(githubKey, { roiId: 'roi_1', blockId: 'b2' }),
+    ];
+    const decisions = evaluatePrivacyPolicy(findings);
+    const safe = buildSafeContext(scene, 'Continue', decisions, new PrivateTokenVault(), createTaskId('ocr-key'), findings, {
+      visualCandidates: [
+        {
+          candidateId: 'vc_g',
+          elementId: el.id,
+          label: `Google ${googleKey}`,
+          bbox: el.bbox,
+          source: 'OCR',
+          confidence: 'HIGH',
+          pageEpoch: scene.pageEpoch,
+        },
+        {
+          candidateId: 'vc_h',
+          elementId: el.id,
+          label: `GitHub ${githubKey}`,
+          bbox: el.bbox,
+          source: 'OCR',
+          confidence: 'HIGH',
+          pageEpoch: scene.pageEpoch,
+        },
+      ],
+    });
+    const serialized = validateSafeContextEgress(safe);
+    expect(serialized).not.toContain(googleKey);
+    expect(serialized).not.toContain(githubKey);
+    expect(JSON.stringify(safe.visualHints || [])).not.toContain('AIza');
+    expect(JSON.stringify(safe.visualHints || [])).not.toContain('ghp_');
   });
 });

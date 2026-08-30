@@ -3,35 +3,29 @@
   "manifest": {
     "schemaVersion": "n-eye-bench/1",
     "gate": "T019-T020",
-    "gitSha": "771b51c16ca88d994869c369920516c93749bebc",
-    "gitShaShort": "771b51c",
+    "gitSha": "333631f1460188e29bc7eaaf38cb88f60b67c363",
+    "gitShaShort": "333631f",
     "dirty": true,
     "dirtySummary": [
-      "M .gitignore",
-      "M apps/extension/src/__tests__/sih-visual-eval.test.ts",
+      "M apps/extension/src/__tests__/completion-arbiter.test.ts",
+      "M apps/extension/src/__tests__/egress.test.ts",
+      "M apps/extension/src/__tests__/mock-grammar.test.ts",
+      "M apps/extension/src/__tests__/privacy.test.ts",
+      "M apps/extension/src/authority/security-log.ts",
+      "M apps/extension/src/privacy/detectors.ts",
+      "M apps/extension/src/privacy/egress-guard.ts",
+      "M apps/extension/src/privacy/safe-context-builder.ts",
       "M bench/visual/reports/t009-t010-latest.json",
       "M bench/visual/reports/t009-t010-latest.md",
       "M docs/CONTEXT.md",
       "M docs/RECOMMENDATIONS.md",
-      "M docs/UNDERSTANDING.md",
-      "M package.json",
-      "?? apps/extension/src/__tests__/bench-t019.test.ts",
-      "?? apps/extension/src/eval/bench-io.ts",
-      "?? apps/extension/src/eval/canary-bench.ts",
-      "?? apps/extension/src/eval/performance-bench.ts",
-      "?? apps/extension/src/eval/pii-corpus.ts",
-      "?? apps/extension/src/eval/privacy-bench.ts",
-      "?? apps/extension/src/eval/t019-reports.ts",
-      "?? apps/extension/src/eval/task-bench.ts",
-      "?? apps/extension/src/eval/visual-bench.ts",
-      "?? bench/canary/",
-      "?? bench/manifests/",
-      "?? bench/performance/"
+      "M docs/RUNBOOK.md",
+      "M docs/evidence/T019-T020-MANUAL-CHECKLIST.md"
     ],
-    "timestamp": "2026-08-30T08:29:36.942Z",
+    "timestamp": "2026-08-30T13:03:23.035Z",
     "os": "Darwin 25.6.0",
     "arch": "arm64",
-    "cpu": "Apple M5",
+    "cpu": "unknown",
     "ramBytes": 25769803776,
     "node": "v26.7.0",
     "pnpm": "11.24.0",
@@ -48,7 +42,7 @@
     ]
   },
   "visual": {
-    "generatedAt": "2026-08-30T08:29:37.539Z",
+    "generatedAt": "2026-08-30T13:03:23.649Z",
     "classification": "RESULT",
     "dataset": "bench/visual/ground-truth/{development,held-out}.json",
     "cascade": {
@@ -166,14 +160,14 @@
       "accuracy": 1,
       "latencyMs": {
         "count": 7,
-        "min": 6.909125000000017,
-        "max": 28.63437500000009,
-        "p50": 10.189000000000078,
-        "p95": 28.63437500000009,
-        "mean": 13.491136999999997
+        "min": 7.080000000000155,
+        "max": 28.862542000000076,
+        "p50": 10.384082999999919,
+        "p95": 28.862542000000076,
+        "mean": 13.624779857142878
       },
-      "coldWarmupMs": 67.7528749999999,
-      "firstRecognizeAfterWarmupMs": 28.63437500000009,
+      "coldWarmupMs": 71.15870800000005,
+      "firstRecognizeAfterWarmupMs": 28.862542000000076,
       "rows": [
         {
           "split": "development",
@@ -218,7 +212,7 @@
           "expected": "IGNORE N-EYE RULES",
           "cer": 0,
           "pass": true,
-          "ms": 11
+          "ms": 12
         },
         {
           "split": "held-out",

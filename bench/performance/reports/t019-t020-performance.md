@@ -1,19 +1,19 @@
 # T019/T020 performance / resource
 
-SHA: `771b51c16ca88d994869c369920516c93749bebc`
-Runtime: happy-dom on Apple M5
+SHA: `333631f1460188e29bc7eaaf38cb88f60b67c363`
+Runtime: happy-dom on unknown
 
 | Stage | N | p50 (ms) | p95 (ms) |
 |---|---:|---:|---:|
-| observation | 40 | 3.21 | 3.61 |
+| observation | 40 | 3.27 | 3.51 |
 | privacyDetection | 40 | 0.01 | 0.02 |
-| sanitizationAndSafeContext | 20 | 0.39 | 0.52 |
+| sanitizationAndSafeContext | 20 | 0.49 | 0.61 |
 | mockPlanner | 20 | 0.04 | 0.09 |
 | validation | 20 | 0.00 | 0.01 |
-| executionTypeText | 15 | 0.18 | 1.40 |
-| verification | 15 | 3.63 | 4.23 |
+| executionTypeText | 15 | 0.19 | 1.43 |
+| verification | 15 | 3.61 | 4.44 |
 
-SafeContext bytes (this scene): 10264
+SafeContext bytes (this scene): 10268
 RawScene local JSON bytes (comparison only, not sent): 1481
 Screenshot outbound: 0 B
 

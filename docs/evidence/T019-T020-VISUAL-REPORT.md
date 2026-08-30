@@ -1,6 +1,6 @@
 # T019/T020 visual-context
 
-SHA: `771b51c16ca88d994869c369920516c93749bebc`
+SHA: `333631f1460188e29bc7eaaf38cb88f60b67c363`
 Dataset: bench/visual/ground-truth/{development,held-out}.json
 
 | Metric | Result | N |
@@ -14,8 +14,8 @@ Dataset: bench/visual/ground-truth/{development,held-out}.json
 | Escalate | 5/7 | 7 |
 | OCR privacy F1 | 100.0% | visual canaries |
 | OCR leakCount | 0 | visual canaries |
-| OCR p50/p95 ms | 10.19 / 28.63 | 7 |
-| OCR cold warmup PROXY ms | 67.75 | 1 |
+| OCR p50/p95 ms | 10.38 / 28.86 | 7 |
+| OCR cold warmup PROXY ms | 71.16 | 1 |
 | Screenshot outbound | 0 B | — |
 | MODEL_ADMISSION | REJECTED | — |
 

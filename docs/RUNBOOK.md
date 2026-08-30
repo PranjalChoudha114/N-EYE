@@ -61,6 +61,7 @@ Chrome does **not** hot-reload this extension. Rebuilding `dist/` is necessary b
    - `chrome://extensions` version line shows `DEV • <git-short-sha>` (trailing `*` means **tracked** files have uncommitted edits; untracked files such as `scratch/` do not count)
    - Capsule footer shows the same label
    - `cat apps/extension/dist/build-identity.txt` matches
+   - **Do not diagnose current source from a screenshot whose footer is older than `git rev-parse --short HEAD`.** Rebuild, Reload on `chrome://extensions`, refresh the page, reopen the Side Panel, then confirm all three identities match. A trailing `*` means the bundle included uncommitted tracked edits at build time. Chrome does not hot-reload this extension.
 
 ### After a normal Cursor source change
 1. `pnpm build:extension` **or** keep `pnpm dev:extension` running

@@ -2,35 +2,29 @@
   "manifest": {
     "schemaVersion": "n-eye-bench/1",
     "gate": "T019-T020",
-    "gitSha": "771b51c16ca88d994869c369920516c93749bebc",
-    "gitShaShort": "771b51c",
+    "gitSha": "333631f1460188e29bc7eaaf38cb88f60b67c363",
+    "gitShaShort": "333631f",
     "dirty": true,
     "dirtySummary": [
-      "M .gitignore",
-      "M apps/extension/src/__tests__/sih-visual-eval.test.ts",
+      "M apps/extension/src/__tests__/completion-arbiter.test.ts",
+      "M apps/extension/src/__tests__/egress.test.ts",
+      "M apps/extension/src/__tests__/mock-grammar.test.ts",
+      "M apps/extension/src/__tests__/privacy.test.ts",
+      "M apps/extension/src/authority/security-log.ts",
+      "M apps/extension/src/privacy/detectors.ts",
+      "M apps/extension/src/privacy/egress-guard.ts",
+      "M apps/extension/src/privacy/safe-context-builder.ts",
       "M bench/visual/reports/t009-t010-latest.json",
       "M bench/visual/reports/t009-t010-latest.md",
       "M docs/CONTEXT.md",
       "M docs/RECOMMENDATIONS.md",
-      "M docs/UNDERSTANDING.md",
-      "M package.json",
-      "?? apps/extension/src/__tests__/bench-t019.test.ts",
-      "?? apps/extension/src/eval/bench-io.ts",
-      "?? apps/extension/src/eval/canary-bench.ts",
-      "?? apps/extension/src/eval/performance-bench.ts",
-      "?? apps/extension/src/eval/pii-corpus.ts",
-      "?? apps/extension/src/eval/privacy-bench.ts",
-      "?? apps/extension/src/eval/t019-reports.ts",
-      "?? apps/extension/src/eval/task-bench.ts",
-      "?? apps/extension/src/eval/visual-bench.ts",
-      "?? bench/canary/",
-      "?? bench/manifests/",
-      "?? bench/performance/"
+      "M docs/RUNBOOK.md",
+      "M docs/evidence/T019-T020-MANUAL-CHECKLIST.md"
     ],
-    "timestamp": "2026-08-30T08:29:36.942Z",
+    "timestamp": "2026-08-30T13:03:23.035Z",
     "os": "Darwin 25.6.0",
     "arch": "arm64",
-    "cpu": "Apple M5",
+    "cpu": "unknown",
     "ramBytes": 25769803776,
     "node": "v26.7.0",
     "pnpm": "11.24.0",
@@ -52,63 +46,63 @@
     "stages": {
       "observation": {
         "count": 40,
-        "min": 3.032624999999939,
-        "max": 3.86587499999996,
-        "p50": 3.2127910000000384,
-        "p95": 3.61424999999997,
-        "mean": 3.258021875000017
+        "min": 3.0977080000000115,
+        "max": 3.8543750000000045,
+        "p50": 3.2687089999999444,
+        "p95": 3.5100830000000087,
+        "mean": 3.3013228999999997
       },
       "privacyDetection": {
         "count": 40,
-        "min": 0.012541000000055647,
-        "max": 0.023874999999975444,
-        "p50": 0.013749999999959073,
-        "p95": 0.020332999999936874,
-        "mean": 0.014856249999991179
+        "min": 0.013374999999996362,
+        "max": 0.02391699999998309,
+        "p50": 0.013916999999992186,
+        "p95": 0.023125000000050022,
+        "mean": 0.015335499999994794
       },
       "sanitizationAndSafeContext": {
         "count": 20,
-        "min": 0.2967079999999669,
-        "max": 0.7310830000000124,
-        "p50": 0.39049999999997453,
-        "p95": 0.5176249999999527,
-        "mean": 0.3970707999999945
+        "min": 0.37420799999995324,
+        "max": 0.6997910000000047,
+        "p50": 0.4948330000000851,
+        "p95": 0.6133330000000115,
+        "mean": 0.49753114999998616
       },
       "mockPlanner": {
         "count": 20,
-        "min": 0.03058299999997871,
-        "max": 0.4759159999999838,
-        "p50": 0.036791999999991276,
-        "p95": 0.09320900000000165,
-        "mean": 0.06361659999999461
+        "min": 0.02762499999994361,
+        "max": 0.48649999999997817,
+        "p50": 0.03566699999998946,
+        "p95": 0.09245799999996507,
+        "mean": 0.06095814999999334
       },
       "validation": {
         "count": 20,
         "min": 0.0013749999999390639,
-        "max": 0.01254099999994196,
-        "p50": 0.0026669999999739957,
-        "p95": 0.009875000000079126,
-        "mean": 0.004225150000002032
+        "max": 0.011082999999985077,
+        "p50": 0.002167000000099506,
+        "p95": 0.010958999999957086,
+        "mean": 0.004004300000002558
       },
       "executionTypeText": {
         "count": 15,
-        "min": 0.16095799999993687,
-        "max": 1.404790999999932,
-        "p50": 0.17591700000002675,
-        "p95": 1.404790999999932,
-        "mean": 0.25959446666666586
+        "min": 0.16254099999991922,
+        "max": 1.4286669999999049,
+        "p50": 0.18737499999997453,
+        "p95": 1.4286669999999049,
+        "mean": 0.26933873333331726
       },
       "verification": {
         "count": 15,
-        "min": 3.4769999999999754,
-        "max": 4.232000000000085,
-        "p50": 3.62824999999998,
-        "p95": 4.232000000000085,
-        "mean": 3.6634112000000036
+        "min": 3.52479100000005,
+        "max": 4.437874999999963,
+        "p50": 3.6121669999999995,
+        "p95": 4.437874999999963,
+        "mean": 3.704911066666667
       }
     },
     "payload": {
-      "safeContextBytes": 10264,
+      "safeContextBytes": 10268,
       "screenshotOutboundBytes": 0,
       "observedControls": 81
     },
@@ -187,7 +181,7 @@
           "bytes": 515
         }
       ],
-      "memoryProxyBytes": 64500672,
+      "memoryProxyBytes": 67512712,
       "memoryProxyLabel": "PROXY: Node process.memoryUsage().heapUsed after bench, not Chrome extension RSS"
     }
   },

@@ -32,6 +32,30 @@ describe('Local completion arbiter', () => {
     expect(decision.alreadySatisfied).toBe(false);
   });
 
+  it('treats naturalistic Search For X In Y Search Bar as search-submit, not type-only complete', () => {
+    const goal = 'Search For OpenAi In Youtube Search Bar';
+    const typedOnly = arbitratePlannerComplete({
+      goal,
+      verifiedCount: 1,
+      lastVerifiedType: 'TYPE_TEXT',
+      lastFieldState: 'MATCHED',
+      verifiedClick: false,
+    });
+    expect(typedOnly.phase).toBe('ASK_USER');
+    expect(typedOnly.kind).toBe('PARTIAL');
+    expect(typedOnly.phase).not.toBe('COMPLETED');
+
+    const typedAndClicked = arbitratePlannerComplete({
+      goal,
+      verifiedCount: 2,
+      lastVerifiedType: 'CLICK',
+      lastFieldState: 'MATCHED',
+      verifiedClick: true,
+    });
+    expect(typedAndClicked.phase).toBe('COMPLETED');
+    expect(typedAndClicked.kind).toBe('VERIFIED_SEQUENCE');
+  });
+
   it('treats search-for as partial until a verified click exists', () => {
     const decision = arbitratePlannerComplete({
       goal: 'Search for OpenAI',

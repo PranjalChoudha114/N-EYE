@@ -32,6 +32,10 @@ describe('Mock bounded grammar', () => {
     expect(parseMockGoal('select India')).toMatchObject({ kind: 'select', option: 'India' });
     expect(parseMockGoal('scroll down')).toMatchObject({ kind: 'scroll', direction: 'down' });
     expect(parseMockGoal('play the video')).toEqual({ kind: 'unsupported' });
+    expect(parseMockGoal('Search For OpenAi In Youtube Search Bar')).toMatchObject({
+      kind: 'type_text',
+      requiresSearchSubmit: true,
+    });
   });
 
   it('does not treat unknown goals as COMPLETE', async () => {
