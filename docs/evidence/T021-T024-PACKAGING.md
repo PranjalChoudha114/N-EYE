@@ -22,10 +22,12 @@ CSP `extension_pages`: `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`
 ```
 pnpm install
 python3 -m venv .venv
-.venv/bin/pip install -e apps/planner-api
+.venv/bin/pip install -e "apps/planner-api[dev]"
 pnpm test
 pnpm build:extension
 ```
+
+`pnpm test` now builds `@n-eye/protocol` first (protocol `dist/` is not in git).
 
 Live Gemini is optional. Mock needs no key.
 

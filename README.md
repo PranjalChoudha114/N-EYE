@@ -40,7 +40,11 @@ See the [Operational Runbook](docs/RUNBOOK.md) for full instructions.
 # Install Node dependencies
 pnpm install
 
-# Build all packages and the extension
+# Python gateway (includes pytest)
+python3 -m venv .venv
+.venv/bin/pip install -e "apps/planner-api[dev]"
+
+# Build protocol + extension (required before tests: protocol dist is not in git)
 pnpm build
 ```
 

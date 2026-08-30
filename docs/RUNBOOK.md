@@ -14,9 +14,7 @@ pnpm install
 
 # Setup Python virtual environment and install planner API dependencies
 python3 -m venv .venv
-.venv/bin/pip install -e apps/planner-api
-# or
-.venv/bin/pip install fastapi uvicorn pydantic httpx pytest pytest-asyncio python-dotenv
+.venv/bin/pip install -e "apps/planner-api[dev]"
 ```
 
 ### Running the Planner API Gateway
