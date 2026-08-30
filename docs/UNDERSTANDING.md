@@ -116,16 +116,17 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 
 ---
 
-## 6. Current Implementation State (Gate T017/T018)
+## 6. Current Implementation State (Gate T019/T020)
 
 - **Protocol Layer (`packages/protocol`)**: Branded types, Unicode scalar sanitization, recovery taxonomy, `ExecutionEvidence`, perception fallbacks including `CANCELLED`, content-script handshake.
 - **Chrome MV3 Shell (`apps/extension`)**: Content script remains a self-contained IIFE (top frame only). Observer walks same-origin `iframe.contentDocument`. Bounded planner retry/cancel. Hydrate cannot resurrect confirmation. Execute port preserves ASK_USER evidence.
-- **Product UI**: Two surfaces (ADR-0010). Overlay + Side Panel architecture unchanged. New truthful phases: retrying, provider unavailable, OCR unavailable, ASK_USER (not Confirm).
+- **Product UI**: Two surfaces (ADR-0010). Overlay + Side Panel architecture, logo, tabs, and theme unchanged. Compact copy is human-first; technical terms stay on Evidence / View technical details. ASK_USER is rewrite + Continue/Cancel (clarification). Confirmation remains Allow once / Don't allow (authorization).
 - **Perception**: Adaptive OCR/ROI unchanged. Capture/OCR failure never sends rasters; visual-required + insufficient structure → OCR_UNAVAILABLE.
-- **Privacy Engine**: Detectors, token vault, SafeContext builder, Egress Guard (Unicode sanitize before serialize; canary errors do not echo secrets).
+- **Privacy Engine**: Detectors, token vault, SafeContext builder, Egress Guard. NEVER_SEND spans (API keys, JWTs) are stripped from `sanitizedGoal` and public labels, not only blocked at egress.
 - **Local Action Authority**: Confirmation capability (ADR-0011). Native SELECT, bounded SCROLL, TYPE_TOKEN/TYPE_TEXT resulting-state verification. Local completion arbiter: planner COMPLETE ≠ task success. HIGH + unverified → no replay (ADR-0012).
 - **Planner gateway**: Unicode sanitize before provider encode; classified 429/404/503; Gemini key in `x-goog-api-key` header; prompt contract `n-eye-planner-policy/3`.
-- **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T017-T018-MANUAL-CHECKLIST.md`.
+- **Formal SIH measurement**: Labeled privacy corpus + visual/performance/task/canary benches. Machine-readable JSON under `bench/`. See `docs/evidence/T019-T020-MEASUREMENT-REPORT.md`.
+- **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T019-T020-MANUAL-CHECKLIST.md`.
 - **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008.
-- **Next Eligible Milestone**: Gate 019/020 — formal SIH measurement. Do not start until explicitly approved.
+- **Next Eligible Milestone**: Gate 021/022 — hidden generalization + clean-profile real Chrome E2E + reproducibility/release engineering. Do not start until explicitly approved.
 

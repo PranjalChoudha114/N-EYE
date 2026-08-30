@@ -1,0 +1,209 @@
+{
+  "manifest": {
+    "schemaVersion": "n-eye-bench/1",
+    "gate": "T019-T020",
+    "gitSha": "771b51c16ca88d994869c369920516c93749bebc",
+    "gitShaShort": "771b51c",
+    "dirty": true,
+    "dirtySummary": [
+      "M .gitignore",
+      "M apps/extension/src/__tests__/sih-visual-eval.test.ts",
+      "M bench/visual/reports/t009-t010-latest.json",
+      "M bench/visual/reports/t009-t010-latest.md",
+      "M docs/CONTEXT.md",
+      "M docs/RECOMMENDATIONS.md",
+      "M docs/UNDERSTANDING.md",
+      "M package.json",
+      "?? apps/extension/src/__tests__/bench-t019.test.ts",
+      "?? apps/extension/src/eval/bench-io.ts",
+      "?? apps/extension/src/eval/canary-bench.ts",
+      "?? apps/extension/src/eval/performance-bench.ts",
+      "?? apps/extension/src/eval/pii-corpus.ts",
+      "?? apps/extension/src/eval/privacy-bench.ts",
+      "?? apps/extension/src/eval/t019-reports.ts",
+      "?? apps/extension/src/eval/task-bench.ts",
+      "?? apps/extension/src/eval/visual-bench.ts",
+      "?? bench/canary/",
+      "?? bench/manifests/",
+      "?? bench/performance/"
+    ],
+    "timestamp": "2026-08-30T08:29:36.942Z",
+    "os": "Darwin 25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "ramBytes": 25769803776,
+    "node": "v26.7.0",
+    "pnpm": "11.24.0",
+    "python": "Python 3.14.6",
+    "browser": "happy-dom (automated) + Chrome unpacked MANUAL for product UI",
+    "ocrEngine": "tesseract.js@7",
+    "providerMode": "MOCK for task/planner benches; live Gemini not required",
+    "notes": [
+      "No personal device identifiers beyond CPU model / RAM class.",
+      "home redacted: [present]",
+      "macOS productVersion: 26.6",
+      "T009/T010 reports are historical and are not this gate’s RESULT files.",
+      "Chrome version is MANUAL / UNVERIFIED in this automated pack."
+    ]
+  },
+  "sanitization": {
+    "n": 41,
+    "correct": 41,
+    "miss": 0,
+    "wrong": 0,
+    "overRedaction": 0,
+    "residualLeak": 0,
+    "utilityPreserved": 54
+  },
+  "auth": {
+    "n": 24,
+    "policyCorrect": 24,
+    "residualLeak": 0,
+    "rows": [
+      {
+        "id": "pw-type",
+        "className": "SECRET_PASSWORD",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "pw-label",
+        "className": "SECRET_PASSWORD",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "pw-passcode",
+        "className": "SECRET_PASSWORD",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "pw-canary",
+        "className": "SECRET_PASSWORD",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "pw-goal",
+        "className": "SECRET_PASSWORD",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "pw-ocr",
+        "className": "SECRET_PASSWORD",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "otp-label",
+        "className": "SECRET_OTP",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "otp-onetime",
+        "className": "SECRET_OTP",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "otp-2fa",
+        "className": "SECRET_OTP",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "otp-verify",
+        "className": "SECRET_OTP",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "otp-canary",
+        "className": "SECRET_OTP",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "api-stripe",
+        "className": "SECRET_API_KEY",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "api-akia",
+        "className": "SECRET_API_KEY",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "api-google",
+        "className": "SECRET_API_KEY",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "api-bearer",
+        "className": "SECRET_API_KEY",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "api-canary",
+        "className": "SECRET_API_KEY",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "api-goal",
+        "className": "SECRET_API_KEY",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "jwt-label",
+        "className": "SECRET_AUTH_TOKEN",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "jwt-ocr",
+        "className": "SECRET_AUTH_TOKEN",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "session-label",
+        "className": "SECRET_SESSION",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "session-auth",
+        "className": "SECRET_SESSION",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "session-canary",
+        "className": "SECRET_SESSION",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "session-ocr-word",
+        "className": "SECRET_SESSION",
+        "policyOk": true,
+        "leaked": false
+      },
+      {
+        "id": "mixed-email-pw-goal",
+        "className": "SECRET_PASSWORD",
+        "policyOk": true,
+        "leaked": false
+      }
+    ]
+  }
+}

@@ -25,6 +25,9 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-019 | Confirmation capability (not boolean) | **Adopted** (ADR-0011) | Authority | T015/T016: single-use grant bound to action/context; post-approval revalidation. |
 | REC-020 | Do not put confirmationId in overlay ProductState | **Proposed** | Overlay / Zone 1 | Overlay paint currently includes `confirmationId`. Page world cannot use it. A modified content script could. Prefer owner-document-only confirm if a later hardening pass is opened. |
 | REC-021 | Local completion arbiter | **Adopted** (T017/T018 repair) | Trust loop | Planner COMPLETE is advice. Product Completed requires verified local evidence or already-satisfied live field proof. |
+| REC-022 | Unicode-aware email local-parts | **Proposed** | Privacy detectors | ASCII email regex can match a suffix of `café-bench@example.com`. Full Unicode local-parts are not first-class. |
+| REC-023 | ASK_USER candidate picker | **Deferred** | Product UX | T019 uses rewrite+Continue. Local opaque candidate choice with fresh re-observation was not built. Do not let page HTML define options. |
+| REC-024 | Chrome E2E SIH measurement | **Proposed** (T021/T022) | Evaluation | T019 latency/resource is Node/happy-dom RESULT plus OCR on fixtures. Formal Chrome RSS/CPU and live HTTP canary remain UNVERIFIED. |
 
 ## 2. REC-016 — Third-Party Network Privacy Guard (not implemented)
 

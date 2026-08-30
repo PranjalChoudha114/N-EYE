@@ -34,14 +34,14 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T017/T018: runtime resilience + failure/recovery + execution completion. T015/T016 authority preserved. |
+| **Current Phase** | T019/T020: human-first ASK_USER + formal SIH measurement. T017/T018 completion arbiter preserved. |
 | **Branch** | `main` |
-| **HEAD Commit** | T017/T018 local-completion repair on parent `3cdd2fd`. See `git log -1` / §61a. |
-| **Latest Verified Gate** | Gate 017/018 repair: local completion arbiter + TYPE_TEXT resulting-state. Chrome E2E MANUAL after rebuild. |
-| **Next Eligible Gate** | Gate 019/020: formal SIH measurement (PII P/R/F1, sanitization, canary leakage, visual-context, latency/resource). |
-| **SIH Prototype Completion** | ~88% (planning estimate; recovery exists; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
-| **Core Architecture Completion** | ~92% (planning estimate; SELECT/SCROLL executors implemented; formal benches remain) |
-| **Company-Product Completion** | ~24% (planning estimate) |
+| **HEAD Commit** | See `git log -1`. Incoming repair was `8024af6`. T019/T020 commits follow. |
+| **Latest Verified Gate** | Gate 019/020: ASK_USER recovery + human-first copy + formal measurement pack. Chrome UI MANUAL. |
+| **Next Eligible Gate** | Gate 021/022: hidden generalization + clean-profile real Chrome E2E + reproducibility/release engineering. |
+| **SIH Prototype Completion** | ~92% (planning estimate; formal P/R/F1 pack exists; Chrome E2E and hidden-site remain) |
+| **Core Architecture Completion** | ~93% (planning estimate; measurement harness exists; hidden generalization remains) |
+| **Company-Product Completion** | ~26% (planning estimate) |
 
 ---
 
@@ -614,9 +614,10 @@ Confirmation is a `ConfirmationBroker` capability (ADR-0011): bound to task, ori
 
 Primary surfaces are the **overlay quick card** (page-isolated Shadow DOM) and the **Side Panel Trust Center**. Compact overlay: status, site, Run/Cancel, Mock/Remote, More. Side Panel: Activity / Privacy / Action / Evidence. Canonical mark is upper-left. Theme control is upper-right (`dark` / `light` / `system`, Side Panel `localStorage` only; overlay never writes page `localStorage`).
 
-- **Compact:** site hostname, human status, optional privacy facts, Run/Cancel, Privacy Receipt after a real protected event
-- **Not compact by default:** PageEpoch, ROI, observed controls, request IDs, SafeContext JSON, seven-box pipeline — those are Details/Evidence
-- **Confirmation:** HIGH-risk `<dialog>` still required; presentation only
+- **Compact:** site hostname, human status, optional privacy facts, Run/Cancel (Continue/Cancel when ASK_USER), Privacy Receipt after a real protected event
+- **Not compact by default:** PageEpoch, ROI, observed controls, request IDs, SafeContext JSON, seven-box pipeline — those are Details/Evidence / View technical details
+- **ASK_USER:** clarification — rewrite the request, then Continue (fresh start). Not Allow/Deny.
+- **Confirmation:** HIGH-risk `<dialog>` Allow once / Don’t allow. Bound capability. Never shown for ASK_USER.
 - **Toasts:** PROTECTED / APPROVAL / BLOCKED / COMPLETED / DEGRADED — not every observation
 - **Provider copy:** gateway reachable ≠ “Gemini online”. Last plan metadata is shown after a real plan.
 - **More / Details:** opens the Chrome Side Panel. Overlay close does not cancel the loop. Closing the Side Panel during a task cancels (T011/T012). See ADR-0010.
@@ -698,23 +699,26 @@ Recorded from Cursor Genesis verification (2026-08-29, this-run). All figures ar
 
 ## 31. Current Fresh Test Results
 
-Run at T015/T016 (2026-08-30), this revision:
+Run at T019/T020 (2026-08-30), this revision:
 
 ```
-@n-eye/protocol:  16 passed (3 files)
-@n-eye/extension: 222 passed (49 files)
-apps/planner-api: 25 passed, 1 skipped (live Gemini; prompt canary assertions ran before skip)
+@n-eye/protocol:  27 passed (4 files)
+@n-eye/extension: 293 passed (62 files)
+apps/planner-api: 40 passed
 ─────────────────────────────────────
-TOTAL:            263 passed, 0 failed, 1 skipped (environment quota)
+TOTAL:            360 passed, 0 failed
 ```
 
-T009–T014 behavioral tests did not regress.
+Live Gemini extension integration skipped internally (gateway offline at 127.0.0.1:8000). That test still reports as passed because it skips.
+
+T009–T018 behavioral tests did not regress. Completion arbiter tests remain green.
 
 - **Lint**: 0 errors, 1 warning (console statement in `real-gemini-integration.test.ts`) — same baseline
 - **Typecheck**: 0 errors
-- **Build**: `content.js` remains a self-contained IIFE. Identity `DEV • 2d548b9*` while the working tree is dirty. Rebuild after commit.
-- **Chrome unpacked security E2E**: UNVERIFIED — MANUAL (`docs/evidence/T015-T016-MANUAL-CHECKLIST.md`)
-- **Test environment**: happy-dom plus node for Tesseract fixtures
+- **Build**: Vite production build ~214 ms. `content.js` remains a self-contained IIFE. Rebuild after commit for identity.
+- **Chrome unpacked UI E2E**: UNVERIFIED — MANUAL (`docs/evidence/T019-T020-MANUAL-CHECKLIST.md`)
+- **Test environment**: happy-dom plus node for Tesseract fixtures and T019 visual/OCR benches
+- **Formal measurement**: `pnpm bench:all` → `docs/evidence/T019-T020-MEASUREMENT-REPORT.md`
 
 Real OCR DEVELOPMENT MEASUREMENT: `ocr-fixture.test.ts` / `ocr-injection-fixture.test.ts`. Not a SIH benchmark.
 
@@ -1011,9 +1015,9 @@ These are **planning estimates**, not scientific metrics:
 
 | Scope | Estimate | Basis |
 |---|---|---|
-| **SIH Prototype** | ~88% | Recovery + SELECT/SCROLL exist. Formal full-weight P/R/F1 and resource benches remain. Real Chrome UI is MANUAL. |
-| **Core Architecture** | ~92% | Six trust zones + adaptive perception + bounded recovery. Formal benches remain. |
-| **Company Product** | ~24% | Prototype vertical slice. No multi-browser, enclaves, multi-tenant gateway, or compliance stack. |
+| **SIH Prototype** | ~92% | Formal P/R/F1 + sanitization + canary + visual + latency pack exists. Chrome E2E and hidden-site remain. |
+| **Core Architecture** | ~93% | Measurement harness exists. Hidden generalization and release packaging remain. |
+| **Company Product** | ~26% | Prototype vertical slice. No multi-browser, enclaves, multi-tenant gateway, or compliance stack. |
 
 ---
 
@@ -1048,11 +1052,13 @@ NEXT (Gate 019/020 — recommended):
 
 ---
 
-## 48. NEXT GATE — T019/T020
+## 48. NEXT GATE — T021/T022
 
-**Recommended:** formal SIH measurement (PII P/R/F1, sanitization/redaction, canary leakage, visual-context accuracy, latency/resource). Do not mix hidden-site generalization or release packaging into that gate.
+T019/T020 is closed in source (human-first ASK_USER + formal measurement pack). Chrome unpacked UI remains MANUAL.
 
-T017/T018 closed the recovery campaign on a deterministic corpus. Chrome unpacked runtime E2E is MANUAL. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
+**Recommended:** hidden-site generalization + clean-profile real Chrome E2E + reproducibility/release engineering. Do not mix independent red-team freeze (T023/T024) into that gate.
+
+Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
 
 ---
 
@@ -1262,7 +1268,7 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Not claimed:** “prompt-injection proof,” formal PII P/R/F1, or live-Gemini obedience.
 
-**Next eligible combined gate:** T019/T020 formal SIH measurement.
+**Next eligible combined gate:** T021/T022 hidden generalization + real Chrome E2E.
 
 ---
 
@@ -1293,7 +1299,7 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Not claimed:** formal SIH P/R/F1, live YouTube Gemini task success, real MV3 service-worker kill, universal site guarantee.
 
-**Next eligible combined gate:** T019/T020 Formal SIH Measurement.
+**Next eligible combined gate (at T017/T018 seal):** T019/T020 Formal SIH Measurement — now executed; see §62.
 
 ---
 
@@ -1310,7 +1316,32 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Repair:** bounded Mock grammar; local completion arbiter; native value setter + post-observe field probe; searchbox `inputType`; truthful ASK_USER when unproven.
 
-**Do not start T019/T020 until a human reloads the rebuilt unpacked extension and confirms YouTube no longer shows false Completed.**
+**Human Chrome (this gate's incoming):** YouTube “search/type OpenAI” after reload executed correctly. False-COMPLETE for that path is considered closed. T019/T020 proceeded.
+
+---
+
+## 62. T019/T020 Human-first product + formal SIH measurement (2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED. Formal measurement pack: **MEASURED** (Node/happy-dom + fixture OCR). Chrome unpacked UI for ASK_USER/copy: **UNVERIFIED** (`docs/evidence/T019-T020-MANUAL-CHECKLIST.md`).
+
+**Incoming HEAD:** `8024af6` (`fix(runtime): require local proof before task completion`), 2 commits ahead of `origin/main` (`ea96f04`). Not pushed.
+
+**Product:**
+- ASK_USER is rewrite + Continue/Cancel. Not confirmation. Continue is a fresh `start()`.
+- Compact copy is human-first. Evidence keeps technical terms.
+- Overlay/Side Panel architecture, logo, tabs, theme unchanged. CSS: `.nq-hint`, `.n-receipt h4` only.
+
+**P0 found by the privacy bench and repaired:** NEVER_SEND API keys/JWTs could remain in `sanitizedGoal` / labels when not bound to the same element id. Span + regex redaction added. Regression in `privacy.test.ts`.
+
+**Measurement commands:** `pnpm bench:privacy` / `bench:visual` / `bench:performance` / `bench:all`
+
+**Evidence:** `docs/evidence/T019-T020-MEASUREMENT-REPORT.md`, scorecard, claims matrix, `bench/**` JSON.
+
+**Fresh automated counts:** protocol 27, extension 293, planner-api 40. TOTAL 360 passed. Lint 0 errors / 1 pre-existing warning. Typecheck pass. Extension build pass.
+
+**Not claimed:** weighted SIH winner score, Chrome E2E latency, hidden-site generalization, universal zero leakage, PII_NAME/ADDRESS/ACCOUNT detection.
+
+**Next eligible combined gate:** T021/T022 Hidden Generalization + Full Real-Chrome E2E + Reproducibility/Release Engineering.
 
 
 

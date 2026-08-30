@@ -1,0 +1,983 @@
+{
+  "manifest": {
+    "schemaVersion": "n-eye-bench/1",
+    "gate": "T019-T020",
+    "gitSha": "771b51c16ca88d994869c369920516c93749bebc",
+    "gitShaShort": "771b51c",
+    "dirty": true,
+    "dirtySummary": [
+      "M .gitignore",
+      "M apps/extension/src/__tests__/sih-visual-eval.test.ts",
+      "M bench/visual/reports/t009-t010-latest.json",
+      "M bench/visual/reports/t009-t010-latest.md",
+      "M docs/CONTEXT.md",
+      "M docs/RECOMMENDATIONS.md",
+      "M docs/UNDERSTANDING.md",
+      "M package.json",
+      "?? apps/extension/src/__tests__/bench-t019.test.ts",
+      "?? apps/extension/src/eval/bench-io.ts",
+      "?? apps/extension/src/eval/canary-bench.ts",
+      "?? apps/extension/src/eval/performance-bench.ts",
+      "?? apps/extension/src/eval/pii-corpus.ts",
+      "?? apps/extension/src/eval/privacy-bench.ts",
+      "?? apps/extension/src/eval/t019-reports.ts",
+      "?? apps/extension/src/eval/task-bench.ts",
+      "?? apps/extension/src/eval/visual-bench.ts",
+      "?? bench/canary/",
+      "?? bench/manifests/",
+      "?? bench/performance/"
+    ],
+    "timestamp": "2026-08-30T08:29:36.942Z",
+    "os": "Darwin 25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "ramBytes": 25769803776,
+    "node": "v26.7.0",
+    "pnpm": "11.24.0",
+    "python": "Python 3.14.6",
+    "browser": "happy-dom (automated) + Chrome unpacked MANUAL for product UI",
+    "ocrEngine": "tesseract.js@7",
+    "providerMode": "MOCK for task/planner benches; live Gemini not required",
+    "notes": [
+      "No personal device identifiers beyond CPU model / RAM class.",
+      "home redacted: [present]",
+      "macOS productVersion: 26.6",
+      "T009/T010 reports are historical and are not this gate’s RESULT files.",
+      "Chrome version is MANUAL / UNVERIFIED in this automated pack."
+    ]
+  },
+  "privacy": {
+    "datasetVersion": "t019-pii-corpus.v1",
+    "datasetHash": "765fbc9eb89fde53",
+    "n": 55,
+    "classes": [
+      {
+        "className": "PII_EMAIL",
+        "nPos": 10,
+        "tp": 10,
+        "fp": 0,
+        "fn": 0,
+        "tn": 45,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "className": "PII_PHONE",
+        "nPos": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "className": "SECRET_PASSWORD",
+        "nPos": 7,
+        "tp": 7,
+        "fp": 0,
+        "fn": 0,
+        "tn": 48,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "className": "SECRET_OTP",
+        "nPos": 5,
+        "tp": 5,
+        "fp": 0,
+        "fn": 0,
+        "tn": 50,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "className": "SECRET_API_KEY",
+        "nPos": 6,
+        "tp": 6,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "className": "SECRET_AUTH_TOKEN",
+        "nPos": 2,
+        "tp": 2,
+        "fp": 0,
+        "fn": 0,
+        "tn": 53,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      {
+        "className": "SECRET_SESSION",
+        "nPos": 4,
+        "tp": 4,
+        "fp": 0,
+        "fn": 0,
+        "tn": 51,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      }
+    ],
+    "micro": {
+      "tp": 40,
+      "fp": 0,
+      "fn": 0,
+      "precision": 1,
+      "recall": 1,
+      "f1": 1
+    },
+    "authNeverSend": {
+      "n": 24,
+      "policyCorrect": 24,
+      "residualLeak": 0,
+      "rows": [
+        {
+          "id": "pw-type",
+          "className": "SECRET_PASSWORD",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "pw-label",
+          "className": "SECRET_PASSWORD",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "pw-passcode",
+          "className": "SECRET_PASSWORD",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "pw-canary",
+          "className": "SECRET_PASSWORD",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "pw-goal",
+          "className": "SECRET_PASSWORD",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "pw-ocr",
+          "className": "SECRET_PASSWORD",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "otp-label",
+          "className": "SECRET_OTP",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "otp-onetime",
+          "className": "SECRET_OTP",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "otp-2fa",
+          "className": "SECRET_OTP",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "otp-verify",
+          "className": "SECRET_OTP",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "otp-canary",
+          "className": "SECRET_OTP",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "api-stripe",
+          "className": "SECRET_API_KEY",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "api-akia",
+          "className": "SECRET_API_KEY",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "api-google",
+          "className": "SECRET_API_KEY",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "api-bearer",
+          "className": "SECRET_API_KEY",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "api-canary",
+          "className": "SECRET_API_KEY",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "api-goal",
+          "className": "SECRET_API_KEY",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "jwt-label",
+          "className": "SECRET_AUTH_TOKEN",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "jwt-ocr",
+          "className": "SECRET_AUTH_TOKEN",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "session-label",
+          "className": "SECRET_SESSION",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "session-auth",
+          "className": "SECRET_SESSION",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "session-canary",
+          "className": "SECRET_SESSION",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "session-ocr-word",
+          "className": "SECRET_SESSION",
+          "policyOk": true,
+          "leaked": false
+        },
+        {
+          "id": "mixed-email-pw-goal",
+          "className": "SECRET_PASSWORD",
+          "policyOk": true,
+          "leaked": false
+        }
+      ]
+    },
+    "sanitization": {
+      "n": 41,
+      "correct": 41,
+      "miss": 0,
+      "wrong": 0,
+      "overRedaction": 0,
+      "residualLeak": 0,
+      "utilityPreserved": 54
+    },
+    "rows": [
+      {
+        "id": "email-type",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 395
+      },
+      {
+        "id": "email-regex",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 542
+      },
+      {
+        "id": "email-aria",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 541
+      },
+      {
+        "id": "email-goal",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 536
+      },
+      {
+        "id": "email-ocr",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 543
+      },
+      {
+        "id": "email-punct",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 542
+      },
+      {
+        "id": "email-subdomain",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 546
+      },
+      {
+        "id": "email-canary",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 543
+      },
+      {
+        "id": "email-neg-at",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 407
+      },
+      {
+        "id": "email-neg-github",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 408
+      },
+      {
+        "id": "email-neg-notld",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 414
+      },
+      {
+        "id": "email-neg-button",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 401
+      },
+      {
+        "id": "phone-type",
+        "expected": [
+          "PII_PHONE"
+        ],
+        "predicted": [
+          "PII_PHONE"
+        ],
+        "decisions": [
+          "PII_PHONE:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 394
+      },
+      {
+        "id": "phone-us",
+        "expected": [
+          "PII_PHONE"
+        ],
+        "predicted": [
+          "PII_PHONE"
+        ],
+        "decisions": [
+          "PII_PHONE:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 540
+      },
+      {
+        "id": "phone-parens",
+        "expected": [
+          "PII_PHONE"
+        ],
+        "predicted": [
+          "PII_PHONE"
+        ],
+        "decisions": [
+          "PII_PHONE:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 544
+      },
+      {
+        "id": "phone-plus",
+        "expected": [
+          "PII_PHONE"
+        ],
+        "predicted": [
+          "PII_PHONE"
+        ],
+        "decisions": [
+          "PII_PHONE:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 542
+      },
+      {
+        "id": "phone-goal",
+        "expected": [
+          "PII_PHONE"
+        ],
+        "predicted": [
+          "PII_PHONE"
+        ],
+        "decisions": [
+          "PII_PHONE:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 553
+      },
+      {
+        "id": "phone-ocr",
+        "expected": [
+          "PII_PHONE"
+        ],
+        "predicted": [
+          "PII_PHONE"
+        ],
+        "decisions": [
+          "PII_PHONE:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 537
+      },
+      {
+        "id": "phone-neg-issue",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 401
+      },
+      {
+        "id": "phone-neg-year",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 405
+      },
+      {
+        "id": "phone-neg-semver",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 399
+      },
+      {
+        "id": "phone-neg-canary-skip",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 430
+      },
+      {
+        "id": "pw-type",
+        "expected": [
+          "SECRET_PASSWORD"
+        ],
+        "predicted": [
+          "SECRET_PASSWORD"
+        ],
+        "decisions": [
+          "SECRET_PASSWORD:NEVER_SEND",
+          "SECRET_PASSWORD:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 396
+      },
+      {
+        "id": "pw-label",
+        "expected": [
+          "SECRET_PASSWORD"
+        ],
+        "predicted": [
+          "SECRET_PASSWORD"
+        ],
+        "decisions": [
+          "SECRET_PASSWORD:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 397
+      },
+      {
+        "id": "pw-passcode",
+        "expected": [
+          "SECRET_PASSWORD"
+        ],
+        "predicted": [
+          "SECRET_PASSWORD"
+        ],
+        "decisions": [
+          "SECRET_PASSWORD:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 400
+      },
+      {
+        "id": "pw-canary",
+        "expected": [
+          "SECRET_PASSWORD"
+        ],
+        "predicted": [
+          "SECRET_PASSWORD"
+        ],
+        "decisions": [
+          "SECRET_PASSWORD:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 398
+      },
+      {
+        "id": "pw-goal",
+        "expected": [
+          "SECRET_PASSWORD"
+        ],
+        "predicted": [
+          "SECRET_PASSWORD"
+        ],
+        "decisions": [
+          "SECRET_PASSWORD:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 413
+      },
+      {
+        "id": "pw-ocr",
+        "expected": [
+          "SECRET_PASSWORD"
+        ],
+        "predicted": [
+          "SECRET_PASSWORD"
+        ],
+        "decisions": [
+          "SECRET_PASSWORD:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 383
+      },
+      {
+        "id": "otp-label",
+        "expected": [
+          "SECRET_OTP"
+        ],
+        "predicted": [
+          "SECRET_OTP"
+        ],
+        "decisions": [
+          "SECRET_OTP:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 398
+      },
+      {
+        "id": "otp-onetime",
+        "expected": [
+          "SECRET_OTP"
+        ],
+        "predicted": [
+          "SECRET_OTP"
+        ],
+        "decisions": [
+          "SECRET_OTP:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 400
+      },
+      {
+        "id": "otp-2fa",
+        "expected": [
+          "SECRET_OTP"
+        ],
+        "predicted": [
+          "SECRET_OTP"
+        ],
+        "decisions": [
+          "SECRET_OTP:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 396
+      },
+      {
+        "id": "otp-verify",
+        "expected": [
+          "SECRET_OTP"
+        ],
+        "predicted": [
+          "SECRET_OTP"
+        ],
+        "decisions": [
+          "SECRET_OTP:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 399
+      },
+      {
+        "id": "otp-canary",
+        "expected": [
+          "SECRET_OTP"
+        ],
+        "predicted": [
+          "SECRET_OTP"
+        ],
+        "decisions": [
+          "SECRET_OTP:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 404
+      },
+      {
+        "id": "api-stripe",
+        "expected": [
+          "SECRET_API_KEY"
+        ],
+        "predicted": [
+          "SECRET_API_KEY"
+        ],
+        "decisions": [
+          "SECRET_API_KEY:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 399
+      },
+      {
+        "id": "api-akia",
+        "expected": [
+          "SECRET_API_KEY"
+        ],
+        "predicted": [
+          "SECRET_API_KEY"
+        ],
+        "decisions": [
+          "SECRET_API_KEY:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 397
+      },
+      {
+        "id": "api-google",
+        "expected": [
+          "SECRET_API_KEY"
+        ],
+        "predicted": [
+          "SECRET_API_KEY"
+        ],
+        "decisions": [
+          "SECRET_API_KEY:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 399
+      },
+      {
+        "id": "api-bearer",
+        "expected": [
+          "SECRET_API_KEY"
+        ],
+        "predicted": [
+          "SECRET_API_KEY"
+        ],
+        "decisions": [
+          "SECRET_API_KEY:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 399
+      },
+      {
+        "id": "api-canary",
+        "expected": [
+          "SECRET_API_KEY"
+        ],
+        "predicted": [
+          "SECRET_API_KEY"
+        ],
+        "decisions": [
+          "SECRET_API_KEY:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 404
+      },
+      {
+        "id": "api-goal",
+        "expected": [
+          "SECRET_API_KEY"
+        ],
+        "predicted": [
+          "SECRET_API_KEY"
+        ],
+        "decisions": [
+          "SECRET_API_KEY:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 398
+      },
+      {
+        "id": "jwt-label",
+        "expected": [
+          "SECRET_AUTH_TOKEN"
+        ],
+        "predicted": [
+          "SECRET_AUTH_TOKEN"
+        ],
+        "decisions": [
+          "SECRET_AUTH_TOKEN:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 398
+      },
+      {
+        "id": "jwt-ocr",
+        "expected": [
+          "SECRET_AUTH_TOKEN"
+        ],
+        "predicted": [
+          "SECRET_AUTH_TOKEN"
+        ],
+        "decisions": [
+          "SECRET_AUTH_TOKEN:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 389
+      },
+      {
+        "id": "session-label",
+        "expected": [
+          "SECRET_SESSION"
+        ],
+        "predicted": [
+          "SECRET_SESSION"
+        ],
+        "decisions": [
+          "SECRET_SESSION:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 402
+      },
+      {
+        "id": "session-auth",
+        "expected": [
+          "SECRET_SESSION"
+        ],
+        "predicted": [
+          "SECRET_SESSION"
+        ],
+        "decisions": [
+          "SECRET_SESSION:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 401
+      },
+      {
+        "id": "session-canary",
+        "expected": [
+          "SECRET_SESSION"
+        ],
+        "predicted": [
+          "SECRET_SESSION"
+        ],
+        "decisions": [
+          "SECRET_SESSION:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 408
+      },
+      {
+        "id": "session-ocr-word",
+        "expected": [
+          "SECRET_SESSION"
+        ],
+        "predicted": [
+          "SECRET_SESSION"
+        ],
+        "decisions": [
+          "SECRET_SESSION:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 413
+      },
+      {
+        "id": "pub-submit",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 405
+      },
+      {
+        "id": "pub-search",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 393
+      },
+      {
+        "id": "pub-nav",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 401
+      },
+      {
+        "id": "lookalike-user",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 414
+      },
+      {
+        "id": "lookalike-keyish",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 406
+      },
+      {
+        "id": "unicode-email",
+        "expected": [
+          "PII_EMAIL"
+        ],
+        "predicted": [
+          "PII_EMAIL"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE"
+        ],
+        "leaked": false,
+        "bytes": 545
+      },
+      {
+        "id": "mixed-email-pw-goal",
+        "expected": [
+          "PII_EMAIL",
+          "SECRET_PASSWORD"
+        ],
+        "predicted": [
+          "PII_EMAIL",
+          "SECRET_PASSWORD"
+        ],
+        "decisions": [
+          "PII_EMAIL:TOKENIZE",
+          "SECRET_PASSWORD:NEVER_SEND"
+        ],
+        "leaked": false,
+        "bytes": 583
+      },
+      {
+        "id": "name-not-detected",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 408
+      },
+      {
+        "id": "address-not-detected",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 422
+      },
+      {
+        "id": "account-not-detected",
+        "expected": [],
+        "predicted": [],
+        "decisions": [],
+        "leaked": false,
+        "bytes": 413
+      }
+    ],
+    "fpReview": [],
+    "fnReview": []
+  }
+}

@@ -1,461 +1,57 @@
 /**
- * SIH visual evaluation harness.
- * Ground truth is loaded from bench/visual/ground-truth/*.json (hand-authored).
- * Predictions come from the system under test. This file must not invent expected labels.
+ * SIH visual evaluation harness (T009/T010 historical writer).
+ * T019/T020 formal visual RESULT is written by bench-t019.test.ts to t019-t020-*.json.
  */
 // @vitest-environment node
 
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  createElementId,
-  createPageEpoch,
-  createTaskId,
-  type RawElement,
-  type RawScene,
-  type VisualRegion,
-} from '@n-eye/protocol';
-import { decidePerception } from '../perception/adaptive-controller.js';
-import { groundAndFuse } from '../perception/grounding.js';
-import { TesseractOcrEngine } from '../perception/tesseract-engine.js';
-import { detectOcrTextPrivacy } from '../privacy/detectors.js';
-import { evaluatePrivacyPolicy } from '../privacy/policy.js';
-import { PrivateTokenVault } from '../privacy/vault.js';
-import { tokenizeDecisionsWithValues } from '../privacy/token-values.js';
-import { buildSafeContext } from '../privacy/safe-context-builder.js';
-import { validateSafeContextEgress } from '../privacy/egress-guard.js';
-import {
-  characterErrorRate,
-  normalizedContains,
-  precisionRecallF1,
-  summarizeSamples,
-} from '../eval/metrics.js';
-import { decideModelAdmission } from '../eval/model-admission.js';
+import { runVisualEval } from '../eval/visual-bench.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, '../../../..');
-const gtDir = join(repoRoot, 'bench/visual/ground-truth');
-const fixtureDir = join(here, '../../ocr-assets/fixtures');
 const reportDir = join(repoRoot, 'bench/visual/reports');
-
-interface OcrGt {
-  id: string;
-  file: string;
-  expectedText: string;
-  matchMode: string;
-  privacyClass: string | null;
-}
-
-interface CascadeGt {
-  id: string;
-  kind: string;
-  expectEscalate: boolean;
-  expectReason?: string;
-}
-
-interface GroundingGt {
-  id: string;
-  kind: string;
-  ocrText: string;
-  ocrConfidence: number;
-  expectElementId: string | null;
-  expectSource?: string;
-  expectFallback?: string;
-}
-
-interface PrivacyGt {
-  id: string;
-  text: string;
-  privacyClass: string | null;
-  mustNotLeak: boolean;
-}
-
-interface SplitGt {
-  split: string;
-  ocrFixtures: OcrGt[];
-  cascade: CascadeGt[];
-  grounding: GroundingGt[];
-  privacyCanaries: PrivacyGt[];
-}
-
-function el(partial: Partial<RawElement> & Pick<RawElement, 'id'>): RawElement {
-  return {
-    tagName: 'button',
-    role: 'button',
-    ariaLabel: null,
-    innerTextCandidate: 'Submit',
-    inputType: null,
-    isEnabled: true,
-    bbox: { x: 10, y: 10, width: 80, height: 24 },
-    ...partial,
-  };
-}
-
-function baseScene(over: Partial<RawScene> = {}): RawScene {
-  return {
-    _isLocalOnly: true,
-    pageEpoch: createPageEpoch(1),
-    url: 'https://lab.example.com/visual',
-    origin: 'https://lab.example.com',
-    title: 'Visual Lab',
-    viewport: { width: 1280, height: 720 },
-    elements: [
-      el({ id: createElementId('e1'), innerTextCandidate: 'Email', inputType: 'email', tagName: 'input', role: 'textbox' }),
-      el({ id: createElementId('e2'), innerTextCandidate: 'Continue' }),
-    ],
-    privacyFindings: [],
-    timestamp: Date.now(),
-    visualRegions: [],
-    ...over,
-  };
-}
-
-function sceneForCascade(kind: string): RawScene {
-  if (kind === 'canvas') {
-    const region: VisualRegion = {
-      regionId: 'canvas_1',
-      kind: 'canvas',
-      reason: 'CANVAS_RENDERED',
-      pageEpoch: createPageEpoch(1),
-      bbox: { x: 20, y: 20, width: 240, height: 80 },
-    };
-    return baseScene({ visualRegions: [region] });
-  }
-  if (kind === 'image') {
-    return baseScene({
-      visualRegions: [
-        {
-          regionId: 'img_1',
-          kind: 'image',
-          reason: 'IMAGE_TEXT',
-          pageEpoch: createPageEpoch(1),
-          bbox: { x: 0, y: 0, width: 240, height: 80 },
-        },
-      ],
-    });
-  }
-  if (kind === 'document') {
-    return baseScene({
-      visualRegions: [
-        {
-          regionId: 'doc_1',
-          kind: 'document',
-          reason: 'PDF_OR_DOCUMENT_PREVIEW',
-          pageEpoch: createPageEpoch(1),
-          bbox: { x: 0, y: 0, width: 240, height: 80 },
-        },
-      ],
-    });
-  }
-  if (kind === 'icon') {
-    return baseScene({
-      elements: [el({ id: createElementId('e9'), innerTextCandidate: null, ariaLabel: null })],
-    });
-  }
-  return baseScene();
-}
-
-function runGroundingCase(gt: GroundingGt): {
-  elementId?: string;
-  source?: string;
-  fallback?: string;
-} {
-  if (gt.kind === 'ambiguous') {
-    const fused = groundAndFuse({
-      elements: [
-        el({ id: createElementId('e1'), innerTextCandidate: null, bbox: { x: 10, y: 10, width: 40, height: 20 } }),
-        el({ id: createElementId('e2'), innerTextCandidate: null, bbox: { x: 12, y: 10, width: 40, height: 20 } }),
-      ],
-      ocrBlocks: [
-        {
-          text: gt.ocrText,
-          confidence: gt.ocrConfidence,
-          bbox: { x: 10, y: 10, width: 42, height: 20 },
-          roiId: 'roi_1',
-          pageEpoch: createPageEpoch(1),
-          blockId: 'b1',
-        },
-      ],
-      pageEpoch: createPageEpoch(1),
-    });
-    return {
-      elementId: fused.candidates[0]?.elementId,
-      source: fused.candidates[0]?.source,
-      fallback: fused.fallback,
-    };
-  }
-  if (gt.kind === 'ocr_only') {
-    const fused = groundAndFuse({
-      elements: [el({ id: createElementId('e1'), innerTextCandidate: 'Far', bbox: { x: 400, y: 400, width: 80, height: 24 } })],
-      ocrBlocks: [
-        {
-          text: gt.ocrText,
-          confidence: gt.ocrConfidence,
-          bbox: { x: 10, y: 10, width: 80, height: 20 },
-          roiId: 'roi_1',
-          pageEpoch: createPageEpoch(1),
-          blockId: 'b1',
-        },
-      ],
-      pageEpoch: createPageEpoch(1),
-    });
-    return {
-      elementId: fused.candidates[0]?.elementId,
-      source: fused.candidates[0]?.source,
-      fallback: fused.fallback,
-    };
-  }
-  const unlabeled = gt.kind === 'duplicate' ? 'Submit' : null;
-  const fused = groundAndFuse({
-    elements: [el({ id: createElementId('e1'), innerTextCandidate: unlabeled, bbox: { x: 10, y: 10, width: 100, height: 30 } })],
-    ocrBlocks: [
-      {
-        text: gt.ocrText,
-        confidence: gt.ocrConfidence,
-        bbox: { x: 12, y: 12, width: 80, height: 20 },
-        roiId: 'roi_1',
-        pageEpoch: createPageEpoch(1),
-        blockId: 'b1',
-      },
-    ],
-    pageEpoch: createPageEpoch(1),
-  });
-  return {
-    elementId: fused.candidates[0]?.elementId,
-    source: fused.candidates[0]?.source,
-    fallback: fused.fallback,
-  };
-}
 
 describe('SIH visual evaluation harness', () => {
   it('scores development and held-out splits without mixing ground truth into predictions', async () => {
-    const development = JSON.parse(readFileSync(join(gtDir, 'development.json'), 'utf8')) as SplitGt;
-    const heldOut = JSON.parse(readFileSync(join(gtDir, 'held-out.json'), 'utf8')) as SplitGt;
-    const visualRegionsSrc = readFileSync(join(here, '../perception/visual-regions.ts'), 'utf8');
-    expect(visualRegionsSrc).not.toMatch(/querySelectorAll\([^)]*data-n-eye-visual/);
-    expect(visualRegionsSrc).not.toMatch(/querySelectorAll\([^)]*data-testid/);
-    expect(visualRegionsSrc).not.toMatch(/querySelectorAll\([^)]*data-visual-only/);
-
-    const cascadeRows: Array<Record<string, string | boolean>> = [];
-    let cascadeCorrect = 0;
-    let cascadeTotal = 0;
-    let ocrInvokedOnDom = 0;
-    for (const split of [development, heldOut]) {
-      for (const item of split.cascade) {
-        cascadeTotal += 1;
-        const decision = decidePerception(sceneForCascade(item.kind));
-        const ok = decision.escalate === item.expectEscalate && (!item.expectReason || decision.reasons.includes(item.expectReason as never));
-        if (ok) cascadeCorrect += 1;
-        if (item.kind === 'dom_labeled' && decision.escalate) ocrInvokedOnDom += 1;
-        cascadeRows.push({
-          split: split.split,
-          id: item.id,
-          predictedEscalate: decision.escalate,
-          expectedEscalate: item.expectEscalate,
-          pass: ok,
-        });
-      }
-    }
-
-    const groundingRows: Array<Record<string, string | boolean | undefined>> = [];
-    let groundingCorrect = 0;
-    let groundingTotal = 0;
-    let falseGrounding = 0;
-    let abstain = 0;
-    for (const split of [development, heldOut]) {
-      for (const item of split.grounding) {
-        groundingTotal += 1;
-        const pred = runGroundingCase(item);
-        const idOk = (pred.elementId || null) === item.expectElementId;
-        const sourceOk = !item.expectSource || pred.source === item.expectSource;
-        const fallbackOk = !item.expectFallback || pred.fallback === item.expectFallback;
-        const ok = idOk && sourceOk && fallbackOk;
-        if (ok) groundingCorrect += 1;
-        if (item.expectElementId && pred.elementId && pred.elementId !== item.expectElementId) falseGrounding += 1;
-        if (!pred.elementId) abstain += 1;
-        groundingRows.push({
-          split: split.split,
-          id: item.id,
-          predictedId: pred.elementId,
-          expectedId: item.expectElementId ?? undefined,
-          pass: ok,
-        });
-      }
-    }
-
-    let tp = 0;
-    let fp = 0;
-    let fn = 0;
-    let leakCount = 0;
-    const privacyRows: Array<Record<string, string | boolean | number>> = [];
-    for (const split of [development, heldOut]) {
-      for (const item of split.privacyCanaries) {
-        const findings = detectOcrTextPrivacy(item.text, { roiId: 'roi_eval', blockId: item.id });
-        const predictedClass = item.privacyClass
-          ? findings.find((f) => f.privacyClass === item.privacyClass)?.privacyClass || findings[0]?.privacyClass || null
-          : findings[0]?.privacyClass || null;
-        if (item.privacyClass) {
-          if (findings.some((f) => f.privacyClass === item.privacyClass)) tp += 1;
-          else fn += 1;
-        } else if (predictedClass) {
-          fp += 1;
-        }
-        const decisions = evaluatePrivacyPolicy(findings);
-        const vault = new PrivateTokenVault();
-        const taskId = createTaskId(`eval-${item.id}`);
-        const scene = baseScene();
-        for (const pair of tokenizeDecisionsWithValues(decisions, findings)) {
-          if (!pair.decision.tokenRole) continue;
-          vault.registerToken(pair.decision.tokenRole, pair.decision.privacyClass, pair.realValue, taskId, 1, scene.origin, [
-            'text',
-            'textbox',
-            'email',
-            'tel',
-          ]);
-        }
-        const safe = buildSafeContext(scene, 'Read the visual region', decisions, vault, taskId, findings);
-        let leaked = false;
-        try {
-          const serialized = validateSafeContextEgress(safe);
-          leaked = item.mustNotLeak && serialized.includes(item.text);
-        } catch {
-          leaked = false;
-        }
-        if (leaked) leakCount += 1;
-        privacyRows.push({
-          split: split.split,
-          id: item.id,
-          predictedClass: predictedClass || 'none',
-          leaked,
-        });
-      }
-    }
-    const pii = precisionRecallF1(tp, fp, fn);
-
-    const engine = new TesseractOcrEngine();
-    const ocrLatencies: number[] = [];
-    const ocrRows: Array<Record<string, string | number | boolean>> = [];
-    let ocrHits = 0;
-    let ocrTotal = 0;
-    try {
-      await engine.warmup();
-      for (const split of [development, heldOut]) {
-        for (const item of split.ocrFixtures) {
-          ocrTotal += 1;
-          const png = new Uint8Array(readFileSync(join(fixtureDir, item.file)));
-          const start = performance.now();
-          const result = await engine.recognize({
-            roiId: item.id,
-            width: 900,
-            height: 140,
-            png,
-          });
-          const ms = performance.now() - start;
-          ocrLatencies.push(ms);
-          const text = result.blocks.map((b) => b.text).join(' ');
-          const hit = normalizedContains(text, item.expectedText);
-          if (hit) ocrHits += 1;
-          ocrRows.push({
-            split: split.split,
-            id: item.id,
-            predicted: text,
-            expected: item.expectedText,
-            cer: Number(characterErrorRate(text, item.expectedText).toFixed(3)),
-            pass: hit,
-            ms: Math.round(ms),
-          });
-        }
-      }
-    } finally {
-      await engine.terminate();
-    }
-
-    const visualOnlyPass = groundingRows.some((r) => r['id'] === 'dev-visual-only-unlabeled' && r['pass']);
-    const canvasPass = cascadeRows.some((r) => String(r['id']).includes('canvas') && r['pass']);
-    const iconPass = cascadeRows.some((r) => r['id'] === 'dev-icon-escalate' && r['pass']);
-    const documentPass = cascadeRows.some((r) => r['id'] === 'dev-document-escalate' && r['pass']);
-    const heldOutOcr = ocrRows.filter((r) => r['split'] === 'held-out');
-    const heldOutOcrUseful = heldOutOcr.filter((r) => r['pass']).length >= Math.ceil(heldOutOcr.length * 0.5);
-
-    const admission = decideModelAdmission({
-      visualOnlyGroundingPassed: Boolean(visualOnlyPass),
-      canvasCasePassed: Boolean(canvasPass),
-      iconCasePassed: Boolean(iconPass),
-      documentCasePassed: Boolean(documentPass),
-      ocrUsefulOnHeldOut: heldOutOcrUseful,
-      screenshotOutboundBytes: 0,
-    });
-
-    const latency = summarizeSamples(ocrLatencies);
-    const report = {
-      gate: 'T009-T010',
-      generatedAt: new Date().toISOString(),
-      classification: 'DEVELOPMENT_MEASUREMENT',
-      notSihFinalScore: true,
-      cascade: {
-        correct: cascadeCorrect,
-        total: cascadeTotal,
-        accuracy: cascadeTotal ? cascadeCorrect / cascadeTotal : 0,
-        unnecessaryOcrOnDomSufficient: ocrInvokedOnDom,
-        rows: cascadeRows,
-      },
-      grounding: {
-        correct: groundingCorrect,
-        total: groundingTotal,
-        accuracy: groundingTotal ? groundingCorrect / groundingTotal : 0,
-        falseGrounding,
-        abstain,
-        rows: groundingRows,
-      },
-      ocr: {
-        hits: ocrHits,
-        total: ocrTotal,
-        accuracy: ocrTotal ? ocrHits / ocrTotal : 0,
-        latencyMs: latency,
-        rows: ocrRows,
-      },
-      privacy: {
-        tp,
-        fp,
-        fn,
-        precision: pii.precision,
-        recall: pii.recall,
-        f1: pii.f1,
-        leakCount,
-        screenshotOutboundBytes: 0,
-        rows: privacyRows,
-      },
-      modelAdmission: admission,
+    const report = (await runVisualEval()) as {
+      cascade: { correct: number; total: number };
+      grounding: { correct: number; total: number; falseGrounding: number; abstain: number };
+      ocr: { hits: number; total: number; latencyMs: { count: number; p50: number | null; p95: number | null } };
+      privacy: { tp: number; fp: number; fn: number; f1: number; leakCount: number };
+      modelAdmission: { decision: string; rationale: string };
+      generatedAt: string;
     };
 
     mkdirSync(reportDir, { recursive: true });
-    writeFileSync(join(reportDir, 't009-t010-latest.json'), `${JSON.stringify(report, null, 2)}\n`);
+    const historical = { gate: 'T009-T010', notSihFinalScore: true, classification: 'DEVELOPMENT_MEASUREMENT', ...report };
+    writeFileSync(join(reportDir, 't009-t010-latest.json'), `${JSON.stringify(historical, null, 2)}\n`);
     const md = [
       '# T009/T010 SIH visual evaluation (development measurement)',
       '',
       `Generated: ${report.generatedAt}`,
       '',
-      'This is **not** a final SIH score. Sample counts are listed. p95 is null unless n ≥ 5.',
+      'This is **not** a final SIH score. Formal T019/T020 visual RESULT lives in t019-t020-visual.json.',
       '',
-      `## Cascade: ${cascadeCorrect}/${cascadeTotal}`,
-      `## Grounding: ${groundingCorrect}/${groundingTotal} (false grounding ${falseGrounding}, abstain ${abstain})`,
-      `## OCR normalized-contains: ${ocrHits}/${ocrTotal}`,
-      `## OCR latency ms: count=${latency.count} p50=${latency.p50} p95=${latency.p95} (p95 requires n≥5)`,
-      `## Visual PII F1: ${pii.f1.toFixed(3)} (tp=${tp} fp=${fp} fn=${fn}) leakCount=${leakCount}`,
+      `## Cascade: ${report.cascade.correct}/${report.cascade.total}`,
+      `## Grounding: ${report.grounding.correct}/${report.grounding.total} (false grounding ${report.grounding.falseGrounding}, abstain ${report.grounding.abstain})`,
+      `## OCR normalized-contains: ${report.ocr.hits}/${report.ocr.total}`,
+      `## OCR latency ms: count=${report.ocr.latencyMs.count} p50=${report.ocr.latencyMs.p50} p95=${report.ocr.latencyMs.p95} (p95 requires n≥5)`,
+      `## Visual PII F1: ${report.privacy.f1.toFixed(3)} (tp=${report.privacy.tp} fp=${report.privacy.fp} fn=${report.privacy.fn}) leakCount=${report.privacy.leakCount}`,
       `## Raw screenshot outbound bytes: 0`,
-      `## MODEL_ADMISSION: ${admission.decision}`,
+      `## MODEL_ADMISSION: ${report.modelAdmission.decision}`,
       '',
-      admission.rationale,
+      report.modelAdmission.rationale,
       '',
     ].join('\n');
     writeFileSync(join(reportDir, 't009-t010-latest.md'), md);
 
-    expect(cascadeCorrect).toBe(cascadeTotal);
-    expect(groundingCorrect).toBe(groundingTotal);
-    expect(leakCount).toBe(0);
-    expect(ocrHits).toBeGreaterThan(0);
-    expect(admission.decision).toBe('REJECTED');
+    expect(report.cascade.correct).toBe(report.cascade.total);
+    expect(report.grounding.correct).toBe(report.grounding.total);
+    expect(report.privacy.leakCount).toBe(0);
+    expect(report.ocr.hits).toBeGreaterThan(0);
+    expect(report.modelAdmission.decision).toBe('REJECTED');
   }, 120_000);
 });

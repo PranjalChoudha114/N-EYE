@@ -1,0 +1,127 @@
+/**
+ * T019 labeled PII/secret corpus (synthetic only).
+ * OWNS: Ground-truth labels for currently implemented detectors.
+ * MUST NOT: Include real people, real secrets, or classes the detector does not implement.
+ * Dataset version is hashed in the privacy bench report.
+ */
+
+export const PII_DATASET_VERSION = 't019-pii-corpus.v1';
+
+export type PiiChannel = 'dom_label' | 'input_type' | 'aria' | 'goal' | 'ocr' | 'mixed';
+
+export interface PiiSample {
+  id: string;
+  split: 'eval';
+  channel: PiiChannel;
+  mode: 'element' | 'goal' | 'ocr';
+  inputType?: string | null;
+  ariaLabel?: string | null;
+  innerText?: string | null;
+  goal?: string;
+  ocrText?: string;
+  expectedClasses: string[];
+  rawSecrets: string[];
+  notes?: string;
+}
+
+export const PII_SAMPLES: PiiSample[] = [
+  // --- PII_EMAIL positives ---
+  { id: 'email-type', split: 'eval', channel: 'input_type', mode: 'element', inputType: 'email', innerText: 'Email', expectedClasses: ['PII_EMAIL'], rawSecrets: [] },
+  { id: 'email-regex', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'agent.lab@example.com', expectedClasses: ['PII_EMAIL'], rawSecrets: ['agent.lab@example.com'] },
+  { id: 'email-aria', split: 'eval', channel: 'aria', mode: 'element', ariaLabel: 'Contact: ops+sih@example.org', expectedClasses: ['PII_EMAIL'], rawSecrets: ['ops+sih@example.org'] },
+  { id: 'email-goal', split: 'eval', channel: 'goal', mode: 'goal', goal: 'Sign in as bench.user@example.net', expectedClasses: ['PII_EMAIL'], rawSecrets: ['bench.user@example.net'] },
+  { id: 'email-ocr', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'Invoice to ocr.t019@example.com', expectedClasses: ['PII_EMAIL'], rawSecrets: ['ocr.t019@example.com'] },
+  { id: 'email-punct', split: 'eval', channel: 'dom_label', mode: 'element', innerText: '(mailto:punct.case@example.com).', expectedClasses: ['PII_EMAIL'], rawSecrets: ['punct.case@example.com'] },
+  { id: 'email-subdomain', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'hello@mail.lab.example.com', expectedClasses: ['PII_EMAIL'], rawSecrets: ['hello@mail.lab.example.com'] },
+  { id: 'email-canary', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'CANARY_EMAIL_T019@example.com', expectedClasses: ['PII_EMAIL'], rawSecrets: ['CANARY_EMAIL_T019@example.com'] },
+
+  // --- PII_EMAIL negatives ---
+  { id: 'email-neg-at', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Meet us @ the lobby', expectedClasses: [], rawSecrets: [] },
+  { id: 'email-neg-github', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'github.com/n-eye', expectedClasses: [], rawSecrets: [] },
+  { id: 'email-neg-notld', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'not-an-email@localhost', expectedClasses: [], rawSecrets: [] },
+  { id: 'email-neg-button', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Continue', expectedClasses: [], rawSecrets: [] },
+
+  // --- PII_PHONE positives ---
+  { id: 'phone-type', split: 'eval', channel: 'input_type', mode: 'element', inputType: 'tel', innerText: 'Phone', expectedClasses: ['PII_PHONE'], rawSecrets: [] },
+  { id: 'phone-us', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Call 415-555-0199', expectedClasses: ['PII_PHONE'], rawSecrets: ['415-555-0199'] },
+  { id: 'phone-parens', split: 'eval', channel: 'aria', mode: 'element', ariaLabel: '(202) 555 0147', expectedClasses: ['PII_PHONE'], rawSecrets: ['(202) 555 0147'] },
+  { id: 'phone-plus', split: 'eval', channel: 'dom_label', mode: 'element', innerText: '+1 212-555-0182', expectedClasses: ['PII_PHONE'], rawSecrets: ['+1 212-555-0182'] },
+  { id: 'phone-goal', split: 'eval', channel: 'goal', mode: 'goal', goal: 'Text 646-555-0133 about the appointment', expectedClasses: ['PII_PHONE'], rawSecrets: ['646-555-0133'] },
+  { id: 'phone-ocr', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'Fax 303-555-0171', expectedClasses: ['PII_PHONE'], rawSecrets: ['303-555-0171'] },
+
+  // --- PII_PHONE negatives ---
+  { id: 'phone-neg-issue', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Issue #12', expectedClasses: [], rawSecrets: [] },
+  { id: 'phone-neg-year', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Copyright 2026', expectedClasses: [], rawSecrets: [] },
+  { id: 'phone-neg-semver', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'v1.2.3', expectedClasses: [], rawSecrets: [] },
+  { id: 'phone-neg-canary-skip', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'CANARY_PHONE_T019 415-555-0100', expectedClasses: [], rawSecrets: ['CANARY_PHONE_T019'], notes: 'Detector skips PHONE regex when CANARY_ is present in the same text.' },
+
+  // --- SECRET_PASSWORD ---
+  { id: 'pw-type', split: 'eval', channel: 'input_type', mode: 'element', inputType: 'password', innerText: 'Password', expectedClasses: ['SECRET_PASSWORD'], rawSecrets: [] },
+  { id: 'pw-label', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Account password', expectedClasses: ['SECRET_PASSWORD'], rawSecrets: [] },
+  { id: 'pw-passcode', split: 'eval', channel: 'aria', mode: 'element', ariaLabel: 'Enter passcode', expectedClasses: ['SECRET_PASSWORD'], rawSecrets: [] },
+  { id: 'pw-canary', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'CANARY_PASSWORD_T019', expectedClasses: ['SECRET_PASSWORD'], rawSecrets: ['CANARY_PASSWORD_T019'] },
+  { id: 'pw-goal', split: 'eval', channel: 'goal', mode: 'goal', goal: 'Login with password BenchSecretT019!', expectedClasses: ['SECRET_PASSWORD'], rawSecrets: ['BenchSecretT019!'] },
+  { id: 'pw-ocr', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'password: ocr-pass-t019', expectedClasses: ['SECRET_PASSWORD'], rawSecrets: ['ocr-pass-t019'] },
+
+  // --- SECRET_OTP ---
+  { id: 'otp-label', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Enter OTP', expectedClasses: ['SECRET_OTP'], rawSecrets: [] },
+  { id: 'otp-onetime', split: 'eval', channel: 'aria', mode: 'element', ariaLabel: 'One-time code', expectedClasses: ['SECRET_OTP'], rawSecrets: [] },
+  { id: 'otp-2fa', split: 'eval', channel: 'dom_label', mode: 'element', innerText: '2FA code', expectedClasses: ['SECRET_OTP'], rawSecrets: [] },
+  { id: 'otp-verify', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Verification code', expectedClasses: ['SECRET_OTP'], rawSecrets: [] },
+  { id: 'otp-canary', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'CANARY_OTP_T019', expectedClasses: ['SECRET_OTP'], rawSecrets: ['CANARY_OTP_T019'] },
+
+  // --- SECRET_API_KEY ---
+  { id: 'api-stripe', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'sk_live_9918237482910394abcd', expectedClasses: ['SECRET_API_KEY'], rawSecrets: ['sk_live_9918237482910394abcd'] },
+  { id: 'api-akia', split: 'eval', channel: 'aria', mode: 'element', ariaLabel: 'AKIAIOSFODNN7EXAMPLE', expectedClasses: ['SECRET_API_KEY'], rawSecrets: ['AKIAIOSFODNN7EXAMPLE'] },
+  { id: 'api-google', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'AIzaSyAabcdefghijklmnopqrstuvwxyz012345', expectedClasses: ['SECRET_API_KEY'], rawSecrets: ['AIzaSyAabcdefghijklmnopqrstuvwxyz012345'] },
+  { id: 'api-bearer', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Bearer abcdefghijklmnopqrstuvwxyz012345', expectedClasses: ['SECRET_API_KEY'], rawSecrets: ['abcdefghijklmnopqrstuvwxyz012345'] },
+  { id: 'api-canary', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'CANARY_API_KEY_T019', expectedClasses: ['SECRET_API_KEY'], rawSecrets: ['CANARY_API_KEY_T019'] },
+  { id: 'api-goal', split: 'eval', channel: 'goal', mode: 'goal', goal: 'Use sk_live_aabbccddeeffgghh1234', expectedClasses: ['SECRET_API_KEY'], rawSecrets: ['sk_live_aabbccddeeffgghh1234'] },
+
+  // --- SECRET_AUTH_TOKEN (JWT) ---
+  {
+    id: 'jwt-label',
+    split: 'eval',
+    channel: 'dom_label',
+    mode: 'element',
+    innerText: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0MDE5In0.signaturepart',
+    expectedClasses: ['SECRET_AUTH_TOKEN'],
+    rawSecrets: ['eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0MDE5In0.signaturepart'],
+  },
+  {
+    id: 'jwt-ocr',
+    split: 'eval',
+    channel: 'ocr',
+    mode: 'ocr',
+    ocrText: 'token eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjF9.sigvaluehere',
+    expectedClasses: ['SECRET_AUTH_TOKEN'],
+    rawSecrets: ['eyJhbGciOiJIUzI1NiJ9.eyJleHAiOjF9.sigvaluehere'],
+  },
+
+  // --- SECRET_SESSION ---
+  { id: 'session-label', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'session_token present', expectedClasses: ['SECRET_SESSION'], rawSecrets: [] },
+  { id: 'session-auth', split: 'eval', channel: 'aria', mode: 'element', ariaLabel: 'auth_token field', expectedClasses: ['SECRET_SESSION'], rawSecrets: [] },
+  { id: 'session-canary', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'CANARY_SESSION_T019', expectedClasses: ['SECRET_SESSION'], rawSecrets: ['CANARY_SESSION_T019'] },
+  { id: 'session-ocr-word', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'ocr_session leftover', expectedClasses: ['SECRET_SESSION'], rawSecrets: [] },
+
+  // --- Mixed / public / lookalikes ---
+  { id: 'pub-submit', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Submit application', expectedClasses: [], rawSecrets: [] },
+  { id: 'pub-search', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Search', expectedClasses: [], rawSecrets: [] },
+  { id: 'pub-nav', split: 'eval', channel: 'aria', mode: 'element', ariaLabel: 'Open repositories', expectedClasses: [], rawSecrets: [] },
+  { id: 'lookalike-user', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'user at example dot com', expectedClasses: [], rawSecrets: [] },
+  { id: 'lookalike-keyish', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'sk_test_short', expectedClasses: [], rawSecrets: [] },
+  {
+    id: 'unicode-email',
+    split: 'eval',
+    channel: 'dom_label',
+    mode: 'element',
+    innerText: 'café-bench@example.com',
+    expectedClasses: ['PII_EMAIL'],
+    rawSecrets: ['café-bench@example.com'],
+    notes: 'ASCII email regex may match the suffix bench@example.com rather than the full Unicode local-part.',
+  },
+  { id: 'mixed-email-pw-goal', split: 'eval', channel: 'goal', mode: 'goal', goal: 'Login with email mix.t019@example.com and password MixSecretT019', expectedClasses: ['PII_EMAIL', 'SECRET_PASSWORD'], rawSecrets: ['mix.t019@example.com', 'MixSecretT019'] },
+  { id: 'name-not-detected', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Jane Q. Public', expectedClasses: [], rawSecrets: [], notes: 'PII_NAME is in the taxonomy/policy but has no detector. Expected empty is honest.' },
+  { id: 'address-not-detected', split: 'eval', channel: 'dom_label', mode: 'element', innerText: '221B Baker Street, London', expectedClasses: [], rawSecrets: [], notes: 'PII_ADDRESS is not detected by current regex/heuristics.' },
+  { id: 'account-not-detected', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Account 99887766', expectedClasses: [], rawSecrets: [], notes: 'PII_ACCOUNT_ID is not detected by current regex/heuristics.' },
+];

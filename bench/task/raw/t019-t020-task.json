@@ -1,0 +1,94 @@
+{
+  "manifest": {
+    "schemaVersion": "n-eye-bench/1",
+    "gate": "T019-T020",
+    "gitSha": "771b51c16ca88d994869c369920516c93749bebc",
+    "gitShaShort": "771b51c",
+    "dirty": true,
+    "dirtySummary": [
+      "M .gitignore",
+      "M apps/extension/src/__tests__/sih-visual-eval.test.ts",
+      "M bench/visual/reports/t009-t010-latest.json",
+      "M bench/visual/reports/t009-t010-latest.md",
+      "M docs/CONTEXT.md",
+      "M docs/RECOMMENDATIONS.md",
+      "M docs/UNDERSTANDING.md",
+      "M package.json",
+      "?? apps/extension/src/__tests__/bench-t019.test.ts",
+      "?? apps/extension/src/eval/bench-io.ts",
+      "?? apps/extension/src/eval/canary-bench.ts",
+      "?? apps/extension/src/eval/performance-bench.ts",
+      "?? apps/extension/src/eval/pii-corpus.ts",
+      "?? apps/extension/src/eval/privacy-bench.ts",
+      "?? apps/extension/src/eval/t019-reports.ts",
+      "?? apps/extension/src/eval/task-bench.ts",
+      "?? apps/extension/src/eval/visual-bench.ts",
+      "?? bench/canary/",
+      "?? bench/manifests/",
+      "?? bench/performance/"
+    ],
+    "timestamp": "2026-08-30T08:29:36.942Z",
+    "os": "Darwin 25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "ramBytes": 25769803776,
+    "node": "v26.7.0",
+    "pnpm": "11.24.0",
+    "python": "Python 3.14.6",
+    "browser": "happy-dom (automated) + Chrome unpacked MANUAL for product UI",
+    "ocrEngine": "tesseract.js@7",
+    "providerMode": "MOCK for task/planner benches; live Gemini not required",
+    "notes": [
+      "No personal device identifiers beyond CPU model / RAM class.",
+      "home redacted: [present]",
+      "macOS productVersion: 26.6",
+      "T009/T010 reports are historical and are not this gate’s RESULT files.",
+      "Chrome version is MANUAL / UNVERIFIED in this automated pack."
+    ]
+  },
+  "task": {
+    "n": 6,
+    "counts": {
+      "ASK_USER": 4,
+      "COMPLETED": 2
+    },
+    "rows": [
+      {
+        "id": "unknown-github-style",
+        "goal": "Open UPESSEM1 Repositories",
+        "phase": "ASK_USER",
+        "verification": "—"
+      },
+      {
+        "id": "type-search-openai",
+        "goal": "Type OpenAI in the search box",
+        "phase": "COMPLETED",
+        "verification": "VERIFIED_SUCCESS"
+      },
+      {
+        "id": "search-for",
+        "goal": "Search for OpenAI",
+        "phase": "ASK_USER",
+        "verification": "VERIFIED_SUCCESS"
+      },
+      {
+        "id": "click-missing",
+        "goal": "Click the missing unicorn",
+        "phase": "ASK_USER",
+        "verification": "—"
+      },
+      {
+        "id": "scroll",
+        "goal": "Scroll down",
+        "phase": "COMPLETED",
+        "verification": "VERIFIED_SUCCESS"
+      },
+      {
+        "id": "continue-no-button",
+        "goal": "Continue",
+        "phase": "ASK_USER",
+        "verification": "—"
+      }
+    ]
+  }
+}

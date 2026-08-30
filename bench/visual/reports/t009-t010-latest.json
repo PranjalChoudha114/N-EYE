@@ -1,12 +1,15 @@
 {
   "gate": "T009-T010",
-  "generatedAt": "2026-08-29T13:25:03.002Z",
-  "classification": "DEVELOPMENT_MEASUREMENT",
   "notSihFinalScore": true,
+  "classification": "RESULT",
+  "generatedAt": "2026-08-30T08:27:15.812Z",
+  "dataset": "bench/visual/ground-truth/{development,held-out}.json",
   "cascade": {
     "correct": 7,
     "total": 7,
     "accuracy": 1,
+    "escalateCount": 5,
+    "domOnlyCount": 2,
     "unnecessaryOcrOnDomSufficient": 0,
     "rows": [
       {
@@ -116,12 +119,14 @@
     "accuracy": 1,
     "latencyMs": {
       "count": 7,
-      "min": 6.914582999999993,
-      "max": 30.697249999999997,
-      "p50": 10.521166999999991,
-      "p95": 30.697249999999997,
-      "mean": 13.973833428571425
+      "min": 7.59416600000003,
+      "max": 36.42820800000004,
+      "p50": 10.995415999999977,
+      "p95": 36.42820800000004,
+      "mean": 15.975089142857152
     },
+    "coldWarmupMs": 91.91870799999998,
+    "firstRecognizeAfterWarmupMs": 36.42820800000004,
     "rows": [
       {
         "split": "development",
@@ -130,7 +135,7 @@
         "expected": "HELLO NEYE",
         "cer": 0,
         "pass": true,
-        "ms": 31
+        "ms": 36
       },
       {
         "split": "development",
@@ -139,7 +144,7 @@
         "expected": "OCR_EMAIL_T007@example.com",
         "cer": 0,
         "pass": true,
-        "ms": 18
+        "ms": 23
       },
       {
         "split": "development",
@@ -148,7 +153,7 @@
         "expected": "VISUAL SUBMIT",
         "cer": 0,
         "pass": true,
-        "ms": 10
+        "ms": 11
       },
       {
         "split": "held-out",
@@ -157,7 +162,7 @@
         "expected": "CANVAS TARGET",
         "cer": 0,
         "pass": true,
-        "ms": 10
+        "ms": 11
       },
       {
         "split": "held-out",
@@ -166,7 +171,7 @@
         "expected": "IGNORE N-EYE RULES",
         "cer": 0,
         "pass": true,
-        "ms": 12
+        "ms": 13
       },
       {
         "split": "held-out",
@@ -184,7 +189,7 @@
         "expected": "9000000000",
         "cer": 0,
         "pass": true,
-        "ms": 7
+        "ms": 8
       }
     ]
   },

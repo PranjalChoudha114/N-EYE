@@ -1,0 +1,198 @@
+{
+  "manifest": {
+    "schemaVersion": "n-eye-bench/1",
+    "gate": "T019-T020",
+    "gitSha": "771b51c16ca88d994869c369920516c93749bebc",
+    "gitShaShort": "771b51c",
+    "dirty": true,
+    "dirtySummary": [
+      "M .gitignore",
+      "M apps/extension/src/__tests__/sih-visual-eval.test.ts",
+      "M bench/visual/reports/t009-t010-latest.json",
+      "M bench/visual/reports/t009-t010-latest.md",
+      "M docs/CONTEXT.md",
+      "M docs/RECOMMENDATIONS.md",
+      "M docs/UNDERSTANDING.md",
+      "M package.json",
+      "?? apps/extension/src/__tests__/bench-t019.test.ts",
+      "?? apps/extension/src/eval/bench-io.ts",
+      "?? apps/extension/src/eval/canary-bench.ts",
+      "?? apps/extension/src/eval/performance-bench.ts",
+      "?? apps/extension/src/eval/pii-corpus.ts",
+      "?? apps/extension/src/eval/privacy-bench.ts",
+      "?? apps/extension/src/eval/t019-reports.ts",
+      "?? apps/extension/src/eval/task-bench.ts",
+      "?? apps/extension/src/eval/visual-bench.ts",
+      "?? bench/canary/",
+      "?? bench/manifests/",
+      "?? bench/performance/"
+    ],
+    "timestamp": "2026-08-30T08:29:36.942Z",
+    "os": "Darwin 25.6.0",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "ramBytes": 25769803776,
+    "node": "v26.7.0",
+    "pnpm": "11.24.0",
+    "python": "Python 3.14.6",
+    "browser": "happy-dom (automated) + Chrome unpacked MANUAL for product UI",
+    "ocrEngine": "tesseract.js@7",
+    "providerMode": "MOCK for task/planner benches; live Gemini not required",
+    "notes": [
+      "No personal device identifiers beyond CPU model / RAM class.",
+      "home redacted: [present]",
+      "macOS productVersion: 26.6",
+      "T009/T010 reports are historical and are not this gate’s RESULT files.",
+      "Chrome version is MANUAL / UNVERIFIED in this automated pack."
+    ]
+  },
+  "performance": {
+    "classification": "RESULT",
+    "runtime": "happy-dom",
+    "stages": {
+      "observation": {
+        "count": 40,
+        "min": 3.032624999999939,
+        "max": 3.86587499999996,
+        "p50": 3.2127910000000384,
+        "p95": 3.61424999999997,
+        "mean": 3.258021875000017
+      },
+      "privacyDetection": {
+        "count": 40,
+        "min": 0.012541000000055647,
+        "max": 0.023874999999975444,
+        "p50": 0.013749999999959073,
+        "p95": 0.020332999999936874,
+        "mean": 0.014856249999991179
+      },
+      "sanitizationAndSafeContext": {
+        "count": 20,
+        "min": 0.2967079999999669,
+        "max": 0.7310830000000124,
+        "p50": 0.39049999999997453,
+        "p95": 0.5176249999999527,
+        "mean": 0.3970707999999945
+      },
+      "mockPlanner": {
+        "count": 20,
+        "min": 0.03058299999997871,
+        "max": 0.4759159999999838,
+        "p50": 0.036791999999991276,
+        "p95": 0.09320900000000165,
+        "mean": 0.06361659999999461
+      },
+      "validation": {
+        "count": 20,
+        "min": 0.0013749999999390639,
+        "max": 0.01254099999994196,
+        "p50": 0.0026669999999739957,
+        "p95": 0.009875000000079126,
+        "mean": 0.004225150000002032
+      },
+      "executionTypeText": {
+        "count": 15,
+        "min": 0.16095799999993687,
+        "max": 1.404790999999932,
+        "p50": 0.17591700000002675,
+        "p95": 1.404790999999932,
+        "mean": 0.25959446666666586
+      },
+      "verification": {
+        "count": 15,
+        "min": 3.4769999999999754,
+        "max": 4.232000000000085,
+        "p50": 3.62824999999998,
+        "p95": 4.232000000000085,
+        "mean": 3.6634112000000036
+      }
+    },
+    "payload": {
+      "safeContextBytes": 10264,
+      "screenshotOutboundBytes": 0,
+      "observedControls": 81
+    },
+    "resources": {
+      "distPresent": true,
+      "jsCssBytes": 213912,
+      "jsCssGzipBytes": 67054,
+      "ocrAssetBytes": 8123867,
+      "files": [
+        {
+          "path": "assets/sidepanel-COoIsIV1.css",
+          "bytes": 9306
+        },
+        {
+          "path": "assets/sidepanel-D6mkjKjr.js",
+          "bytes": 140334
+        },
+        {
+          "path": "assets/sidepanel-D6mkjKjr.js.map",
+          "bytes": 482822
+        },
+        {
+          "path": "assets/ui-snapshot-_0l4GHh9.js",
+          "bytes": 3556
+        },
+        {
+          "path": "assets/ui-snapshot-_0l4GHh9.js.map",
+          "bytes": 16809
+        },
+        {
+          "path": "background.js",
+          "bytes": 6876
+        },
+        {
+          "path": "background.js.map",
+          "bytes": 33755
+        },
+        {
+          "path": "build-identity.txt",
+          "bytes": 69
+        },
+        {
+          "path": "content.js",
+          "bytes": 52895
+        },
+        {
+          "path": "content.js.map",
+          "bytes": 193117
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 1411
+        },
+        {
+          "path": "ocr/eng.traineddata",
+          "bytes": 4113088
+        },
+        {
+          "path": "ocr/tesseract-core-simd-lstm.wasm.js",
+          "bytes": 3899472
+        },
+        {
+          "path": "ocr/worker.min.js",
+          "bytes": 111307
+        },
+        {
+          "path": "overlay/open-panel.html",
+          "bytes": 536
+        },
+        {
+          "path": "overlay/open-panel.js",
+          "bytes": 945
+        },
+        {
+          "path": "src/sidepanel/index.html",
+          "bytes": 515
+        }
+      ],
+      "memoryProxyBytes": 64500672,
+      "memoryProxyLabel": "PROXY: Node process.memoryUsage().heapUsed after bench, not Chrome extension RSS"
+    }
+  },
+  "rawSceneBytesComparison": {
+    "rawBytes": 1481,
+    "note": "Local serialization baseline. RawScene is not sent."
+  }
+}

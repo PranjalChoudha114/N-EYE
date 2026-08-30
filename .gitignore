@@ -40,3 +40,6 @@ coverage/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Local scratch notes (not product evidence)
+scratch/
