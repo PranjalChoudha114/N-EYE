@@ -29,9 +29,10 @@ Cursor IDE browser cannot load this MV3 extension. These steps are for a human C
 ## Completion truth (8024af6 must not regress)
 
 1. Repeat YouTube with a **current** identity. Preferred Mock phrasing: `Type OpenAI in the YouTube search box` (type-only) or `Search for OpenAI` (type + submit).
-2. Naturalistic `Search For OpenAi In Youtube Search Bar` is a **search-submit** goal: Completed requires a verified type **and** a verified search click. Type-only is ASK_USER (partial), not green Completed.
-3. Must not show Completed while VALIDATE/ACT/VERIFY are pending.
-4. If the search box looks empty while the panel says Completed, first confirm identity and screenshot timing (YouTube may navigate). Do not assume a source regression.
+2. Naturalistic `Search For OpenAi In Youtube Search Bar` is a **search-submit** goal: Completed requires typed query **and** a verified search **outcome** (URL/origin transition). A verified CLICK or text remaining in the field is not enough. Type-only is ASK_USER (partial), not green Completed.
+3. If ASK_USER after typing: **Continue is not Allow once.** It starts a fresh loop. Live MATCHED text must not be retyped; remaining search-submit must still be proven. Ambiguous/missing submit stays ASK_USER.
+4. Must not show Completed while VALIDATE/ACT/VERIFY are pending.
+5. If the search box looks empty while the panel says Completed, first confirm identity and screenshot timing (YouTube may navigate). Do not assume a source regression.
 
 ## Privacy receipt
 

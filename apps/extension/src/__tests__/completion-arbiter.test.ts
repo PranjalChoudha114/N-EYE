@@ -52,11 +52,24 @@ describe('Local completion arbiter', () => {
       lastFieldState: 'MATCHED',
       verifiedClick: true,
     });
-    expect(typedAndClicked.phase).toBe('COMPLETED');
-    expect(typedAndClicked.kind).toBe('VERIFIED_SEQUENCE');
+    expect(typedAndClicked.phase).toBe('ASK_USER');
+    expect(typedAndClicked.kind).toBe('PARTIAL');
+    expect(typedAndClicked.message).not.toMatch(/Typed text and search action were verified locally/);
+
+    const typedClickedAndNavigated = arbitratePlannerComplete({
+      goal,
+      verifiedCount: 2,
+      lastVerifiedType: 'CLICK',
+      lastFieldState: 'MATCHED',
+      verifiedClick: true,
+      verifiedSearchOutcome: true,
+    });
+    expect(typedClickedAndNavigated.phase).toBe('COMPLETED');
+    expect(typedClickedAndNavigated.kind).toBe('VERIFIED_SEQUENCE');
+    expect(typedClickedAndNavigated.message).toMatch(/Typed text and search action were verified locally/);
   });
 
-  it('treats search-for as partial until a verified click exists', () => {
+  it('treats search-for as partial until a verified search outcome exists', () => {
     const decision = arbitratePlannerComplete({
       goal: 'Search for OpenAI',
       verifiedCount: 1,

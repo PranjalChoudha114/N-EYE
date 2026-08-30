@@ -58,6 +58,10 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
   const mark = el('img', { class: 'nq-mark', alt: 'N-Eye', width: '32', height: '16' });
   mark.src = brandUrl('mark');
   const trustState = el('p', { class: 'nq-kicker' }, ['Ready']);
+  const statusPill = el('div', { class: 'nq-status-pill' }, [
+    el('span', { class: 'nq-status-dot', 'aria-hidden': 'true' }),
+    trustState,
+  ]);
   const themeToggle = el('button', { class: 'nq-icon', type: 'button', 'aria-label': 'Theme: Dark. Click for light.' });
   themeToggle.append(iconMoon());
   const closeBtn = el('button', { class: 'nq-icon', type: 'button', 'aria-label': 'Close N-Eye' });
@@ -115,17 +119,19 @@ export function mountOverlayCard(root: ShadowRoot): OverlayEls {
 
   const card = el('article', { class: 'nq-card', 'data-theme': 'dark' }, [
     el('header', { class: 'nq-header' }, [
-      el('div', { class: 'nq-brand' }, [mark, el('div', {}, [el('h1', { class: 'nq-name' }, ['N-Eye']), trustState])]),
+      el('div', { class: 'nq-brand' }, [
+        mark,
+        el('div', { class: 'nq-brand-text' }, [el('h1', { class: 'nq-name' }, ['N-Eye']), statusPill]),
+      ]),
       el('div', { class: 'nq-actions-h' }, [themeToggle, closeBtn]),
     ]),
     unsupported,
-    siteHost,
-    headline,
-    message,
-    facts,
-    goal,
-    askHint,
-    el('div', { class: 'nq-row-btns' }, [run, cancel, extra]),
+    el('div', { class: 'nq-context' }, [siteHost, headline, message, facts]),
+    el('div', { class: 'nq-task' }, [
+      goal,
+      askHint,
+      el('div', { class: 'nq-row-btns' }, [run, cancel, extra]),
+    ]),
     confirmBox,
     el('div', { class: 'nq-mode', role: 'group', 'aria-label': 'Planner mode' }, [modeMock, modeRemote]),
     moreSlot,
@@ -169,6 +175,9 @@ export function paintOverlayCard(
 ): void {
   els.card.dataset['theme'] = resolvedTheme;
   els.card.dataset['tone'] = state.tone;
+  // Presentation only: CSS reads phase/running for glow and the working sweep. Not a state machine.
+  els.card.dataset['phase'] = state.phase;
+  els.card.dataset['running'] = state.running ? '1' : '0';
   replaceIcon(els.themeToggle, themePref === 'light' ? iconSun() : themePref === 'system' ? iconSystem() : iconMoon());
   els.themeToggle.setAttribute('aria-label', themeControlLabel(themePref));
   setSafeText(els.trustState, state.headline);
@@ -232,7 +241,11 @@ export function paintOverlayCard(
   } else {
     els.facts.classList.remove('nq-hidden');
     for (const [label, value] of facts) {
-      const row = el('li', { class: 'nq-row' }, [el('span', {}, [label]), el('span', {}, [value])]);
+      const shotZero = label === 'Screenshot' && value === 'No screenshot was sent';
+      const row = el('li', { class: shotZero ? 'nq-row is-shot-zero' : 'nq-row' }, [
+        el('span', {}, [label]),
+        el('span', {}, [value]),
+      ]);
       els.facts.append(row);
     }
   }

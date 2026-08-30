@@ -34,6 +34,7 @@ describe('Mock bounded grammar', () => {
     expect(parseMockGoal('play the video')).toEqual({ kind: 'unsupported' });
     expect(parseMockGoal('Search For OpenAi In Youtube Search Bar')).toMatchObject({
       kind: 'type_text',
+      text: 'OpenAi',
       requiresSearchSubmit: true,
     });
   });
@@ -135,5 +136,45 @@ describe('Mock bounded grammar', () => {
     );
     expect(picked.ok).toBe(false);
     if (!picked.ok) expect(picked.reason).toBe('ambiguous');
+  });
+
+  it('does not click an unlabeled canvas just because the goal mentions canvas', () => {
+    const picked = pickUniqueClickTarget(
+      [
+        { id: 'e1', role: 'canvas', safeLabel: '', innerTextCandidate: null, isEnabled: true },
+        { id: 'e2', role: 'button', safeLabel: '', innerTextCandidate: null, isEnabled: true },
+      ],
+      ['canvas', 'hit', 'target']
+    );
+    expect(picked.ok).toBe(false);
+    if (!picked.ok) expect(picked.reason).toBe('none');
+  });
+
+  it('clicks a uniquely OCR-labeled visual surface, not an unlabeled overlay button', async () => {
+    const planner = new DeterministicPlanner();
+    const canvasId = createElementId('e1');
+    const result = await planner.proposeAction(
+      context('Click the painted NEXT STEP control', [
+        {
+          id: canvasId,
+          role: 'canvas',
+          safeLabel: 'NEXT STEP',
+          inputType: null,
+          isEnabled: true,
+          perceptionSource: 'OCR',
+          bbox: { x: 20, y: 20, width: 420, height: 72 },
+        },
+        {
+          id: createElementId('e2'),
+          role: 'button',
+          safeLabel: '',
+          inputType: 'button',
+          isEnabled: true,
+          bbox: { x: 20, y: 120, width: 220, height: 48 },
+        },
+      ])
+    );
+    expect(result.proposal.type).toBe('CLICK');
+    expect(result.proposal.targetId).toBe(canvasId);
   });
 });

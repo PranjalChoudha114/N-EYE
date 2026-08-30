@@ -38,19 +38,92 @@ export function hintTokens(phrase: string): string[] {
     .filter((t) => t.length >= 2 && !STOP.has(t));
 }
 
+function uniqueHints(tokens: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const token of tokens) {
+    if (!token || seen.has(token)) continue;
+    seen.add(token);
+    out.push(token);
+  }
+  return out;
+}
+
+/** UI-chrome nouns are click targets, not search queries. */
+function isChromeNounQuery(query: string): boolean {
+  return /\b(button|link|tab|menu|icon|control)\s*$/i.test(query.trim());
+}
+
+/**
+ * SEARCH / type-then-act dialect.
+ * WHY: "search for X in Y search bar" must keep query=X and still require submit.
+ * MUST NOT: Treat the location phrase as the typed query, or complete from typing alone.
+ */
+function parseSearchSubmitGoal(g: string): Extract<MockIntent, { kind: 'type_text' }> | null {
+  const searchFor =
+    /^(?:please\s+)?search(?:\s+(?!for\b)(.+?))?\s+for\s+["']?(.+?)["']?(?:\s+in(?:to)?\s+(?:the\s+)?(.+?))?\s*$/i.exec(
+      g
+    );
+  if (searchFor?.[2]) {
+    const query = searchFor[2].trim();
+    if (!query || isChromeNounQuery(query)) return null;
+    const scope = (searchFor[1] || '').trim();
+    const location = (searchFor[3] || '').trim();
+    return {
+      kind: 'type_text',
+      text: query,
+      fieldHints: uniqueHints(['search', ...hintTokens(scope), ...hintTokens(location)]),
+      requiresSearchSubmit: true,
+    };
+  }
+
+  const lookUp =
+    /^(?:please\s+)?look\s+up\s+["']?(.+?)["']?(?:\s+in(?:to)?\s+(?:the\s+)?(.+?))?\s*$/i.exec(g);
+  if (lookUp?.[1]) {
+    const query = lookUp[1].trim();
+    if (!query || isChromeNounQuery(query)) return null;
+    return {
+      kind: 'type_text',
+      text: query,
+      fieldHints: uniqueHints(['search', ...hintTokens(lookUp[2] || '')]),
+      requiresSearchSubmit: true,
+    };
+  }
+
+  const find =
+    /^(?:please\s+)?find\s+["']?(.+?)["']?(?:\s+in(?:to)?\s+(?:the\s+)?(.+?))?\s*$/i.exec(g);
+  if (find?.[1]) {
+    const query = find[1].trim();
+    if (!query || isChromeNounQuery(query)) return null;
+    return {
+      kind: 'type_text',
+      text: query,
+      fieldHints: uniqueHints(['search', ...hintTokens(find[2] || '')]),
+      requiresSearchSubmit: true,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Belt-and-suspenders for goals the dialect did not parse.
+ * TRUST: An unclassified "search for …" must not complete from TYPE_TEXT via the generic fallback.
+ */
+export function looksLikeSearchSubmitGoal(goal: string): boolean {
+  const g = goal.trim();
+  if (!g || /^(?:please\s+)?(?:type|enter)\s+/i.test(g)) return false;
+  const intent = parseSearchSubmitGoal(g);
+  if (intent) return true;
+  return /(?:\bsearch\s+(?:.+\s+)?for\b|\blook\s+up\b|^\s*(?:please\s+)?find\s+)/i.test(g);
+}
+
 export function parseMockGoal(goal: string): MockIntent {
   const g = goal.trim();
   if (!g) return { kind: 'unsupported' };
 
-  const searchFor = /^(?:please\s+)?search\s+for\s+["']?(.+?)["']?\s*$/i.exec(g);
-  if (searchFor?.[1]) {
-    return {
-      kind: 'type_text',
-      text: searchFor[1].trim(),
-      fieldHints: ['search'],
-      requiresSearchSubmit: true,
-    };
-  }
+  const searchIntent = parseSearchSubmitGoal(g);
+  if (searchIntent) return searchIntent;
 
   const typeIn =
     /^(?:please\s+)?(?:type|enter)\s+["']?(.+?)["']?\s+(?:in(?:to)?|on)\s+(?:the\s+)?(.+?)\s*$/i.exec(g);
@@ -165,11 +238,33 @@ export function pickUniqueTypeTextTarget<T extends { id: string; isEnabled?: boo
   return { ok: true, target: winners[0].el };
 }
 
-function isClickCapable(el: { role?: string | null; inputType?: string | null; isEnabled?: boolean }): boolean {
+function clickLabelText(el: {
+  safeLabel?: string | null;
+  innerTextCandidate?: string | null;
+  ariaLabel?: string | null;
+}): string {
+  return `${el.safeLabel || ''} ${el.innerTextCandidate || ''} ${el.ariaLabel || ''}`.trim();
+}
+
+function isVisualSurfaceRole(role: string): boolean {
+  return role === 'canvas' || role === 'img' || role === 'image';
+}
+
+function isClickCapable(el: {
+  role?: string | null;
+  inputType?: string | null;
+  isEnabled?: boolean;
+  safeLabel?: string | null;
+  innerTextCandidate?: string | null;
+  ariaLabel?: string | null;
+}): boolean {
   if (el.isEnabled === false) return false;
   const role = (el.role || '').toLowerCase();
   const t = el.inputType || '';
-  return role === 'button' || role === 'link' || t === 'submit' || t === 'button';
+  if (role === 'button' || role === 'link' || t === 'submit' || t === 'button') return true;
+  // TRUST: Canvas/img nodes are already registered local targets. Clicking an unlabeled
+  // surface because the goal contains "canvas" is a pixel guess, not OCR grounding.
+  return isVisualSurfaceRole(role) && clickLabelText(el).length > 0;
 }
 
 /**
@@ -206,6 +301,53 @@ export function pickUniqueClickTarget<T extends { id: string; isEnabled?: boolea
   if (positive.length === 0) return { ok: false, reason: 'none' };
   const max = Math.max(...positive.map((s) => s.score));
   const winners = positive.filter((s) => s.score === max);
+  if (winners.length !== 1 || !winners[0]) return { ok: false, reason: 'ambiguous' };
+  return { ok: true, target: winners[0].el };
+}
+
+type SearchSubmitEl = {
+  id: string;
+  isEnabled?: boolean;
+  role?: string | null;
+  inputType?: string | null;
+  safeLabel?: string | null;
+  innerTextCandidate?: string | null;
+  ariaLabel?: string | null;
+};
+
+function scoreSearchSubmitTarget(el: SearchSubmitEl): number {
+  if (el.isEnabled === false) return -1;
+  const role = (el.role || '').toLowerCase();
+  // TRUST: Search submit is a semantic control, not an OCR canvas guess.
+  if (isVisualSurfaceRole(role)) return -1;
+  const inputType = el.inputType || '';
+  const isControl =
+    role === 'button' || inputType === 'submit' || inputType === 'button' || role === 'link';
+  if (!isControl) return -1;
+  const trimmed = clickLabelText(el).trim();
+  if (!trimmed) return -1;
+  let score = 0;
+  if (inputType === 'submit') score += 5;
+  if (role === 'button' || inputType === 'submit' || inputType === 'button') score += 2;
+  if (/^search$/i.test(trimmed)) score += 6;
+  else if (/\bsearch\b/i.test(trimmed)) score += 4;
+  if (/\bsubmit\b/i.test(trimmed)) score += 4;
+  if (/\bfind\b/i.test(trimmed) && !/\bsearch\b/i.test(trimmed)) score += 2;
+  if (/^go$/i.test(trimmed)) score += 3;
+  return score;
+}
+
+/**
+ * Unique search/submit control. First-match is a guess.
+ * WHY: Completing SEARCH requires acting on one submit control, or ASK_USER.
+ */
+export function pickUniqueSearchSubmitTarget<T extends SearchSubmitEl>(
+  elements: T[]
+): { ok: true; target: T } | { ok: false; reason: 'none' | 'ambiguous' } {
+  const scored = elements.map((el) => ({ el, score: scoreSearchSubmitTarget(el) })).filter((s) => s.score > 0);
+  if (scored.length === 0) return { ok: false, reason: 'none' };
+  const max = Math.max(...scored.map((s) => s.score));
+  const winners = scored.filter((s) => s.score === max);
   if (winners.length !== 1 || !winners[0]) return { ok: false, reason: 'ambiguous' };
   return { ok: true, target: winners[0].el };
 }

@@ -140,7 +140,12 @@ export function bindProductUi(els: ProductEls): ProductUi {
         els.quickPrivacy.append(chip);
       }
       els.quickPrivacy.append(
-        row('Screenshot', screenshotOutboundLabel(facts.screenshotBytes), undefined, screenshotOutboundHint(facts.screenshotBytes))
+        row(
+          'Screenshot',
+          screenshotOutboundLabel(facts.screenshotBytes),
+          facts.screenshotBytes === 0 ? 'is-shot-zero' : undefined,
+          screenshotOutboundHint(facts.screenshotBytes)
+        )
       );
     }
 
@@ -187,7 +192,9 @@ export function bindProductUi(els: ProductEls): ProductUi {
       const protectedList = document.createElement('div');
       protectedList.className = 'n-facts';
       for (const line of view.protectedLines) {
-        protectedList.append(row('Protected', line));
+        protectedList.append(
+          row('Protected', line, line === 'No screenshot was sent' ? 'is-shot-zero' : undefined)
+        );
       }
       const receivedHead = document.createElement('h4');
       receivedHead.textContent = 'What the AI received';
@@ -311,7 +318,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
         row(
           screenshotOutboundLabel(rec.rawScreenshotSent ? -1 : 0),
           rec.rawScreenshotSent ? 'YES' : '0 B',
-          undefined,
+          rec.rawScreenshotSent ? undefined : 'is-shot-zero',
           screenshotOutboundHint(rec.rawScreenshotSent ? -1 : 0)
         )
       );
@@ -326,7 +333,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
       els.actionView.append(row('Target', a.targetLabel));
       if (a.targetId) els.actionView.append(row('Target id', a.targetId));
       if (a.frame) els.actionView.append(row('Frame', a.frame));
-      els.actionView.append(row('Risk', a.risk));
+      els.actionView.append(row('Risk', a.risk, a.risk === 'HIGH' ? 'is-risk-high' : a.risk === 'LOW' ? 'is-risk-low' : undefined));
       if (a.confirmationRequired !== undefined) {
         els.actionView.append(row('Your approval', a.confirmationRequired ? 'Required' : 'Not required'));
       }
@@ -381,7 +388,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
     );
     els.evidenceView.append(
       group('Perception', [
-        row(screenshotOutboundLabel(ev.screenshotOutBytes), `${ev.screenshotOutBytes} B`, undefined, screenshotOutboundHint(ev.screenshotOutBytes)),
+        row(screenshotOutboundLabel(ev.screenshotOutBytes), `${ev.screenshotOutBytes} B`, ev.screenshotOutBytes === 0 ? 'is-shot-zero' : undefined, screenshotOutboundHint(ev.screenshotOutBytes)),
         row('Crop outbound', ev.cropOutbound),
         row(
           ev.ocrInvoked ? 'Read visible text locally' : 'Did not read pixels',

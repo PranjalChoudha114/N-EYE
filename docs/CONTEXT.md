@@ -34,11 +34,11 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T021–T024 final software gate: held-out templates + packaging + red-team automated; full Chrome owner-loop and 10-demo rehearsal remain MANUAL. |
+| **Current Phase** | Sealed: premium UI, visual-action click, SEARCH outcome proof, ASK_USER Continue live-MATCHED. YouTube Continue: HUMAN REQUIRED. |
 | **Branch** | `main` |
-| **HEAD Commit** | See `git log -1`. Incoming sealed privacy repair `dc182a3`. |
-| **Latest Verified Gate** | T021 hidden templates TESTED; Chrome load PARTIALLY_PROVEN; owner-loop UNVERIFIED in this environment. |
-| **Next Eligible Gate** | Human Chrome checklist + demo rehearsal. No further feature gates unless P0/P1. |
+| **HEAD Commit** | This seal commit. Rebuild `apps/extension/dist/` so Side Panel identity matches `git rev-parse --short HEAD` with no dirty `*` if the tree is clean. |
+| **Latest Verified Gate** | SEARCH typing ≠ search proof. Continue adopts live MATCHED. TESTED. YouTube: HUMAN REQUIRED. |
+| **Next Eligible Gate** | Human Chrome: youtube.com `Search for OpenAI in YouTube search bar`; if ASK_USER, Continue once. Scenario 08 visual-only Chrome still UNVERIFIED. |
 | **SIH Prototype Completion** | ~95% (planning estimate; hidden templates exist; Chrome owner-loop still MANUAL) |
 | **Core Architecture Completion** | ~95% (planning estimate) |
 | **Company-Product Completion** | ~26% (planning estimate) |
@@ -613,6 +613,8 @@ Confirmation is a `ConfirmationBroker` capability (ADR-0011): bound to task, ori
 ## 27. Product UI
 
 Primary surfaces are the **overlay quick card** (page-isolated Shadow DOM) and the **Side Panel Trust Center**. Compact overlay: status, site, Run/Cancel, Mock/Remote, More. Side Panel: Activity / Privacy / Action / Evidence. Canonical mark is upper-left. Theme control is upper-right (`dark` / `light` / `system`, Side Panel `localStorage` only; overlay never writes page `localStorage`).
+
+Visual presentation (2026-08-30 polish): shared tokens in `ui/tokens.css` plus isolated overlay CSS. Dark navy/cyan identity, cool light mode, status pills, trust-rail icons. Human-first copy, handlers, logo files, tabs, and information architecture are unchanged. See §66.
 
 - **Compact:** site hostname, human status, optional privacy facts, Run/Cancel (Continue/Cancel when ASK_USER), Privacy Receipt after a real protected event
 - **Not compact by default:** PageEpoch, ROI, observed controls, request IDs, SafeContext JSON, seven-box pipeline — those are Details/Evidence / View technical details
@@ -1377,6 +1379,98 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Evidence:** `docs/evidence/T021-T024-*.md`, `bench/hidden/`, `bench/chrome/`.
 
+---
 
+## 65. Visual-action P1 — OCR-fused canvas/img click (2026-08-30)
 
+**Classification:** Genuine general P1 in Mock click capability, not an intentional “vision cannot act” architecture.
+
+**What real Chrome showed:** Scenario 08, goal `Click the painted CONTINUE control`. Local OCR ran (Privacy Receipt). Screenshot outbound 0 B. Outcome ASK_USER: “No unique supported control matched this request.” Rewrite/Continue re-ran Mock with the same gap.
+
+**Why automated visual 7/7 still passes:** `bench/visual` + `visual-bench.ts` score OCR text, cascade escalate, and `groundAndFuse` onto a **synthetic `role: button` named e1**. They never load Scenario 08, never call `DeterministicPlanner`, and never `click()` a canvas. `dev-visual-only-unlabeled` is fusion-to-button, not visual-only execution.
+
+**What the architecture already had:** Observer registers canvas/img via `collectClickableVisualSurfaces`. Grounding fuses OCR onto nearby registered nodes. Executor `click()`s any live registered node. Validator does not require `role=button`. T021 `isClickCapable` then required button/link/submit only, so a fused canvas label never became a CLICK.
+
+**Repair (smallest):** Mock treats canvas/img as click-capable only when they have a non-empty fused/DOM label. Unlabeled visual surfaces (held-out h06–h08) still ASK_USER. No Scenario 08 patch, no CONTINUE hard-code, no planner coordinates.
+
+**Not claimed:** Chrome Scenario 08 click VERIFIED IN REAL RUNTIME until the human reloads this build identity and retests.
+
+**Evidence:** `apps/extension/src/__tests__/visual-action.test.ts`, `mock-grammar.test.ts`, REC-028.
+
+---
+
+## 66. Final UI/UX visual refinement (2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED (unit/integration). Real Chrome visual smoke: **UNVERIFIED** (HUMAN REQUIRED — reload unpacked `apps/extension/dist/` with identity matching HEAD).
+
+**Scope:** Presentation only. Card + Side Panel look/feel. No architecture, runtime, privacy, planner, confirmation, ASK_USER, or test-portal change.
+
+**Typography:** No Orbitron/Inter files and no CDN. Display stack is `Orbitron` (local install only) → geometric system fallbacks. Body remains system UI. Brand mark files unchanged (`ui/brand.ts`).
+
+**Verified this run:** protocol 27, extension 314, planner-api 40. Lint 0 errors / 1 pre-existing warning. Extension build pass. `content.js` remains a self-contained IIFE.
+
+**Typecheck:** `pnpm typecheck` reports a pre-existing error in uncommitted `visual-action.test.ts` (TS18048). No type errors in this polish's overlay/UI files.
+
+**Build size (non-map, excluding OCR assets unchanged):** `content.js` 52945 → 59428 B; Side Panel CSS 9306 → 19482 B; Side Panel JS 141405 → 142718 B. ~+17–18 KB CSS/JS. No new image/font dependencies.
+
+**Not claimed:** Chrome overlay/Side Panel appearance VERIFIED IN REAL RUNTIME.
+
+---
+
+## 67. Post-UI real-Chrome forensic repair (2026-08-30)
+
+**Incoming:** Human Chrome after UI polish: compact card rendered and accepted task text, but **Run did not start a task** and **More / Details did not open the Side Panel**. Automated 381-pass did not cover this class (tests clicked in-shadow nodes; they did not mount the More iframe or assert CSS hit-testing).
+
+**Root cause (presentation):** UI polish added `overflow: hidden` + `position: relative` on `.nq-card` and `:active { transform: scale() }` / More `translateX`. Combined with the existing opacity-0 More iframe and `backdrop-filter`, Chrome hit-testing can miss Run and fail to deliver the user gesture to `open-panel.html`.
+
+**Repair:** `overflow: visible` on the card; isolate `.nq-more-slot`; `pointer-events: none !important` on the running sweep; no transform on control `:active`. Handlers unchanged.
+
+**Typecheck:** `visual-action.test.ts` optional-chain on `visualRegions` (TS18048). Test-only; product behavior unchanged.
+
+---
+
+## 68. Composite SEARCH false-completion P1 (2026-08-30)
+
+**Incoming (real Chrome, youtube.com, Mock):** Goal `Search for OpenAI in YouTube search bar`. TYPE_TEXT put OpenAI in the live field. Search was not submitted. YouTube did not reach results. Product showed **Completed** / “Typed text and search action were verified locally.” with Look…Prove all done.
+
+**Forensic (source, not guess):**
+1. Grammar classified the naturalistic goal as `type_text` + `requiresSearchSubmit`, but captured the location suffix as part of the query (`OpenAI in YouTube search bar`).
+2. First Mock turn: TYPE_TEXT. Live field MATCHED is typing proof only.
+3. Second turn: first-match `find()` on a button whose `safeLabel` matches `/search|go|find|submit/`.
+4. CLICK `VERIFIED_SUCCESS` could come from control-set change (suggestions), not navigation.
+5. Trust loop set `verifiedClick` on any verified CLICK. Arbiter treated `verifiedClick` + MATCHED as full SEARCH proof and emitted the false copy.
+6. Dirty visual-action `isClickCapable` WIP did **not** change `parseMockGoal`. UI hit-test repair is unrelated and was preserved.
+7. First incorrect product transition: arbiter COMPLETED from TYPE_TEXT MATCHED + any verified CLICK, without search-outcome proof.
+
+**Repair (general SEARCH / type-then-act, not youtube.com):**
+- Parse `search for X [in location]`, `find X`, `look up X`, `search <scope> for X`. Query is X. `requiresSearchSubmit` stays true.
+- Unique search/submit control or ASK_USER. No first-match.
+- Planner does not COMPLETE a pending search-submit because `stepCount >= 3`.
+- Search outcome proof is URL/origin transition (`verificationShowsNavigation`). Epoch, click(), dispatch, and field MATCHED are not enough.
+- Copy “Typed text and search action were verified locally.” only when typing and navigation are both locally proven.
+- Enter-key submit is **NOT_IMPLEMENTED** (REC-032). If the unique control click does not navigate, ASK_USER is honest.
+
+**UI:** Overlay/Side Panel presentation and hit-test repair not modified in this gate.
+
+**Evidence:** `apps/extension/src/__tests__/composite-search.test.ts` Cases A–J. Automated: protocol 27, extension 343, planner-api 40. Lint 0 errors / 1 pre-existing warning. Typecheck PASS.
+
+**Not claimed:** YouTube search VERIFIED IN REAL RUNTIME until the human reloads this dist and retests the one case.
+
+**Build identity (this repair):** `DEV • ada0311*` — `Built 2026-08-30T16:50:07.360Z (uncommitted source)`. Reload this unpacked `apps/extension/dist/`. Do not keep an older `ada0311*` from an earlier UI build.
+
+---
+
+## 69. ASK_USER Continue after composite SEARCH (2026-08-30)
+
+**Incoming (human Chrome, after §68):** Search goal typed OpenAI, suggestions appeared, N-Eye ASK_USER’d instead of false Completed. Pressing Continue could fail/reject instead of resuming from the live field.
+
+**First incorrect transition:** Continue calls `start()` → `planner.reset()` with empty `priorOutcome` → Mock proposed TYPE_TEXT again despite live MATCHED. That could duplicate text, fail re-grounding, or drop the remaining search-submit subgoal. Continue never became Allow once.
+
+**Repair:** After each fresh observation, if a unique type target’s live probe is MATCHED, adopt that as local typing proof (`priorOutcome VERIFIED`) and do not re-execute TYPE_TEXT. Remaining SEARCH still requires unique submit + navigation proof. Missing/ambiguous submit stays ASK_USER.
+
+**Continue ≠ confirmation.** No capability is minted. Stale pre-ASK_USER proposals are not replayed.
+
+**YouTube Continue retest:** HUMAN REQUIRED after reload of the sealed dist.
+
+**Tests:** `composite-search.test.ts` Continue A–F; `ask-user.test.ts` PARTIAL_GOAL / not Allow once.
 

@@ -31,6 +31,10 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-025 | Mock-dialect arbiter coverage | **Proposed** | Completion | `arbitratePlannerComplete` uses `parseMockGoal`. Goals outside that dialect can COMPLETE after any verified actionable type. Expanding the dialect is a product change, not a silent forensic patch. |
 | REC-026 | Stale unpacked identity | **Documented** (T019 forensic) | DX | Chrome MV3 has no HMR. Accept screenshots only when HEAD / `dist/build-identity.txt` / Side Panel footer match. |
 | REC-027 | Unique Mock click targets | **Adopted** (T021) | Mock planner | First-match CLICK on duplicate labels is a guess. `pickUniqueClickTarget` abstains. Not a site-specific patch. |
+| REC-028 | OCR-labeled visual surfaces are click-capable | **Adopted** | Mock planner / visual action | Canvas/img already registered as local nodes. Mock `isClickCapable` had required button/link, so fused OCR labels never became CLICK. Unlabeled visual surfaces still ASK_USER. Not site-specific; not planner coordinates. |
+| REC-029 | Self-host Orbitron (OFL) | **Proposed** | Product UI | Display stack currently uses Orbitron only if already installed; otherwise geometric system fallbacks. Bundling OFL Orbitron would need a license-file decision. No CDN. |
+| REC-030 | Compact-card trust-rail glance | **Proposed** | Product UI | Overlay has no Look…Prove rail today. A tiny 7-dot glance on the card would be presentation-only if it bound to existing `pipeline` visuals. Not built. |
+| REC-032 | Enter key as search submit | **Proposed** | Execution | Some pages submit search only via Enter in the field. Architecture has no PRESS_ENTER action. Unique search/submit CLICK is the supported path; otherwise ASK_USER. Do not add a new action type until explicitly gated. |
 
 ## 2. REC-016 — Third-Party Network Privacy Guard (not implemented)
 

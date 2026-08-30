@@ -30,6 +30,12 @@ describe('ASK_USER clarification', () => {
     );
     expect(classifyAskUser('Multiple equivalent fields.')).toBe('MULTIPLE_CANDIDATES');
     expect(classifyAskUser('This high-risk action could not be verified.')).toBe('HIGH_UNVERIFIED');
+    expect(classifyAskUser('Text is in the search field, but search was not submitted. This is not task completion.')).toBe(
+      'PARTIAL_GOAL'
+    );
+    expect(buildAskUserView('Text is in the search field, but search was not submitted.').continueLabel).not.toMatch(
+      /allow once/i
+    );
   });
 });
 

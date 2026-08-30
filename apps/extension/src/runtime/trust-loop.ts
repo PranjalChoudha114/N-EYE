@@ -19,6 +19,7 @@ import {
   type ValidatedAction,
   type VerificationResult,
   CONTENT_SCRIPT_PROTOCOL,
+  createActionId,
   createTaskId,
 } from '@n-eye/protocol';
 import { detectGoalPrivacy, detectOcrTextPrivacy } from '../privacy/detectors.js';
@@ -37,7 +38,7 @@ import {
   verifyConfirmationBinding,
 } from '../authority/confirmation.js';
 import { SecurityLog } from '../authority/security-log.js';
-import { verifyActionExecution } from '../verification/verifier.js';
+import { verifyActionExecution, verificationShowsNavigation } from '../verification/verifier.js';
 import { shouldStopAfterUnverifiedHighRisk } from '../verification/idempotency.js';
 import { applyFusionLabels, runPerception } from '../perception/index.js';
 import type { OcrEngine } from '../perception/ocr-engine.js';
@@ -621,6 +622,7 @@ export class TrustLoopController {
     let lastVerifiedType: string | undefined;
     let lastFieldState: FieldValueState | undefined;
     let verifiedClick = false;
+    let verifiedSearchOutcome = false;
 
     try {
       for (let step = 1; step <= MAX_STEPS; step++) {
@@ -792,6 +794,31 @@ export class TrustLoopController {
         );
         if (priorOutcome) {
           safeContext.priorOutcome = priorOutcome;
+        }
+
+        // TRUST: Continue is a fresh loop, not approval. Live MATCHED typing must not be
+        // re-executed; remaining search-submit is still required.
+        const typeIntent = parseMockGoal(rawGoal);
+        if (typeIntent.kind === 'type_text' && !priorOutcome) {
+          const liveTyped = pickUniqueTypeTextTarget(workingScene.elements, typeIntent.fieldHints);
+          if (liveTyped.ok && liveTyped.target.fingerprint) {
+            const probe = await probeFieldOnTab(
+              this.ports,
+              tabId,
+              liveTyped.target.fingerprint,
+              typeIntent.text,
+              liveTyped.target.frameProvenance?.frameId
+            );
+            if (probe.fieldState === 'MATCHED') {
+              lastFieldState = 'MATCHED';
+              priorOutcome = {
+                actionId: createActionId('act_live_matched'),
+                status: 'VERIFIED',
+                summary: 'Live field already holds the requested text.',
+              };
+              safeContext.priorOutcome = priorOutcome;
+            }
+          }
         }
 
         let serializedBytes: string;
@@ -971,7 +998,7 @@ export class TrustLoopController {
         if (proposal.type === 'COMPLETE') {
           let liveFieldState: FieldValueState | undefined;
           const intent = parseMockGoal(rawGoal);
-          if (intent.kind === 'type_text' && verifiedCount === 0) {
+          if (intent.kind === 'type_text' && (verifiedCount === 0 || intent.requiresSearchSubmit)) {
             const picked = pickUniqueTypeTextTarget(workingScene.elements, intent.fieldHints);
             if (picked.ok && picked.target.fingerprint) {
               const probe = await probeFieldOnTab(
@@ -992,6 +1019,7 @@ export class TrustLoopController {
               lastFieldState,
               verifiedClick,
               liveFieldState,
+              verifiedSearchOutcome,
             }),
             step
           );
@@ -1263,7 +1291,12 @@ export class TrustLoopController {
         const verifyStart = performance.now();
         this.setPipeline('VERIFY', 'active');
         this.applyPhase('VERIFYING');
-        await this.wait(120);
+        const searchIntent = parseMockGoal(rawGoal);
+        const searchClickSettle =
+          proposal.type === 'CLICK' &&
+          searchIntent.kind === 'type_text' &&
+          searchIntent.requiresSearchSubmit;
+        await this.wait(searchClickSettle ? WAIT_SETTLE_MS : 120);
         if (signal.aborted || taskGeneration !== this.taskGeneration) {
           throw new DOMException('Task cancelled by user.', 'AbortError');
         }
@@ -1326,6 +1359,9 @@ export class TrustLoopController {
             lastVerifiedType = proposal.type;
             if (fieldState) lastFieldState = fieldState;
             if (proposal.type === 'CLICK') verifiedClick = true;
+            if (verificationShowsNavigation(executionScene, postScene)) {
+              verifiedSearchOutcome = true;
+            }
           }
         }
         this.patch({
@@ -1351,6 +1387,7 @@ export class TrustLoopController {
             lastVerifiedType,
             lastFieldState,
             verifiedClick,
+            verifiedSearchOutcome,
           }),
           this.state.step?.index ?? MAX_STEPS
         );

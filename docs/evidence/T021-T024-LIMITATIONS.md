@@ -9,6 +9,7 @@
 | PII_NAME/ADDRESS/ACCOUNT not scored as detections | Taxonomy gap | Policy maps exist; not claimed as P/R | Email/phone/secrets are scored | Expand detectors | We do not claim we detect every PII class |
 | T019 latency is Node/happy-dom | Not Chrome E2E p95 | Labeled RESULT for that runtime | Chrome supplement is sparse | Chrome traces | We report the runtime we measured |
 | OCR fixtures are high-contrast | Not all UI fonts | Fail closed / ASK_USER | — | Optional engine swap (REC-017) | Local OCR on controlled fixtures, not every screenshot |
+| T019 visual 7/7 is perception, not Chrome visual-action | Fixture OCR/cascade/fusion onto a synthetic button | Real Chrome must still fuse onto a registered live node and propose CLICK | REC-028: labeled canvas/img are click-capable | Coordinate clicks remain forbidden | Automated visual 7/7 does not prove “click the painted control” in Chrome |
 | Live Gemini 429/503 | Remote path unavailable | Skip/degrade; Mock backup | Mock demo | — | Provider outage does not grant extra authority |
 | Side Panel open needs user gesture | CDP cannot finish owner-loop E2E | Manual checklist | Human Reload + click | — | Judges should click the toolbar like a user |
 | 10 consecutive demo runs | Not executed in this agent environment | Procedure frozen; human rehearsal | Rehearse on finale hardware | — | Demo reliability is an operator procedure |

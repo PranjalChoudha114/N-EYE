@@ -12,10 +12,17 @@ import {
   createActionId,
 } from '@n-eye/protocol';
 import type { Planner, PlannerOptions, PlannerProposalResult } from './types.js';
-import { parseMockGoal, pickUniqueClickTarget, pickUniqueTypeTextTarget } from './mock-grammar.js';
+import {
+  parseMockGoal,
+  pickUniqueClickTarget,
+  pickUniqueSearchSubmitTarget,
+  pickUniqueTypeTextTarget,
+} from './mock-grammar.js';
 
 export class DeterministicPlanner implements Planner {
   private stepCount = 0;
+  /** Set when a search-submit CLICK has already been proposed this task. */
+  private searchSubmitProposed = false;
 
   public async proposeAction(
     context: SafeContext,
@@ -50,7 +57,10 @@ export class DeterministicPlanner implements Planner {
     const intent = parseMockGoal(goal);
     const id = (): ReturnType<typeof createActionId> => createActionId(`act_${Date.now()}_${this.stepCount}`);
 
-    if (context.priorOutcome?.status === 'VERIFIED' && this.stepCount >= 3) {
+    const pendingSearchSubmit =
+      intent.kind === 'type_text' && intent.requiresSearchSubmit && !this.searchSubmitProposed;
+    // TRUST: Do not skip the required search-submit turn just because the loop is on step 3.
+    if (context.priorOutcome?.status === 'VERIFIED' && this.stepCount >= 3 && !pendingSearchSubmit) {
       return {
         actionId: id(),
         type: 'COMPLETE',
@@ -80,20 +90,36 @@ export class DeterministicPlanner implements Planner {
           riskLevel: 'LOW',
         };
       }
+      if (intent.requiresSearchSubmit && this.searchSubmitProposed) {
+        if (context.priorOutcome?.status === 'VERIFIED') {
+          return {
+            actionId: id(),
+            type: 'COMPLETE',
+            reasoning: 'Mock proposed search submit. Local proof of search outcome is still required.',
+            expectedOutcome: 'Local arbiter confirms search occurred or asks the user.',
+            riskLevel: 'LOW',
+          };
+        }
+        return {
+          actionId: id(),
+          type: 'ASK_USER',
+          reasoning:
+            'A search control was activated, but N-Eye could not verify that search actually occurred. This is not completion.',
+          expectedOutcome: 'User confirms search results or retries.',
+          riskLevel: 'LOW',
+        };
+      }
       if (context.priorOutcome?.status === 'VERIFIED' && intent.requiresSearchSubmit) {
-        const searchBtn = context.safeElements.find(
-          (e) =>
-            e.isEnabled &&
-            (e.role === 'button' || e.inputType === 'submit') &&
-            /search|go|find|submit/i.test(e.safeLabel)
-        );
-        if (searchBtn) {
+        const picked = pickUniqueSearchSubmitTarget(context.safeElements);
+        if (picked.ok) {
+          this.searchSubmitProposed = true;
+          const searchBtn = picked.target;
           return {
             actionId: id(),
             type: 'CLICK',
             targetId: searchBtn.id,
-            reasoning: 'Text is present. Proposing a search/submit click. Completion is still local.',
-            expectedOutcome: 'Search is submitted.',
+            reasoning: 'Text is present. Proposing the unique search/submit control. Completion is still local.',
+            expectedOutcome: 'Search is submitted and the resulting state can be verified locally.',
             riskLevel: searchBtn.inputType === 'submit' ? 'HIGH' : 'LOW',
           };
         }
@@ -101,7 +127,9 @@ export class DeterministicPlanner implements Planner {
           actionId: id(),
           type: 'ASK_USER',
           reasoning:
-            'Typed text may be present, but N-Eye found no unique search button to click. This is not completion.',
+            picked.reason === 'ambiguous'
+              ? 'Typed text may be present, but multiple search/submit controls match. N-Eye will not guess. This is not completion.'
+              : 'Typed text may be present, but N-Eye found no unique search button to click. This is not completion.',
           expectedOutcome: 'User completes search.',
           riskLevel: 'LOW',
         };
@@ -234,5 +262,6 @@ export class DeterministicPlanner implements Planner {
 
   public reset(): void {
     this.stepCount = 0;
+    this.searchSubmitProposed = false;
   }
 }

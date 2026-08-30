@@ -267,6 +267,11 @@ export function verifyActionExecution(
   };
 }
 
+/** Search outcome proof. Epoch and control-set churn are not search success. */
+export function verificationShowsNavigation(preScene: RawScene, postScene: RawScene): boolean {
+  return preScene.origin !== postScene.origin || preScene.url !== postScene.url;
+}
+
 function semanticShift(before: string | null | undefined, after: string | null | undefined): boolean {
   return (before || '').trim().toLowerCase() !== (after || '').trim().toLowerCase();
 }

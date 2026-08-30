@@ -38,7 +38,16 @@ const RULES: Array<{ reason: AskUserReason; tests: RegExp[] }> = [
   { reason: 'AMBIGUOUS_TARGET', tests: [/multiple matching/i, /will not guess which/i] },
   { reason: 'MULTIPLE_CANDIDATES', tests: [/multiple equivalent/i] },
   { reason: 'CUSTOM_SELECT', tests: [/custom widgets/i, /unique native select/i] },
-  { reason: 'SEARCH_SUBMIT_MISSING', tests: [/no unique search button/i] },
+  { reason: 'SEARCH_SUBMIT_MISSING', tests: [/no unique search button/i, /multiple search\/submit/i] },
+  {
+    reason: 'PARTIAL_GOAL',
+    tests: [
+      /search was not submitted/i,
+      /search actually occurred/i,
+      /no longer holds the requested text/i,
+      /complete this step/i,
+    ],
+  },
   { reason: 'HIGH_UNVERIFIED', tests: [/high-risk action could not be verified/i] },
   { reason: 'TYPE_UNVERIFIED', tests: [/typed text could not/i, /did not keep the intended text/i, /field did not keep/i] },
   { reason: 'VERIFICATION_AMBIGUOUS', tests: [/verification was ambiguous/i, /could not be verified/i] },
@@ -46,7 +55,6 @@ const RULES: Array<{ reason: AskUserReason; tests: RegExp[] }> = [
   { reason: 'UNSUPPORTED_CONTROL', tests: [/no supported text field/i, /can't safely use this control/i] },
   { reason: 'UNKNOWN_GOAL', tests: [/outside the .*grammar/i, /will not invent success/i, /next instruction/i] },
   { reason: 'NO_SUPPORTED_ACTION', tests: [/no unique supported control/i] },
-  { reason: 'PARTIAL_GOAL', tests: [/complete this step/i] },
 ];
 
 const HUMAN: Record<AskUserReason, string> = {

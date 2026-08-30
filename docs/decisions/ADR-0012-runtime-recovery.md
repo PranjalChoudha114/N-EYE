@@ -27,5 +27,5 @@ T017/T018 is the runtime-resilience campaign. T015/T016 already made confirmatio
 ## Consequences
 - **Positive:** YouTube-class surrogate pages no longer crash local UTF-8 serialization. Provider outages are truthful. Cancellation races and HIGH ambiguity fail closed. SELECT/SCROLL are real, locally authorized actions.
 - **Negative:** Native-select-only SELECT; custom widgets ask the user. Completing a “search for X” goal still requires a unique search/submit control after typing; typing alone is not task success.
-- **Residual:** True Chrome MV3 service-worker termination is not proven by jsdom. Live Gemini task success remains quota-dependent. Cross-site TYPE_TEXT is control-class based, not universal.
+- **Residual:** True Chrome MV3 service-worker termination is not proven by jsdom. Live Gemini task success remains quota-dependent. Cross-site TYPE_TEXT is control-class based, not universal. Completing SEARCH requires a verified URL/origin transition after submit, not a verified CLICK or a MATCHED search field. ASK_USER Continue is a fresh loop (not Allow once); live MATCHED typing may be adopted from a new observation.
 - **Out of scope:** formal SIH P/R/F1, resource benches, final red-team, packaging.

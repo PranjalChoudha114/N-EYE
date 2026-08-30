@@ -1,5 +1,5 @@
 import type { FieldValueState, LocalCompletionKind } from '@n-eye/protocol';
-import { parseMockGoal } from '../planner/mock-grammar.js';
+import { looksLikeSearchSubmitGoal, parseMockGoal } from '../planner/mock-grammar.js';
 import type { PipelineState, ProductPhase } from './ui-snapshot.js';
 
 /**
@@ -17,6 +17,8 @@ export interface CompletionFacts {
   lastFieldState?: FieldValueState;
   verifiedClick: boolean;
   liveFieldState?: FieldValueState;
+  /** URL/origin transition after a verified action. Not click() and not field MATCHED. */
+  verifiedSearchOutcome?: boolean;
 }
 
 export interface CompletionDecision {
@@ -30,9 +32,19 @@ const ACTIONABLE = new Set(['CLICK', 'TYPE_TEXT', 'TYPE_TOKEN', 'SELECT', 'SCROL
 
 export function arbitratePlannerComplete(facts: CompletionFacts): CompletionDecision {
   const intent = parseMockGoal(facts.goal);
+  const searchSubmit =
+    (intent.kind === 'type_text' && intent.requiresSearchSubmit) || looksLikeSearchSubmitGoal(facts.goal);
 
-  if (intent.kind === 'type_text' && intent.requiresSearchSubmit) {
-    if (facts.verifiedCount >= 1 && facts.verifiedClick && facts.lastFieldState === 'MATCHED') {
+  if (searchSubmit) {
+    const fieldOverwritten =
+      facts.liveFieldState === 'EMPTY' ||
+      facts.liveFieldState === 'DIVERGED' ||
+      facts.lastFieldState === 'EMPTY' ||
+      facts.lastFieldState === 'DIVERGED';
+    const typed =
+      facts.lastFieldState === 'MATCHED' || facts.liveFieldState === 'MATCHED';
+    // TRUST: TYPE_TEXT MATCHED proves typing. Search requires a verified resulting-state transition.
+    if (facts.verifiedSearchOutcome === true && typed && !fieldOverwritten) {
       return {
         kind: 'VERIFIED_SEQUENCE',
         phase: 'COMPLETED',
@@ -40,7 +52,24 @@ export function arbitratePlannerComplete(facts: CompletionFacts): CompletionDeci
         alreadySatisfied: false,
       };
     }
-    if (facts.lastFieldState === 'MATCHED' || facts.liveFieldState === 'MATCHED') {
+    if (fieldOverwritten && facts.verifiedCount >= 1) {
+      return {
+        kind: 'PARTIAL',
+        phase: 'ASK_USER',
+        message: 'The search field no longer holds the requested text. This is not task completion.',
+        alreadySatisfied: false,
+      };
+    }
+    if (typed && facts.verifiedClick && facts.verifiedSearchOutcome !== true) {
+      return {
+        kind: 'PARTIAL',
+        phase: 'ASK_USER',
+        message:
+          'A search control was activated, but N-Eye could not verify that search actually occurred. This is not task completion.',
+        alreadySatisfied: false,
+      };
+    }
+    if (typed) {
       return {
         kind: 'PARTIAL',
         phase: 'ASK_USER',
@@ -72,6 +101,9 @@ export function arbitratePlannerComplete(facts: CompletionFacts): CompletionDeci
   }
 
   if (facts.verifiedCount >= 1 && facts.lastVerifiedType && ACTIONABLE.has(facts.lastVerifiedType)) {
+    if (facts.lastVerifiedType === 'TYPE_TEXT' && looksLikeSearchSubmitGoal(facts.goal)) {
+      return unproven();
+    }
     return {
       kind: 'VERIFIED_SEQUENCE',
       phase: 'COMPLETED',

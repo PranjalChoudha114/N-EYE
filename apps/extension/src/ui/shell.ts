@@ -4,7 +4,18 @@
  */
 
 import { brandUrl } from './brand.js';
-import { iconChevron, iconMoon } from './icons.js';
+import {
+  iconAsk,
+  iconCheck,
+  iconChevron,
+  iconClock,
+  iconDo,
+  iconLook,
+  iconMoon,
+  iconProtect,
+  iconProve,
+  iconRead,
+} from './icons.js';
 import { pipelineRailLabel, pipelineStageHelp } from './pipeline-copy.js';
 
 export interface ProductEls {
@@ -87,6 +98,10 @@ export function mountProductShell(doc: Document): ProductEls {
     height: '14',
   });
   const trustState = h('p', { id: 'n-trust-state', class: 'n-kicker' }, ['Ready']);
+  const statusPill = h('div', { class: 'n-status-pill' }, [
+    h('span', { class: 'n-status-dot', 'aria-hidden': 'true' }),
+    trustState,
+  ]);
   const themeToggle = h('button', {
     id: 'n-theme',
     class: 'n-icon-btn',
@@ -115,15 +130,26 @@ export function mountProductShell(doc: Document): ProductEls {
   const run = h('button', { id: 'n-run', class: 'n-btn n-btn-primary', type: 'button' }, ['Run']);
   const cancel = h('button', { id: 'n-cancel', class: 'n-btn n-btn-danger hidden', type: 'button' }, ['Cancel']);
   const extra = h('button', { id: 'n-extra', class: 'n-btn n-btn-quiet hidden', type: 'button' }, ['View result']);
-  const askHint = h('p', { id: 'n-ask-hint', class: 'n-caption hidden' });
+  const askHint = h('p', { id: 'n-ask-hint', class: 'n-caption n-ask-callout hidden' });
   const receipt = h('section', { id: 'n-receipt', class: 'n-receipt hidden', 'aria-label': 'Privacy Receipt' });
 
   const pipeline = h('ol', { id: 'n-pipeline', class: 'n-rail', 'aria-label': 'Trust loop' });
   const stages = ['SEE', 'PERCEIVE', 'PROTECT', 'THINK', 'VALIDATE', 'ACT', 'VERIFY'] as const;
+  const railIcon = {
+    SEE: iconLook,
+    PERCEIVE: iconRead,
+    PROTECT: iconProtect,
+    THINK: iconAsk,
+    VALIDATE: iconCheck,
+    ACT: iconDo,
+    VERIFY: iconProve,
+  } as const;
   for (const stage of stages) {
+    const dot = h('span', { class: 'n-rail-dot', 'aria-hidden': 'true' });
+    dot.append(railIcon[stage]());
     pipeline.append(
       h('li', { class: 'n-rail-step is-pending', 'data-stage': stage }, [
-        h('span', { class: 'n-rail-dot' }),
+        dot,
         h('span', { class: 'n-rail-name', title: `${stage} · ${pipelineStageHelp(stage)}` }, [
           pipelineRailLabel(stage),
         ]),
@@ -148,15 +174,19 @@ export function mountProductShell(doc: Document): ProductEls {
 
   const tabs = h('div', { class: 'n-tabs', role: 'tablist', 'aria-label': 'Trust Center' }, [
     h('button', { class: 'n-tab is-active', type: 'button', role: 'tab', 'aria-selected': 'true', 'data-tab': 'activity' }, [
+      iconClock(),
       'Activity',
     ]),
     h('button', { class: 'n-tab', type: 'button', role: 'tab', 'aria-selected': 'false', 'data-tab': 'privacy' }, [
+      iconProtect(),
       'Privacy',
     ]),
     h('button', { class: 'n-tab', type: 'button', role: 'tab', 'aria-selected': 'false', 'data-tab': 'action' }, [
+      iconDo(),
       'Action',
     ]),
     h('button', { class: 'n-tab', type: 'button', role: 'tab', 'aria-selected': 'false', 'data-tab': 'evidence' }, [
+      iconRead(),
       'Evidence',
     ]),
   ]);
@@ -204,7 +234,7 @@ export function mountProductShell(doc: Document): ProductEls {
     h('header', { class: 'n-header' }, [
       h('div', { class: 'n-brand' }, [
         mark,
-        h('div', {}, [h('h1', { class: 'n-name' }, ['N-Eye']), trustState]),
+        h('div', { class: 'n-brand-text' }, [h('h1', { class: 'n-name' }, ['N-Eye']), statusPill]),
       ]),
       h('div', { class: 'n-header-actions' }, [themeToggle, detailsBtn]),
     ]),
