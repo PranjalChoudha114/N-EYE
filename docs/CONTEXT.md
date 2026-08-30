@@ -36,8 +36,8 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | **Project** | N-Eye |
 | **Current Phase** | T017/T018: runtime resilience + failure/recovery + execution completion. T015/T016 authority preserved. |
 | **Branch** | `main` |
-| **HEAD Commit** | T017/T018 seal on parent `ea96f04`. See `git log -1` / §61. |
-| **Latest Verified Gate** | Gate 017/018: Unicode transport, classified planner retry, SELECT/SCROLL executors, TYPE_TOKEN resulting-state verification. Chrome E2E MANUAL. |
+| **HEAD Commit** | T017/T018 local-completion repair on parent `3cdd2fd`. See `git log -1` / §61a. |
+| **Latest Verified Gate** | Gate 017/018 repair: local completion arbiter + TYPE_TEXT resulting-state. Chrome E2E MANUAL after rebuild. |
 | **Next Eligible Gate** | Gate 019/020: formal SIH measurement (PII P/R/F1, sanitization, canary leakage, visual-context, latency/resource). |
 | **SIH Prototype Completion** | ~88% (planning estimate; recovery exists; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
 | **Core Architecture Completion** | ~92% (planning estimate; SELECT/SCROLL executors implemented; formal benches remain) |
@@ -357,7 +357,7 @@ N-Eye/
 
 20. **Multi-step Loop**: Sets `priorOutcome` from verification result. Feeds back into next step's `SafeContext.priorOutcome`. Repeats up to `MAX_STEPS = 8`. Cycle detection: if same `type:targetId:tokenId` signature appears 3+ times, throws loop safety error.
 
-**END**: Task completes via `COMPLETE` proposal, `ASK_USER` proposal, `MAX_STEPS` reached, user cancellation, or error.
+**END**: Task terminates via local completion arbiter (`VERIFIED_SEQUENCE` / `ALREADY_SATISFIED`), `ASK_USER`, block/error, cancellation, or `MAX_STEPS`. Planner `COMPLETE` is untrusted advice and is **not** product success.
 
 ---
 
@@ -517,7 +517,7 @@ The system prompt ([`system_prompt.py`](file:///Users/pranjalchoudha/Desktop/N-E
 | `SELECT` | Select a dropdown option | `targetId`, `textValue` | `LOW` |
 | `WAIT` | Wait for page to settle | None | `LOW` |
 | `ASK_USER` | Request user clarification | None | `LOW` |
-| `COMPLETE` | Signal task completion | None | `LOW` |
+| `COMPLETE` | Planner believes no further actions are required (untrusted advice) | None | `LOW` |
 
 **Why proposals remain untrusted**: The remote model may hallucinate element IDs that don't exist, reference tokens it doesn't have access to, or propose actions on disabled elements. Local validation catches all of these. The model has zero ability to execute anything directly.
 
@@ -1282,18 +1282,35 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Fresh automated counts (post-repair suite):**
 - `@n-eye/protocol`: 27 passed
-- `@n-eye/extension`: 263 passed (live Gemini test skipped internally when gateway offline; counted as pass by vitest skip-inside-test)
-- `apps/planner-api`: 37 passed / 1 skipped (live Gemini)
-- TOTAL: 327 passed / 0 failed / 1 skipped
+- `@n-eye/extension`: 285 passed (live Gemini test skipped internally when gateway offline; counted as pass by vitest skip-inside-test)
+- `apps/planner-api`: 40 passed this run (includes live Gemini on this machine)
+- TOTAL: 352 passed / 0 failed / 0 skipped (this machine; live Gemini is environment-dependent)
 - lint: 0 errors (pre-existing `no-console` warning in real-gemini integration test)
 - typecheck: pass
-- extension build: pass. `apps/extension/dist/content.js` is a self-contained IIFE (no `import`). Build identity at this working-tree build: `DEV • ea96f04*` (dirty `*` because the gate was uncommitted). After seal, do not rebuild solely to clear `*`.
+- extension build: pass. `apps/extension/dist/content.js` is a self-contained IIFE. Build identity before commit: `DEV • 3cdd2fd*` (dirty `*` because this repair was uncommitted). After the repair commit, rebuild so identity matches the repair SHA.
 
 **Ending HEAD:** this T017/T018 seal commit on `main` (see `git log -1`). Pushed: NO.
 
 **Not claimed:** formal SIH P/R/F1, live YouTube Gemini task success, real MV3 service-worker kill, universal site guarantee.
 
 **Next eligible combined gate:** T019/T020 Formal SIH Measurement.
+
+---
+
+## 61a. T017/T018 focused repair — local completion (2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED. Real Chrome E2E after this repair: see `docs/evidence/T017-T018-MANUAL-CHECKLIST.md` (rebuild `apps/extension/dist/` before the human session).
+
+**Incoming defect (human Chrome, Mock, youtube.com):** goal “Type OpenAI in the YouTube search box” left the search box empty while UI showed Completed / “All available goal actions completed on current page state.” / “Task completed successfully.” with VALIDATE/ACT/VERIFY pending. Dist identity was `DEV • ea96f04*` vs sealed source `3cdd2fd`. The false-COMPLETE path also exists in `3cdd2fd` source.
+
+**Root cause (not a YouTube patch):**
+1. Mock planner had no TYPE_TEXT grammar; unknown goals fell through to planner `COMPLETE`.
+2. Trust loop treated planner `COMPLETE` as product `COMPLETED` before VALIDATE/ACT/VERIFY.
+3. Loop-end `PROTECTED`/`PLANNING` was promoted to Completed without local proof.
+
+**Repair:** bounded Mock grammar; local completion arbiter; native value setter + post-observe field probe; searchbox `inputType`; truthful ASK_USER when unproven.
+
+**Do not start T019/T020 until a human reloads the rebuilt unpacked extension and confirms YouTube no longer shows false Completed.**
 
 
 

@@ -4,7 +4,7 @@
  * WHY: The overlay is a view. Tests inject fakes. Vault never travels these messages.
  */
 
-import type { ExtensionMessage, ExtensionResponse, RoiSpec, ValidatedAction } from '@n-eye/protocol';
+import type { ExtensionMessage, ExtensionResponse, FrameId, RoiSpec, TargetFingerprint, ValidatedAction } from '@n-eye/protocol';
 import type { ExecutionResult } from '../execution/executor.js';
 import { discardWireRois, wireRoisToBuffers, type CapturedRoiWire } from '../perception/capture.js';
 import type { PixelBuffer } from '../perception/pixel-buffer.js';
@@ -102,6 +102,29 @@ export async function executeOnTab(
   });
   if (!result.ok) {
     return { success: false, error: result.lastError };
+  }
+  return result.data;
+}
+
+/**
+ * Read live typed-field relation after a fresh observation. Never returns the raw value.
+ * PRIVACY: expectedText stays on this device; only FieldValueState comes back.
+ */
+export async function probeFieldOnTab(
+  ports: PagePorts,
+  tabId: number,
+  fingerprint: TargetFingerprint,
+  expectedText: string,
+  frameId?: FrameId
+): Promise<ExecutionResult> {
+  const result = await ports.send<ExecutionResult>(tabId, {
+    type: 'PROBE_FIELD_REQUEST',
+    fingerprint,
+    expectedText,
+    frameId,
+  });
+  if (!result.ok) {
+    return { success: false, error: result.lastError, fieldState: 'UNREADABLE' };
   }
   return result.data;
 }

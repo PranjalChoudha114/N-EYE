@@ -101,11 +101,15 @@ Implemented. Local `targetId`, native `HTMLSelectElement` only, option via `text
 
 Implemented. Viewport if no target; container or `scrollIntoView` if targeted. Schema reject `|delta| > 2000`. Execute clamp 800px. No Infinity/NaN/script/selector. Verifier: moved, or truthful boundary, else failure. Fresh observation is the next loop step.
 
-## 13. TYPE_TOKEN verification
+## 13. TYPE_TOKEN / TYPE_TEXT verification
 
-Executor reads live control after dispatch (`MATCHED` / `EMPTY` / `DIVERGED` / `UNREADABLE`) without logging values. Verifier requires `MATCHED` for success. Missing evidence → AMBIGUOUS. Evidence JSON must not contain the raw token value.
+Executor uses the native prototype value setter plus bubbling `input`/`change` (and bounded contenteditable insert). Live control is re-read (`MATCHED` / `EMPTY` / `DIVERGED` / `UNREADABLE`). After a fresh observation, `PROBE_FIELD_REQUEST` re-grounds by fingerprint when the node was replaced. Verifier requires `MATCHED` for success. Missing evidence → AMBIGUOUS. Evidence JSON must not contain the raw value.
 
-Limitation: overwrite that happens after the executor returns (async framework) is UNVERIFIED by this sync read.
+Limitation: closed shadow roots and inaccessible iframes remain unobservable. Duplicate equivalent fields → ASK_USER.
+
+## 13b. Local completion
+
+Planner `COMPLETE` is not product success. `completion-arbiter.ts` requires verified local actions or a live already-satisfied field probe. Mock unknown grammar → ASK_USER. Green Completed with pending ACT/VERIFY is rejected unless already-satisfied (ACT skipped).
 
 ## 14. Privacy / network proof (automated)
 
@@ -133,24 +137,28 @@ Existing T015/T016 suites remain in the 263 extension tests: proposal extra keys
 
 ## 17. Fresh automated counts (this gate, post-repair)
 
+Recorded after the local-completion repair (not the earlier 327 seal):
+
 - `@n-eye/protocol`: 27 passed / 0 failed
-- `@n-eye/extension`: 263 passed / 0 failed
-- `apps/planner-api`: 37 passed / 0 failed / 1 skipped (live Gemini)
-- TOTAL: 327 passed / 0 failed / 1 skipped
-- lint: 0 errors
+- `@n-eye/extension`: 285 passed / 0 failed
+- `apps/planner-api`: 40 passed this run (live Gemini included on this machine)
+- TOTAL: 352 passed / 0 failed
+- lint: 0 errors (pre-existing `no-console` warning in real-gemini integration test)
 - typecheck: pass
-- `pnpm build:extension`: pass; `dist/content.js` IIFE present
+- `pnpm build:extension`: pass; `dist/content.js` IIFE present; identity `DEV • 3cdd2fd*` before the repair commit
 
 ## 18. Real Chrome / YouTube
 
-- Unpacked Chrome checklist: **UNVERIFIED** (`T017-T018-MANUAL-CHECKLIST.md`)
+- Unpacked Chrome checklist: **UNVERIFIED** until the human reloads the rebuilt dist (`T017-T018-MANUAL-CHECKLIST.md`)
+- False COMPLETE on YouTube Mock: **root-caused** in source; **must not recur** after rebuild + Reload
 - YouTube live Gemini success: **UNVERIFIED** / may be **BLOCKED BY 429**
-- Unicode transport: **TESTED** (deterministic). Chrome YouTube: UNVERIFIED until a human runs C.
+- Unicode transport: **TESTED** (deterministic). Chrome YouTube: UNVERIFIED until a human runs C and the type-text checklist.
 
 ## 19. Known limitations
 
 - Custom SELECT widgets are ASK_USER, not JS automation.
-- Async TYPE_TOKEN overwrite after executor return.
+- “Search for X” is not complete after typing if no unique search/submit control exists.
+- Closed shadow / inaccessible iframe / custom combobox: ASK_USER or unsupported.
 - jsdom ≠ real MV3 service-worker kill.
 - Formal SIH P/R/F1 not this gate.
 - Live Gemini availability not guaranteed.

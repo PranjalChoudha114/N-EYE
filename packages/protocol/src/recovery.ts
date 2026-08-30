@@ -44,7 +44,28 @@ export type PlannerTransportCode =
   | 'UNKNOWN_SAFE_FAILURE';
 
 /** Local resulting-state evidence. Never includes the raw typed/token value. */
-export type FieldValueState = 'MATCHED' | 'EMPTY' | 'DIVERGED' | 'UNREADABLE' | 'NOT_APPLICABLE';
+export type FieldValueState =
+  | 'MATCHED'
+  | 'EMPTY'
+  | 'DIVERGED'
+  | 'UNREADABLE'
+  | 'NOT_APPLICABLE'
+  | 'TARGET_REPLACED'
+  | 'AMBIGUOUS';
+
+/**
+ * Local completion truth (Zone 3).
+ * WHY: Planner COMPLETE is untrusted advice. Green Completed requires local proof.
+ */
+export type LocalCompletionKind =
+  | 'VERIFIED_SEQUENCE'
+  | 'ALREADY_SATISFIED'
+  | 'PLANNER_COMPLETE_UNPROVEN'
+  | 'NO_SUPPORTED_ACTION'
+  | 'AMBIGUOUS_TARGET'
+  | 'PARTIAL'
+  | 'FAILED'
+  | 'CANCELLED';
 
 export interface ExecutionEvidence {
   fieldState?: FieldValueState;

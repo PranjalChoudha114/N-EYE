@@ -22,9 +22,10 @@ T017/T018 is the runtime-resilience campaign. T015/T016 already made confirmatio
 5. **Perception failure is local.** Capture/OCR errors never send rasters. If visual evidence was required and structure is insufficient, the loop stops in `OCR_UNAVAILABLE`.
 6. **SELECT / SCROLL are constrained executors.** Native `<select>` only; option from local `textValue`. SCROLL amounts are schema-bounded (2000px reject) and execute-clamped (800px). No planner selectors or JavaScript.
 7. **Resulting-state verification.** TYPE_TOKEN/TYPE_TEXT succeed only when the live control holds the intended value (`fieldState === MATCHED`). Raw values never enter evidence. HIGH + not `VERIFIED_SUCCESS` → `ASK_USER`, no automatic replay.
+8. **Local completion arbiter.** Planner `COMPLETE`, empty action lists, and Mock unknown-grammar must not become product `COMPLETED`. Green Completed requires verified local actions or a live already-satisfied field probe. VALIDATE/ACT/VERIFY pending must not coexist with Completed unless the goal was proven already satisfied (ACT skipped, VERIFY done).
 
 ## Consequences
 - **Positive:** YouTube-class surrogate pages no longer crash local UTF-8 serialization. Provider outages are truthful. Cancellation races and HIGH ambiguity fail closed. SELECT/SCROLL are real, locally authorized actions.
-- **Negative:** Native-select-only SELECT; custom widgets ask the user. TYPE_TOKEN cannot re-read after an asynchronous app overwrite that happens after the executor returns.
-- **Residual:** True Chrome MV3 service-worker termination is not proven by jsdom. Live Gemini task success remains quota-dependent.
+- **Negative:** Native-select-only SELECT; custom widgets ask the user. Completing a “search for X” goal still requires a unique search/submit control after typing; typing alone is not task success.
+- **Residual:** True Chrome MV3 service-worker termination is not proven by jsdom. Live Gemini task success remains quota-dependent. Cross-site TYPE_TEXT is control-class based, not universal.
 - **Out of scope:** formal SIH P/R/F1, resource benches, final red-team, packaging.

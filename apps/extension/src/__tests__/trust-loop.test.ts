@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CONTENT_SCRIPT_PROTOCOL,
   createElementId,
@@ -59,6 +59,9 @@ function mockPorts(sceneFn: () => RawScene = scene): PagePorts {
       if (message.type === 'EXECUTE_ACTION_REQUEST') {
         return { ok: true, data: { success: true, fieldState: 'MATCHED', scrollMoved: true, selectMatched: true } as T };
       }
+      if (message.type === 'PROBE_FIELD_REQUEST') {
+        return { ok: true, data: { success: false, fieldState: 'EMPTY' } as T };
+      }
       return { ok: false, lastError: 'unexpected' };
     },
     async inject() {
@@ -94,7 +97,9 @@ describe('TrustLoopController', () => {
     await controller.start('Continue');
     const state = controller.getState();
     expect(state.running).toBe(false);
-    expect(['COMPLETED', 'PROTECTED', 'READY']).toContain(state.phase);
+    expect(state.phase).toBe('ASK_USER');
+    expect(state.headline).not.toMatch(/^Completed$/);
+    expect(state.message).not.toMatch(/completed successfully/i);
     expect(JSON.stringify(state)).not.toContain('CANARY_PASSWORD');
     expect(state.evidence.screenshotOutBytes).toBe(0);
     expect(controller.getVaultSize()).toBeGreaterThanOrEqual(0);
@@ -123,6 +128,9 @@ describe('TrustLoopController', () => {
         if (message.type === 'OBSERVE_REQUEST') return { ok: true, data: submitScene() as T };
         if (message.type === 'EXECUTE_ACTION_REQUEST') {
           return { ok: false, lastError: 'should not execute' };
+        }
+        if (message.type === 'PROBE_FIELD_REQUEST') {
+          return { ok: true, data: { success: false, fieldState: 'EMPTY' } as T };
         }
         return { ok: false, lastError: 'unexpected' };
       },
@@ -209,5 +217,156 @@ describe('TrustLoopController', () => {
     controller.hydrate({ ...idle, running: true, phase: 'PLANNING', canCancel: true });
     expect(controller.getState().running).toBe(false);
     expect(controller.getState().phase).toBe('CANCELLED');
+  });
+
+  it('does not declare Completed when Mock cannot type and VALIDATE/ACT/VERIFY never ran', async () => {
+    const controller = new TrustLoopController({
+      ports: mockPorts(),
+      planner: new PlannerManager('MOCK'),
+      ocr: new MockOcrEngine(),
+      delayFn: async () => undefined,
+    });
+    controller.bindTab(tab);
+    await controller.start('Type OpenAI in the YouTube search box');
+    const state = controller.getState();
+    expect(state.phase).toBe('ASK_USER');
+    expect(state.headline).not.toBe('Completed');
+    expect(state.step?.summary).not.toMatch(/completed successfully/i);
+    expect(state.pipeline.VALIDATE).not.toBe('done');
+    expect(state.pipeline.ACT).not.toBe('done');
+    expect(state.evidence.screenshotOutBytes).toBe(0);
+  });
+
+  it('completes a type-only goal only after MATCHED local evidence', async () => {
+    const searchScene = (): RawScene => ({
+      ...scene(),
+      elements: [
+        {
+          id: createElementId('e1'),
+          tagName: 'input',
+          role: 'searchbox',
+          ariaLabel: 'Search',
+          innerTextCandidate: 'Search',
+          inputType: 'search',
+          isEnabled: true,
+          bbox: { x: 0, y: 0, width: 240, height: 32 },
+        },
+      ],
+    });
+    const ports: PagePorts = {
+      async send<T>(tabId: number, message: ExtensionMessage) {
+        if (tabId !== 7) return { ok: false, lastError: 'wrong tab' };
+        if (message.type === 'PING') return { ok: true, data: hello() as T };
+        if (message.type === 'OBSERVE_REQUEST') return { ok: true, data: searchScene() as T };
+        if (message.type === 'EXECUTE_ACTION_REQUEST') {
+          return { ok: true, data: { success: true, fieldState: 'MATCHED' } as T };
+        }
+        if (message.type === 'PROBE_FIELD_REQUEST') {
+          return { ok: true, data: { success: true, fieldState: 'MATCHED' } as T };
+        }
+        return { ok: false, lastError: 'unexpected' };
+      },
+      async inject() {
+        return true;
+      },
+      async captureRois() {
+        return [];
+      },
+    };
+    const controller = new TrustLoopController({
+      ports,
+      planner: new PlannerManager('MOCK'),
+      ocr: new MockOcrEngine(),
+      delayFn: async () => undefined,
+    });
+    controller.bindTab(tab);
+    await controller.start('Type OpenAI in the search box');
+    const state = controller.getState();
+    expect(state.phase).toBe('COMPLETED');
+    expect(state.pipeline.VALIDATE).toBe('done');
+    expect(state.pipeline.ACT).toBe('done');
+    expect(state.pipeline.VERIFY).toBe('done');
+    expect(state.message).not.toMatch(/All available goal actions completed/i);
+  });
+
+  it('does not treat Search for as complete after typing alone', async () => {
+    const searchScene = (): RawScene => ({
+      ...scene(),
+      elements: [
+        {
+          id: createElementId('e1'),
+          tagName: 'input',
+          role: 'searchbox',
+          ariaLabel: 'Search',
+          innerTextCandidate: 'Search',
+          inputType: 'search',
+          isEnabled: true,
+          bbox: { x: 0, y: 0, width: 240, height: 32 },
+        },
+      ],
+    });
+    const ports: PagePorts = {
+      async send<T>(tabId: number, message: ExtensionMessage) {
+        if (tabId !== 7) return { ok: false, lastError: 'wrong tab' };
+        if (message.type === 'PING') return { ok: true, data: hello() as T };
+        if (message.type === 'OBSERVE_REQUEST') return { ok: true, data: searchScene() as T };
+        if (message.type === 'EXECUTE_ACTION_REQUEST') {
+          return { ok: true, data: { success: true, fieldState: 'MATCHED' } as T };
+        }
+        if (message.type === 'PROBE_FIELD_REQUEST') {
+          return { ok: true, data: { success: true, fieldState: 'MATCHED' } as T };
+        }
+        return { ok: false, lastError: 'unexpected' };
+      },
+      async inject() {
+        return true;
+      },
+      async captureRois() {
+        return [];
+      },
+    };
+    const controller = new TrustLoopController({
+      ports,
+      planner: new PlannerManager('MOCK'),
+      ocr: new MockOcrEngine(),
+      delayFn: async () => undefined,
+    });
+    controller.bindTab(tab);
+    await controller.start('Search for OpenAI');
+    const state = controller.getState();
+    expect(state.phase).toBe('ASK_USER');
+    expect(state.headline).not.toBe('Completed');
+    expect(state.message).toMatch(/search was not submitted|no unique search button/i);
+  });
+
+  it('does not accept remote planner COMPLETE as product success', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          actionProposal: {
+            actionId: 'act_c',
+            type: 'COMPLETE',
+            reasoning: 'All available goal actions completed on current page state.',
+            expectedOutcome: 'done',
+            riskLevel: 'LOW',
+          },
+          metadata: { requestId: 'req_c', provider: 'gemini', model: 'gemini-2.5-flash', planningLatencyMs: 1 },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+    const controller = new TrustLoopController({
+      ports: mockPorts(),
+      planner: new PlannerManager('REMOTE', 'http://localhost:8000'),
+      ocr: new MockOcrEngine(),
+      delayFn: async () => undefined,
+    });
+    controller.bindTab(tab);
+    await controller.start('Type OpenAI in the YouTube search box');
+    const state = controller.getState();
+    expect(state.phase).toBe('ASK_USER');
+    expect(state.headline).not.toBe('Completed');
+    expect(state.evidence.screenshotOutBytes).toBe(0);
+    vi.restoreAllMocks();
   });
 });

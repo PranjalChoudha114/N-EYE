@@ -24,7 +24,7 @@ export function describeAction(proposal: ActionProposal | null, targetLabel?: st
     case 'ASK_USER':
       return 'Ask you for the next instruction';
     case 'COMPLETE':
-      return 'Mark the task complete';
+      return 'Planner suggested completion (untrusted)';
     default:
       return proposal.type;
   }

@@ -34,7 +34,10 @@ function liveInputType(liveNode: HTMLElement): ReturnType<typeof mapInputType> |
   if (liveNode instanceof HTMLInputElement) return mapInputType(liveNode.type);
   if (liveNode instanceof HTMLTextAreaElement) return 'textarea';
   if (liveNode instanceof HTMLSelectElement) return 'select';
-  if (liveNode.getAttribute('role') === 'textbox') return 'text';
+  const role = (liveNode.getAttribute('role') || '').toLowerCase();
+  if (role === 'searchbox') return 'search';
+  if (role === 'textbox') return 'text';
+  if (liveNode.isContentEditable) return 'text';
   return null;
 }
 
@@ -148,6 +151,28 @@ function riskStillValid(node: HTMLElement, authority?: RegroundAuthority): boole
     (node instanceof HTMLInputElement && ['submit', 'image'].includes(node.type.toLowerCase()) && node.form !== null) ||
     (node instanceof HTMLButtonElement && node.type.toLowerCase() === 'submit' && node.form !== null);
   return !isSubmitControl;
+}
+
+/**
+ * Find a unique live node by observation-time fingerprint after registry IDs were rotated.
+ * WHY: observePage clears the registry. Post-action verification must not keep using a stale id.
+ */
+export function findUniqueLiveTarget(
+  expectedFingerprint: TargetFingerprint,
+  expectedFrameId?: FrameId
+): { kind: 'unique'; node: HTMLElement } | { kind: 'none' } | { kind: 'ambiguous'; count: number } {
+  const expectedFrame = defaultFrameId(expectedFrameId);
+  const frames = discoverFrames(document);
+  const searchRoots = frames
+    .filter((frame) => frame.frameId === expectedFrame && frame.document)
+    .map((frame) => frame.document as Document);
+  const liveNodes = searchRoots.flatMap((doc) => collectCandidates(doc));
+  const scored = scoreCandidates(expectedFingerprint, expectedFrame, liveNodes, frames);
+  const neighborhoodHits = scored.filter((candidate) => candidate.neighborhood);
+  const unique = neighborhoodHits.length === 1 ? neighborhoodHits : scored;
+  if (unique.length === 1 && unique[0]) return { kind: 'unique', node: unique[0].node };
+  if (unique.length === 0) return { kind: 'none' };
+  return { kind: 'ambiguous', count: unique.length };
 }
 
 export function regroundTarget(

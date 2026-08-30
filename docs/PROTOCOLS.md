@@ -51,6 +51,8 @@ Structured next action suggestion returned by planner:
 
 Unknown keys, including `confirmed`, `selector`, `javascript`, `policyOverride`, `verified`, are rejected (`UNTRUSTED_AUTHORITY_CLAIM` / `MALFORMED_PROPOSAL`). `targetId` must be opaque `eN` / `fKeN`.
 
+`COMPLETE` is planner advice that no further actions are proposed. Local `LocalCompletionKind` (`VERIFIED_SEQUENCE` | `ALREADY_SATISFIED` | …) decides product success.
+
 ### 2.5c Unicode transport safety
 Page-derived strings may contain unpaired UTF-16 surrogates. `sanitizeUnicodeScalars` / `sanitize_unicode` replace those code units with U+FFFD before EgressGuard serialize and before provider UTF-8 encode. Valid Unicode is preserved. See ADR-0012.
 
@@ -64,6 +66,7 @@ Planner/perception/execution failures terminate in named outcomes (`RETRY`, `REO
 Typed cross-context messaging between Content Script, Service Worker, and Product UI.
 - `OBSERVE_REQUEST` / `OBSERVE_RESPONSE`
 - `EXECUTE_ACTION_REQUEST` / `EXECUTE_ACTION_RESPONSE`
+- `PROBE_FIELD_REQUEST` / `PROBE_FIELD_RESPONSE` (local `FieldValueState` only)
 - `GET_TASK_STATE` / `TASK_STATE_UPDATED`
 - `CAPTURE_ROIS_REQUEST` / `CAPTURE_TAB_CROPS` (ROI RGBA locally; never planner transport)
 - `PING` / `PONG`

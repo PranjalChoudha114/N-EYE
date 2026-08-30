@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 14: Text input classes</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="container" style="max-width: 720px;">
+    <header class="header">
+      <div class="badge">N-EYE LABORATORY SCENARIO 14</div>
+      <h1>Text input control classes</h1>
+      <p class="subtitle">Controlled fixtures for TYPE_TEXT completion. Product code must not special-case this page.</p>
+    </header>
+
+    <main class="card">
+      <h2>Native search</h2>
+      <label for="s14-native">Search</label>
+      <input id="s14-native" type="search" placeholder="Search" />
+
+      <h2>Listener-backed (controlled-like)</h2>
+      <label for="s14-controlled">Query</label>
+      <input id="s14-controlled" type="text" placeholder="Query" />
+      <p id="s14-controlled-store">store:</p>
+
+      <h2>Overwrite on input</h2>
+      <label for="s14-overwrite">Name</label>
+      <input id="s14-overwrite" type="text" placeholder="Name" />
+
+      <h2>Replace node after input</h2>
+      <div id="s14-rerender-host">
+        <label for="s14-rerender">Find</label>
+        <input id="s14-rerender" type="search" placeholder="Find" />
+      </div>
+
+      <h2>Duplicate search boxes</h2>
+      <input type="search" placeholder="Search" aria-label="Search" />
+      <input type="search" placeholder="Search" aria-label="Search" />
+
+      <h2>Contenteditable</h2>
+      <div id="s14-editor" role="textbox" contenteditable="true" aria-label="Notes" style="min-height:48px;border:1px solid #444;padding:8px;"></div>
+
+      <h2>Already filled</h2>
+      <label for="s14-filled">Search</label>
+      <input id="s14-filled" type="search" placeholder="Search" value="OpenAI" />
+    </main>
+
+    <footer class="footer">
+      <p>N-Eye Test Portal • Scenario 14 • T017/T018 repair</p>
+      <p style="font-size:12px;margin-top:8px;">
+        <a href="./index.html">01</a> ·
+        <a href="./scenario-13-resilience.html">13 Resilience</a> ·
+        14 Text input
+      </p>
+    </footer>
+  </div>
+  <script>
+    (function () {
+      var controlled = document.getElementById('s14-controlled');
+      var store = document.getElementById('s14-controlled-store');
+      controlled.addEventListener('input', function () {
+        store.textContent = 'store:' + controlled.value;
+      });
+      var overwrite = document.getElementById('s14-overwrite');
+      overwrite.addEventListener('input', function () {
+        overwrite.value = '';
+      });
+      var host = document.getElementById('s14-rerender-host');
+      host.addEventListener('input', function (ev) {
+        var t = ev.target;
+        if (!(t instanceof HTMLInputElement) || t.id !== 's14-rerender') return;
+        var next = document.createElement('input');
+        next.id = 's14-rerender';
+        next.type = 'search';
+        next.placeholder = 'Find';
+        next.value = t.value;
+        t.replaceWith(next);
+      });
+    })();
+  </script>
+</body>
+</html>

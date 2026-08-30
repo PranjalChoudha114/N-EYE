@@ -10,6 +10,10 @@ describe('status mapping', () => {
     expect(statusCopy('PROVIDER_UNAVAILABLE').tone).toBe('warning');
     expect(statusCopy('ASK_USER').headline).toMatch(/Need your input/i);
     expect(statusCopy('OCR_UNAVAILABLE').message).toMatch(/screenshot stayed/i);
+    expect(statusCopy('COMPLETED', 'Goal already satisfied. No action was required.').message).toMatch(
+      /already satisfied/i
+    );
+    expect(statusCopy('COMPLETED', 'Goal already satisfied. No action was required.').headline).toBe('Completed');
   });
 
   it('classifies planner failures without claiming Gemini is online', () => {

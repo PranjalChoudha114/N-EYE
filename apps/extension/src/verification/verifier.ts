@@ -25,8 +25,8 @@ export function verifyActionExecution(
   if (action.proposal.type === 'COMPLETE') {
     return {
       actionId,
-      status: 'VERIFIED_SUCCESS',
-      observedDelta: 'Workflow completed successfully.',
+      status: 'AMBIGUOUS',
+      observedDelta: 'Planner COMPLETE is not local proof of success.',
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
@@ -106,6 +106,28 @@ export function verifyActionExecution(
         postEpoch,
         timestamp: Date.now(),
         evidence: { fieldState: evidence.fieldState },
+      };
+    }
+    if (evidence?.fieldState === 'TARGET_REPLACED') {
+      return {
+        actionId,
+        status: 'VERIFIED_FAILURE',
+        observedDelta: 'The typed control was replaced and could not be uniquely re-grounded.',
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { fieldState: 'TARGET_REPLACED' },
+      };
+    }
+    if (evidence?.fieldState === 'AMBIGUOUS') {
+      return {
+        actionId,
+        status: 'AMBIGUOUS',
+        observedDelta: 'Multiple equivalent fields after the action. N-Eye will not guess.',
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { fieldState: 'AMBIGUOUS' },
       };
     }
     return {

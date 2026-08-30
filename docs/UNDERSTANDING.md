@@ -123,7 +123,7 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 - **Product UI**: Two surfaces (ADR-0010). Overlay + Side Panel architecture unchanged. New truthful phases: retrying, provider unavailable, OCR unavailable, ASK_USER (not Confirm).
 - **Perception**: Adaptive OCR/ROI unchanged. Capture/OCR failure never sends rasters; visual-required + insufficient structure → OCR_UNAVAILABLE.
 - **Privacy Engine**: Detectors, token vault, SafeContext builder, Egress Guard (Unicode sanitize before serialize; canary errors do not echo secrets).
-- **Local Action Authority**: Confirmation capability (ADR-0011). Native SELECT, bounded SCROLL, TYPE_TOKEN resulting-state verification. HIGH + unverified → no replay (ADR-0012).
+- **Local Action Authority**: Confirmation capability (ADR-0011). Native SELECT, bounded SCROLL, TYPE_TOKEN/TYPE_TEXT resulting-state verification. Local completion arbiter: planner COMPLETE ≠ task success. HIGH + unverified → no replay (ADR-0012).
 - **Planner gateway**: Unicode sanitize before provider encode; classified 429/404/503; Gemini key in `x-goog-api-key` header; prompt contract `n-eye-planner-policy/3`.
 - **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T017-T018-MANUAL-CHECKLIST.md`.
 - **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008.

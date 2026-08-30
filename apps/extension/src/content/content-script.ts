@@ -8,7 +8,7 @@ import {
 import { ElementRegistry } from './registry.js';
 import { PageEpochManager } from './epoch.js';
 import { observePage } from './observer.js';
-import { executeValidatedAction } from '../execution/executor.js';
+import { executeValidatedAction, probeExpectedText } from '../execution/executor.js';
 import { captureRoisInPage, discardWireRois, type CapturedRoiWire } from '../perception/capture.js';
 import { isNeyeOverlayMessage, type NEyeOverlayMessage } from '../runtime/ui-messages.js';
 import { isSameExtensionSender } from '../runtime/message-trust.js';
@@ -151,6 +151,16 @@ function handleMessage(
       const result = executeValidatedAction(message.action, registry);
       // Transport success means the executor ran. Action success lives on result.success.
       // Dropping data on action failure would lose ASK_USER / fieldState evidence.
+      sendResponse({ success: true, data: result });
+    } catch (err) {
+      sendResponse({ success: false, error: (err as Error).message });
+    }
+    return true;
+  }
+
+  if (message.type === 'PROBE_FIELD_REQUEST') {
+    try {
+      const result = probeExpectedText(message.fingerprint, message.expectedText, message.frameId);
       sendResponse({ success: true, data: result });
     } catch (err) {
       sendResponse({ success: false, error: (err as Error).message });

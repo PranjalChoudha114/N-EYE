@@ -10,7 +10,7 @@ Do not replay the automated suite by hand. These checks cover browser/runtime pr
 1. Open a normal HTTPS page.
 2. Toolbar toggles the overlay card.
 3. More opens the Side Panel Trust Center.
-4. Mock mode: a simple “Continue” / labeled-button task still runs.
+4. Mock mode: a labeled-button task such as “click Continue” still runs when a unique Continue control exists. A Continue goal on a page without that control must ASK_USER, not Completed.
 
 ## B. Unicode / Scenario 13
 1. Open `apps/test-portal/scenario-13-resilience.html`.
@@ -62,5 +62,15 @@ Do not replay the automated suite by hand. These checks cover browser/runtime pr
 1. If Chrome DevTools can terminate the service worker without dangerous assumptions: pending HIGH confirmation must not survive as a bare approval after restart.
 2. If this cannot be done reliably, leave **UNVERIFIED**. jsdom hydrate tests are not this check.
 
+## L. TYPE_TEXT / false completion (this repair)
+1. Rebuild `pnpm build:extension`. Confirm Side Panel identity matches the repair SHA (dirty `*` is OK if uncommitted at build time).
+2. Scenario 14 (`apps/test-portal/scenario-14-text-input.html`), Mock: “Type OpenAI in the search box” on the **native search** field. OpenAI must appear. VALIDATE/ACT/VERIFY must not stay pending if Overall is Completed.
+3. Overwrite-on-input field: must **not** show Completed.
+4. Duplicate search boxes: ASK_USER / ambiguous, not a guessed field.
+5. YouTube Mock: “Type OpenAI in the YouTube search box” — either OpenAI is visible in search **or** N-Eye says ASK_USER / failed. **Never** Completed with an empty box.
+6. Unrelated public search field (harmless type only, do not submit): same honesty rule.
+7. Goal “Search for OpenAI” on a page with no search button: typing is not overall Completed.
+8. Remote, gateway down: Gateway unreachable, not Completed. Screenshot outbound 0 B.
+
 ## Pass rule
-Tick A–J only from a live unpacked session. K is optional and may remain UNVERIFIED.
+Tick A–J only from a live unpacked session. K is optional and may remain UNVERIFIED. L is required for this completion-repair seal; do not tick L from jsdom.

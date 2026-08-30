@@ -1,8 +1,10 @@
-import type { ActionId, PageEpoch, TaskId } from './identifiers.js';
+import type { ActionId, FrameId, PageEpoch, TaskId } from './identifiers.js';
 import type { ActionProposal, ValidatedAction, VerificationResult } from './action-proposal.js';
 import type { RawScene } from './raw-scene.js';
 import type { SafeContext } from './safe-context.js';
 import type { PrivacyDecision, PrivacyFinding, StageMetric } from './privacy.js';
+import type { TargetFingerprint } from './fingerprint.js';
+import type { FieldValueState } from './recovery.js';
 
 /**
  * Content-script handshake protocol (Zone 1 ↔ 2).
@@ -101,6 +103,13 @@ export type ExtensionMessage =
     }
   | { type: 'EXECUTE_ACTION_REQUEST'; action: ValidatedAction }
   | { type: 'EXECUTE_ACTION_RESPONSE'; success: boolean; error?: string }
+  | {
+      type: 'PROBE_FIELD_REQUEST';
+      fingerprint: TargetFingerprint;
+      expectedText: string;
+      frameId?: FrameId;
+    }
+  | { type: 'PROBE_FIELD_RESPONSE'; fieldState: FieldValueState }
   | { type: 'CONFIRM_ACTION'; actionId: ActionId; approved: boolean }
   | { type: 'STEP_TASK' }
   | { type: 'INJECT_CONTENT_SCRIPT'; tabId: number };

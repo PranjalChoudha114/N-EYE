@@ -9,6 +9,7 @@ import {
   type ContentScriptErrorClass,
   type ContentScriptHello,
   type ElementId,
+  type FieldValueState,
   type PerceptionResult,
   type PrivacyFinding,
   type RawScene,
@@ -79,8 +80,16 @@ import {
   type PipelineId,
   type ProductState,
 } from './ui-snapshot.js';
-import { delay, executeOnTab, type PagePorts } from './page-ports.js';
+import { delay, executeOnTab, probeFieldOnTab, type PagePorts } from './page-ports.js';
 import { abortableDelay } from './abortable-delay.js';
+import {
+  arbitratePlannerComplete,
+  completedStageContradiction,
+  pipelineForAlreadySatisfied,
+  pipelineForUnprovenComplete,
+  pipelineForVerifiedCompletion,
+} from './completion-arbiter.js';
+import { parseMockGoal, pickUniqueTypeTextTarget } from '../planner/mock-grammar.js';
 
 export const MAX_STEPS = 8;
 export const WAIT_SETTLE_MS = 400;
@@ -113,6 +122,7 @@ export class TrustLoopController {
   private taskGeneration = 0;
   private lastHostname: string | null = null;
   private confirmWait: { confirmationId: string; resolve: (approved: boolean) => void } | null = null;
+  private completionAlreadySatisfied = false;
 
   constructor(deps: TrustLoopDeps) {
     this.ports = deps.ports;
@@ -333,6 +343,63 @@ export class TrustLoopController {
     });
   }
 
+  /**
+   * Local completion truth. Planner COMPLETE and empty loops cannot author this.
+   * WHY: Green Completed with pending ACT/VERIFY was a trust contradiction.
+   */
+  private applyLocalCompletion(decision: ReturnType<typeof arbitratePlannerComplete>, step: number): void {
+    this.completionAlreadySatisfied = decision.alreadySatisfied;
+    if (decision.phase === 'COMPLETED') {
+      this.patch({
+        pipeline: decision.alreadySatisfied
+          ? pipelineForAlreadySatisfied(this.state.pipeline)
+          : pipelineForVerifiedCompletion(this.state.pipeline),
+      });
+      if (completedStageContradiction('COMPLETED', this.state.pipeline, decision.alreadySatisfied)) {
+        this.patch({ pipeline: pipelineForUnprovenComplete(this.state.pipeline) });
+        this.applyPhase(
+          'ASK_USER',
+          'Completion evidence was inconsistent with VALIDATE/ACT/VERIFY. This is not success.'
+        );
+        return;
+      }
+      this.applyPhase('COMPLETED', decision.message);
+      this.patch({
+        toast: toastFromPhase(
+          'COMPLETED',
+          decision.alreadySatisfied ? decision.message : 'Task completed.'
+        ),
+        step: {
+          index: step,
+          max: MAX_STEPS,
+          summary: decision.alreadySatisfied ? decision.message : 'Task completed successfully.',
+        },
+        evidence: {
+          ...this.state.evidence,
+          verificationResult: decision.alreadySatisfied ? 'ALREADY_SATISFIED' : 'VERIFIED_SUCCESS',
+        },
+        action: this.state.action
+          ? {
+              ...this.state.action,
+              verification: 'VERIFIED_SUCCESS',
+              verificationDelta: decision.message,
+            }
+          : this.state.action,
+      });
+      return;
+    }
+    this.patch({ pipeline: pipelineForUnprovenComplete(this.state.pipeline) });
+    this.applyPhase('ASK_USER', decision.message);
+    this.patch({
+      toast: toastFromPhase('ASK_USER', decision.message),
+      step: { index: step, max: MAX_STEPS, summary: decision.message },
+      confirmation: undefined,
+      action: this.state.action
+        ? { ...this.state.action, verification: 'AMBIGUOUS', verificationDelta: decision.message }
+        : this.state.action,
+    });
+  }
+
   private setPipeline(id: PipelineId, visual: ProductState['pipeline'][PipelineId]): void {
     this.patch({ pipeline: { ...this.state.pipeline, [id]: visual } });
   }
@@ -506,6 +573,7 @@ export class TrustLoopController {
     this.abort = new AbortController();
     const signal = this.abort.signal;
     const taskGeneration = ++this.taskGeneration;
+    this.completionAlreadySatisfied = false;
 
     const taskId = createTaskId(`task_${Date.now()}`);
     this.patch({
@@ -520,6 +588,10 @@ export class TrustLoopController {
     let priorOutcome: SafeContext['priorOutcome'] | undefined;
     const executedProposals: string[] = [];
     const loopStart = performance.now();
+    let verifiedCount = 0;
+    let lastVerifiedType: string | undefined;
+    let lastFieldState: FieldValueState | undefined;
+    let verifiedClick = false;
 
     try {
       for (let step = 1; step <= MAX_STEPS; step++) {
@@ -868,17 +940,32 @@ export class TrustLoopController {
         });
 
         if (proposal.type === 'COMPLETE') {
-          this.applyPhase('COMPLETED', proposal.reasoning || 'Goal fully achieved on active page.');
-          this.patch({
-            toast: toastFromPhase('COMPLETED', 'Task completed.'),
-            action: {
-              ...actionView,
-              verification: 'VERIFIED_SUCCESS' as const,
-              verificationDelta: proposal.reasoning || 'Goal fully achieved on active page.',
-            },
-            step: { index: step, max: MAX_STEPS, summary: 'Task completed successfully.' },
-            evidence: { ...this.state.evidence, verificationResult: 'COMPLETED' },
-          });
+          let liveFieldState: FieldValueState | undefined;
+          const intent = parseMockGoal(rawGoal);
+          if (intent.kind === 'type_text' && verifiedCount === 0) {
+            const picked = pickUniqueTypeTextTarget(workingScene.elements, intent.fieldHints);
+            if (picked.ok && picked.target.fingerprint) {
+              const probe = await probeFieldOnTab(
+                this.ports,
+                tabId,
+                picked.target.fingerprint,
+                intent.text,
+                picked.target.frameProvenance?.frameId
+              );
+              liveFieldState = probe.fieldState;
+            }
+          }
+          this.applyLocalCompletion(
+            arbitratePlannerComplete({
+              goal: rawGoal,
+              verifiedCount,
+              lastVerifiedType,
+              lastFieldState,
+              verifiedClick,
+              liveFieldState,
+            }),
+            step
+          );
           break;
         }
 
@@ -1156,8 +1243,26 @@ export class TrustLoopController {
         }
         const postScene = await this.requestObservation(tabId, false);
         if (postScene) {
+          let fieldState = execResult.fieldState;
+          if (
+            (actionToExecute.proposal.type === 'TYPE_TOKEN' || actionToExecute.proposal.type === 'TYPE_TEXT') &&
+            actionToExecute.expectedFingerprint
+          ) {
+            const expectedText =
+              actionToExecute.proposal.type === 'TYPE_TOKEN'
+                ? actionToExecute.resolvedTokenValue || ''
+                : actionToExecute.proposal.textValue || '';
+            const probe = await probeFieldOnTab(
+              this.ports,
+              tabId,
+              actionToExecute.expectedFingerprint,
+              expectedText,
+              actionToExecute.expectedFrameId
+            );
+            if (probe.fieldState) fieldState = probe.fieldState;
+          }
           const verification: VerificationResult = verifyActionExecution(actionToExecute, executionScene, postScene, {
-            fieldState: execResult.fieldState,
+            fieldState,
             scrollMoved: execResult.scrollMoved,
             atScrollBoundary: execResult.atScrollBoundary,
             selectMatched: execResult.selectMatched,
@@ -1180,11 +1285,30 @@ export class TrustLoopController {
             });
             break;
           }
+          if (
+            (actionToExecute.proposal.type === 'TYPE_TEXT' || actionToExecute.proposal.type === 'TYPE_TOKEN') &&
+            (verification.status === 'VERIFIED_FAILURE' || verification.status === 'AMBIGUOUS')
+          ) {
+            this.applyPhase(
+              'ASK_USER',
+              verification.observedDelta || 'The field did not keep the intended text. This is not completion.'
+            );
+            this.patch({
+              toast: toastFromPhase('ASK_USER', 'Typed text could not be verified on the live control.'),
+            });
+            break;
+          }
           priorOutcome = {
             actionId: proposal.actionId,
             status: verification.status === 'VERIFIED_SUCCESS' ? 'VERIFIED' : 'FAILURE',
             summary: verification.observedDelta,
           };
+          if (verification.status === 'VERIFIED_SUCCESS') {
+            verifiedCount += 1;
+            lastVerifiedType = proposal.type;
+            if (fieldState) lastFieldState = fieldState;
+            if (proposal.type === 'CLICK') verifiedClick = true;
+          }
         }
         this.patch({
           latency: { ...this.state.latency, verify: `${(performance.now() - verifyStart).toFixed(1)} ms` },
@@ -1195,8 +1319,23 @@ export class TrustLoopController {
       this.patch({
         latency: { ...this.state.latency, total: `${(performance.now() - loopStart).toFixed(1)} ms` },
       });
-      if (this.state.phase === 'PROTECTED' || this.state.phase === 'PLANNING') {
-        this.applyPhase('COMPLETED', 'The task finished.');
+      if (
+        this.state.phase === 'PROTECTED' ||
+        this.state.phase === 'PLANNING' ||
+        this.state.phase === 'VERIFYING' ||
+        this.state.phase === 'ACTING' ||
+        this.state.phase === 'VALIDATING'
+      ) {
+        this.applyLocalCompletion(
+          arbitratePlannerComplete({
+            goal: rawGoal,
+            verifiedCount,
+            lastVerifiedType,
+            lastFieldState,
+            verifiedClick,
+          }),
+          this.state.step?.index ?? MAX_STEPS
+        );
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {

@@ -1,6 +1,6 @@
 import type { ExecutionEvidence, FieldValueState, ValidatedAction } from '@n-eye/protocol';
 import type { ElementRegistry } from '../content/registry.js';
-import { assertLiveAuthority, regroundTarget, TargetStaleError } from '../authority/regrounding.js';
+import { assertLiveAuthority, findUniqueLiveTarget, regroundTarget, TargetStaleError } from '../authority/regrounding.js';
 
 export const MAX_SCROLL_EXECUTE_PX = 800;
 
@@ -37,6 +37,55 @@ function clampScroll(delta: number): number {
  * Compare a live control's current value to the intended string without logging either.
  * PRIVACY: expected and actual never leave this function.
  */
+
+/**
+ * Set a native text control through the prototype setter, then fire bubbling input/change.
+ * WHY: Isolated-world `node.value = x` can skip framework value trackers. The prototype
+ *      setter plus InputEvent is the platform-compatible path. No framework internals.
+ */
+export function setNativeTextControlValue(node: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto = node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+  if (desc?.set) {
+    desc.set.call(node, value);
+  } else {
+    node.value = value;
+  }
+  try {
+    node.dispatchEvent(
+      new InputEvent('input', { bubbles: true, cancelable: true, data: value, inputType: 'insertFromPaste' })
+    );
+  } catch {
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  node.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+export function setContentEditableText(node: HTMLElement, value: string): void {
+  node.focus();
+  const doc = node.ownerDocument;
+  try {
+    const range = doc.createRange();
+    range.selectNodeContents(node);
+    const sel = doc.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    const inserted = doc.execCommand('insertText', false, value);
+    if (!inserted) {
+      node.textContent = value;
+    }
+  } catch {
+    node.textContent = value;
+  }
+  try {
+    node.dispatchEvent(
+      new InputEvent('input', { bubbles: true, cancelable: true, data: value, inputType: 'insertFromPaste' })
+    );
+  } catch {
+    node.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+}
+
 export function readTypedFieldState(node: HTMLElement, expected: string): FieldValueState {
   if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
     if (node.value === expected) return 'MATCHED';
@@ -275,12 +324,9 @@ export function executeValidatedAction(
       assertLiveAuthority(liveNode, action.expectedFingerprint, action.expectedFrameId);
 
       if (liveNode instanceof HTMLInputElement || liveNode instanceof HTMLTextAreaElement) {
-        liveNode.value = textToType;
-        liveNode.dispatchEvent(new Event('input', { bubbles: true }));
-        liveNode.dispatchEvent(new Event('change', { bubbles: true }));
+        setNativeTextControlValue(liveNode, textToType);
       } else if (liveNode.isContentEditable) {
-        liveNode.textContent = textToType;
-        liveNode.dispatchEvent(new Event('input', { bubbles: true }));
+        setContentEditableText(liveNode, textToType);
       } else {
         return { success: false, error: `Target ${action.targetElementId} is not an input or editable element.`, outcome: 'BLOCK' };
       }
@@ -301,4 +347,76 @@ export function executeValidatedAction(
     }
     return { success: false, error: (err as Error).message, outcome: 'BLOCK' };
   }
+}
+
+/**
+ * Re-read typed text after a fresh observation. Uses fingerprint when the old id is gone.
+ * PRIVACY: expected text never leaves this function except as MATCHED/EMPTY/DIVERGED.
+ */
+export function probeTypedField(action: ValidatedAction, registry: ElementRegistry): ExecutionResult {
+  if (action.proposal.type !== 'TYPE_TOKEN' && action.proposal.type !== 'TYPE_TEXT') {
+    return { success: false, fieldState: 'NOT_APPLICABLE', error: 'Field probe applies to typed actions only.' };
+  }
+  const expected =
+    action.proposal.type === 'TYPE_TOKEN' ? action.resolvedTokenValue || '' : action.proposal.textValue || '';
+  if (!expected) {
+    return { success: false, fieldState: 'UNREADABLE', error: 'No expected text for field probe.' };
+  }
+
+  let node: HTMLElement | undefined;
+  const live = liveNodeForAction(action, registry);
+  if (live instanceof HTMLElement) node = live;
+
+  if (!node && action.expectedFingerprint) {
+    const found = findUniqueLiveTarget(action.expectedFingerprint, action.expectedFrameId);
+    if (found.kind === 'ambiguous') {
+      return {
+        success: false,
+        fieldState: 'AMBIGUOUS',
+        outcome: 'ASK_USER',
+        error: 'Multiple equivalent fields after rerender.',
+      };
+    }
+    if (found.kind === 'unique') node = found.node;
+  }
+
+  if (!node) {
+    return {
+      success: false,
+      fieldState: 'TARGET_REPLACED',
+      outcome: 'REOBSERVE',
+      error: 'Typed field is no longer uniquely grounded.',
+    };
+  }
+  const fieldState = readTypedFieldState(node, expected);
+  return {
+    success: fieldState === 'MATCHED',
+    fieldState,
+    outcome: 'SAFE_REGROUND',
+    targetTag: node.tagName.toLowerCase(),
+  };
+}
+
+export function probeExpectedText(
+  fingerprint: NonNullable<ValidatedAction['expectedFingerprint']>,
+  expectedText: string,
+  frameId?: ValidatedAction['expectedFrameId']
+): ExecutionResult {
+  if (!expectedText) {
+    return { success: false, fieldState: 'UNREADABLE', error: 'No expected text for field probe.' };
+  }
+  const found = findUniqueLiveTarget(fingerprint, frameId);
+  if (found.kind === 'ambiguous') {
+    return { success: false, fieldState: 'AMBIGUOUS', outcome: 'ASK_USER', error: 'Multiple equivalent fields.' };
+  }
+  if (found.kind === 'none') {
+    return { success: false, fieldState: 'TARGET_REPLACED', outcome: 'REOBSERVE', error: 'No unique live field.' };
+  }
+  const fieldState = readTypedFieldState(found.node, expectedText);
+  return {
+    success: fieldState === 'MATCHED',
+    fieldState,
+    outcome: 'SAFE_REGROUND',
+    targetTag: found.node.tagName.toLowerCase(),
+  };
 }

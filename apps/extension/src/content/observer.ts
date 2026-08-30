@@ -260,7 +260,10 @@ function inputTypeOf(el: HTMLElement): InputType | null {
   if (el instanceof HTMLInputElement) return mapInputType(el.type);
   if (el instanceof HTMLTextAreaElement) return 'textarea';
   if (el instanceof HTMLSelectElement) return 'select';
-  if (el.getAttribute('role') === 'textbox') return 'text';
+  const role = (el.getAttribute('role') || '').toLowerCase();
+  if (role === 'searchbox') return 'search';
+  if (role === 'textbox') return 'text';
+  if (el.isContentEditable) return 'text';
   return null;
 }
 

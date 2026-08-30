@@ -82,3 +82,43 @@ async def test_gemini_does_not_place_api_key_in_url(monkeypatch, sample_safe_con
         await adapter.propose(sample_safe_context, "req_key")
     assert "SECRET_KEY_MUST_NOT_APPEAR_IN_URL" not in captured["url"]
     assert captured["headers"].get("x-goog-api-key") == "SECRET_KEY_MUST_NOT_APPEAR_IN_URL"
+
+
+@pytest.mark.asyncio
+async def test_mock_adapter_types_into_unique_search_field(sample_safe_context: SafeContext):
+    context = sample_safe_context.model_copy(
+        update={
+            "sanitizedGoal": "Type OpenAI in the search box",
+            "availableTokens": [],
+            "safeElements": [
+                sample_safe_context.safeElements[0].model_copy(
+                    update={
+                        "id": "e_search",
+                        "role": "searchbox",
+                        "safeLabel": "Search",
+                        "inputType": "search",
+                    }
+                )
+            ],
+        }
+    )
+    adapter = MockProviderAdapter()
+    proposal, _, _ = await adapter.propose(context, "req_type")
+    assert proposal.type == "TYPE_TEXT"
+    assert proposal.textValue == "OpenAI"
+    assert proposal.targetId == "e_search"
+
+
+@pytest.mark.asyncio
+async def test_mock_adapter_asks_user_instead_of_false_complete(sample_safe_context: SafeContext):
+    context = sample_safe_context.model_copy(
+        update={
+            "sanitizedGoal": "Type OpenAI in the YouTube search box",
+            "availableTokens": [],
+            "safeElements": [sample_safe_context.safeElements[1]],
+        }
+    )
+    adapter = MockProviderAdapter()
+    proposal, _, _ = await adapter.propose(context, "req_ask")
+    assert proposal.type == "ASK_USER"
+    assert "completed" not in proposal.reasoning.lower()
