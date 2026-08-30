@@ -4,6 +4,7 @@
  */
 
 import type { ProductPhase, StatusTone } from '../runtime/ui-snapshot.js';
+import { PlannerTransportError } from '../planner/transport-error.js';
 
 export interface StatusCopy {
   headline: string;
@@ -79,6 +80,30 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
         message: detail || 'The local planner gateway did not respond. This is not a Gemini health claim.',
         tone: 'warning',
       };
+    case 'PROVIDER_UNAVAILABLE':
+      return {
+        headline: 'Planner provider unavailable',
+        message: detail || 'The planner provider is unavailable or misconfigured. The gateway may still be reachable.',
+        tone: 'warning',
+      };
+    case 'RETRYING':
+      return {
+        headline: 'Retrying planner',
+        message: detail || 'Retrying a bounded planner request with the same protected context.',
+        tone: 'info',
+      };
+    case 'OCR_UNAVAILABLE':
+      return {
+        headline: 'On-device perception unavailable',
+        message: detail || 'Visual text could not be read locally. The screenshot stayed on this device.',
+        tone: 'warning',
+      };
+    case 'ASK_USER':
+      return {
+        headline: 'Need your input',
+        message: detail || 'N-Eye needs the next instruction. This is not a high-risk confirmation.',
+        tone: 'warning',
+      };
     case 'ERROR':
       return { headline: 'Error', message: detail || 'The task failed.', tone: 'danger' };
     default:
@@ -86,11 +111,31 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
   }
 }
 
-export function classifyPlannerFailure(message: string): ProductPhase {
-  const text = message.toLowerCase();
-  if (text.includes('rate limit')) return 'RATE_LIMITED';
+export function classifyPlannerFailure(error: unknown): ProductPhase {
+  if (error instanceof PlannerTransportError) {
+    switch (error.code) {
+      case 'RATE_LIMITED':
+        return 'RATE_LIMITED';
+      case 'NETWORK_FAILURE':
+        return 'GATEWAY_UNREACHABLE';
+      case 'MISCONFIGURED':
+      case 'UNAVAILABLE':
+      case 'TIMEOUT':
+      case 'AUTH_FAILED':
+        return 'PROVIDER_UNAVAILABLE';
+      case 'CANCELLED':
+        return 'CANCELLED';
+      default:
+        return 'ERROR';
+    }
+  }
+  const text = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  if (text.includes('rate limit') || text.includes('rate limited')) return 'RATE_LIMITED';
   if (text.includes('failed to reach planner gateway') || text.includes('gateway unreachable')) {
     return 'GATEWAY_UNREACHABLE';
+  }
+  if (text.includes('misconfigured') || text.includes('provider unavailable') || text.includes('timed out')) {
+    return 'PROVIDER_UNAVAILABLE';
   }
   return 'ERROR';
 }

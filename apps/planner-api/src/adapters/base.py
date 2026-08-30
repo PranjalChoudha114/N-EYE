@@ -29,14 +29,22 @@ class ProviderTimeoutError(ProviderError):
 class ProviderRateLimitError(ProviderError):
     """Raised when the provider quota or rate limit is exhausted."""
 
-    def __init__(self, message: str = "Provider rate limit exceeded"):
-        super().__init__(message, is_retryable=False)
+    def __init__(self, message: str = "Provider rate limit exceeded", retry_after_seconds: float | None = None):
+        super().__init__(message, is_retryable=True)
+        self.retry_after_seconds = retry_after_seconds
 
 
 class ProviderAuthError(ProviderError):
     """Raised when provider credentials are missing or unauthorized."""
 
     def __init__(self, message: str = "Provider authentication failed"):
+        super().__init__(message, is_retryable=False)
+
+
+class ProviderConfigError(ProviderError):
+    """Raised when the provider model or endpoint is missing or not found."""
+
+    def __init__(self, message: str = "Provider endpoint or model is misconfigured"):
         super().__init__(message, is_retryable=False)
 
 

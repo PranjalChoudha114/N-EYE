@@ -8,6 +8,7 @@ import type {
   TaskId,
   VisualCandidate,
 } from '@n-eye/protocol';
+import { sanitizeUnicodeDeep } from '@n-eye/protocol';
 import type { PrivateTokenVault } from './vault.js';
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
@@ -175,5 +176,7 @@ export function buildSafeContext(
     visualHints: visualHints.length > 0 ? visualHints : undefined,
   };
 
-  return safeContext;
+  // WHY: Page-derived strings can carry unpaired UTF-16 surrogates. Sanitize here so
+  // the planner transport never sees a payload Python cannot UTF-8 encode.
+  return sanitizeUnicodeDeep(safeContext);
 }

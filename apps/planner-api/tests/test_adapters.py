@@ -4,7 +4,7 @@ import pytest
 from src.adapters.mock import MockProviderAdapter
 from src.adapters.gemini import GeminiProviderAdapter
 from src.adapters.openai_compatible import OpenAICompatibleAdapter
-from src.adapters.base import ProviderAuthError, ProviderSchemaError, ProviderTimeoutError
+from src.adapters.base import ProviderAuthError, ProviderError, ProviderSchemaError, ProviderTimeoutError
 from src.schemas.safe_context import SafeContext
 
 
@@ -47,3 +47,38 @@ def test_openai_adapter_rejects_missing_api_key(sample_safe_context: SafeContext
     with pytest.raises(ProviderAuthError):
         import asyncio
         asyncio.run(adapter.propose(sample_safe_context, "req_4"))
+
+
+@pytest.mark.asyncio
+async def test_gemini_does_not_place_api_key_in_url(monkeypatch, sample_safe_context: SafeContext):
+    """Provider credentials must not appear in the request URL (error traces would leak them)."""
+    captured: dict = {}
+
+    class _FakeResponse:
+        status_code = 503
+        headers = {}
+
+        def json(self):
+            return {}
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, content=None, headers=None):
+            captured["url"] = url
+            captured["headers"] = headers or {}
+            return _FakeResponse()
+
+    monkeypatch.setattr("src.adapters.gemini.httpx.AsyncClient", _FakeClient)
+    adapter = GeminiProviderAdapter(api_key="SECRET_KEY_MUST_NOT_APPEAR_IN_URL")
+    with pytest.raises(ProviderError):
+        await adapter.propose(sample_safe_context, "req_key")
+    assert "SECRET_KEY_MUST_NOT_APPEAR_IN_URL" not in captured["url"]
+    assert captured["headers"].get("x-goog-api-key") == "SECRET_KEY_MUST_NOT_APPEAR_IN_URL"

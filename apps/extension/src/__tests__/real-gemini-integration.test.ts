@@ -129,7 +129,9 @@ describe('Real Gemini API Extension Trust Loop', () => {
     // 6. VERIFY LOCALLY
     epoch = createPageEpoch(2);
     const postScene = observePage(registry, epoch);
-    const verification = verifyActionExecution(validatedAction, rawScene, postScene);
+    const verification = verifyActionExecution(validatedAction, rawScene, postScene, {
+      fieldState: execResult.fieldState,
+    });
     expect(verification.status).toBe('VERIFIED_SUCCESS');
   }, 15000); // 15s timeout for remote network AI roundtrip
 });

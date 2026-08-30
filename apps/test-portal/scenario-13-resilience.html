@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Scenario 13: Runtime Resilience</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="container" style="max-width: 720px;">
+    <header class="header">
+      <div class="badge">N-EYE LABORATORY SCENARIO 13</div>
+      <h1>Unicode, SELECT, SCROLL, TYPE_TOKEN</h1>
+      <p class="subtitle">Controlled fixtures for T017/T018. Product code must not special-case this page.</p>
+    </header>
+
+    <main class="card">
+      <h2 id="page-title">Resilience bench 😀 हिन्दी 中文</h2>
+      <p>Public multilingual copy. A test harness may inject a malformed surrogate separately.</p>
+
+      <form id="res-form" onsubmit="event.preventDefault();">
+        <div class="form-row">
+          <label for="res-email">Email (tokenize)</label>
+          <input id="res-email" type="email" value="resilience.canary@example.com">
+        </div>
+        <div class="form-row">
+          <label for="res-password">Password (NEVER_SEND)</label>
+          <input id="res-password" type="password" value="CANARY_PASSWORD_T017">
+        </div>
+        <div class="form-row">
+          <label for="res-otp">OTP (NEVER_SEND)</label>
+          <input id="res-otp" type="text" inputmode="numeric" autocomplete="one-time-code" value="CANARY_OTP_T017">
+        </div>
+        <div class="form-row">
+          <label for="res-api">API token (NEVER_SEND)</label>
+          <input id="res-api" type="text" value="CANARY_API_T017">
+        </div>
+        <div class="form-row">
+          <label for="res-country">Country (native SELECT)</label>
+          <select id="res-country">
+            <option value="">Choose…</option>
+            <option value="in">India</option>
+            <option value="jp">日本</option>
+            <option value="us">United States</option>
+          </select>
+        </div>
+        <div class="form-actions">
+          <button id="res-submit" class="btn btn-primary" type="submit">Submit Application</button>
+        </div>
+      </form>
+
+      <div id="res-scroll" style="height:160px;overflow:auto;border:1px solid #444;margin-top:16px;padding:8px;">
+        <p style="height:900px;">Scrollable container. Bounded SCROLL should move this, then fresh observation must follow.</p>
+      </div>
+
+      <p id="res-overwrite-note">Harness control: TYPE_TOKEN overwrite</p>
+      <button id="res-arm-overwrite" class="btn btn-secondary" type="button">Arm email overwrite on input</button>
+    </main>
+
+    <footer class="footer">
+      <p>N-Eye Test Portal • Scenario 13 • T017/T018</p>
+      <p style="font-size:12px;margin-top:8px;">
+        <a href="./index.html">01</a> ·
+        <a href="./scenario-12-high-risk.html">12 High risk</a> ·
+        13 Resilience
+      </p>
+    </footer>
+  </div>
+  <script>
+    document.getElementById('res-arm-overwrite').addEventListener('click', function () {
+      var email = document.getElementById('res-email');
+      email.addEventListener('input', function () { email.value = ''; });
+    });
+  </script>
+</body>
+</html>

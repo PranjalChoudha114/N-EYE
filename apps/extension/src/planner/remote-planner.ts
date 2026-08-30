@@ -4,20 +4,62 @@
  * OWNS: Outbound transport of egress-guarded SafeContext to the remote planner gateway.
  * TRUST BOUNDARY: Enforces mandatory Egress Guard inspection before serializing network requests.
  * MUST NOT: Send RawScene, bypass EgressGuard, store provider keys, or execute remote responses directly.
+ * RETRY: Bounded, cancellable, same protected payload. Never retries with a broader/raw context.
  */
 
 import {
   type ActionProposal,
   type SafeContext,
   NEyeError,
+  sanitizeUnicodeDeep,
 } from '@n-eye/protocol';
 import { validateSafeContextEgress } from '../privacy/egress-guard.js';
 import { assertProposalShape } from '../authority/proposal-schema.js';
+import { abortableDelay } from '../runtime/abortable-delay.js';
 import type { Planner, PlannerOptions, PlannerProposalResult } from './types.js';
+import {
+  PLANNER_429_DEFAULT_DELAY_MS,
+  PLANNER_429_MAX_EXTRA_ATTEMPTS,
+  PLANNER_MAX_ATTEMPTS,
+  PLANNER_RETRY_MAX_DELAY_MS,
+  PlannerTransportError,
+  parseRetryAfterMs,
+  retryBackoffMs,
+} from './transport-error.js';
 
 const DEFAULT_GATEWAY_URL = 'http://localhost:8000';
 const DEFAULT_TIMEOUT_MS = 15000;
-const MAX_TRANSIENT_RETRIES = 1;
+
+function cancelledError(attempt: number): PlannerTransportError {
+  return new PlannerTransportError({
+    code: 'CANCELLED',
+    message: 'Planner request was aborted by user.',
+    retryable: false,
+    attempt,
+  });
+}
+
+function isAbortError(err: unknown): boolean {
+  return (
+    (err instanceof DOMException && err.name === 'AbortError') ||
+    (err instanceof Error && err.name === 'AbortError')
+  );
+}
+
+async function waitBeforeRetry(
+  options: PlannerOptions | undefined,
+  attempt: number,
+  error: PlannerTransportError,
+  waitMs: number
+): Promise<void> {
+  options?.onRetry?.({
+    attempt,
+    nextAttempt: attempt + 1,
+    code: error.code,
+    delayMs: waitMs,
+  });
+  await abortableDelay(waitMs, options?.signal);
+}
 
 export class RemotePlanner implements Planner {
   private defaultGatewayUrl: string;
@@ -35,11 +77,11 @@ export class RemotePlanner implements Planner {
     const callerSignal = options?.signal;
     const requestId = options?.requestId || `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-    // STEP 1: Mandatory Egress Guard checkpoint
-    // RawScene, unredacted goals, and raw secrets are blocked from reaching transport.
+    // STEP 1: Mandatory Egress Guard checkpoint on Unicode-safe SafeContext.
+    // Encoding failure must not retry with raw DOM/OCR/screenshot or a broader payload.
     let serializedContextBytes: string;
     try {
-      serializedContextBytes = validateSafeContextEgress(context);
+      serializedContextBytes = validateSafeContextEgress(sanitizeUnicodeDeep(context));
     } catch (err) {
       throw new NEyeError(
         'PRIVACY_ERROR',
@@ -49,28 +91,25 @@ export class RemotePlanner implements Planner {
 
     const payloadObj = {
       requestId,
-      safeContext: JSON.parse(serializedContextBytes),
+      safeContext: JSON.parse(serializedContextBytes) as SafeContext,
     };
     const bodyStr = JSON.stringify(payloadObj);
 
-    // STEP 2: Network transport with timeout, cancellation, and bounded retry
-    let attempts = 0;
-    let lastError: Error | null = null;
+    let lastError: PlannerTransportError | null = null;
+    let rateLimitRetries = 0;
 
-    while (attempts <= MAX_TRANSIENT_RETRIES) {
-      attempts += 1;
-
-      // Check caller cancellation before network dispatch
+    for (let attempt = 1; attempt <= PLANNER_MAX_ATTEMPTS; attempt += 1) {
       if (callerSignal?.aborted) {
-        throw new DOMException('Planner request was aborted by user.', 'AbortError');
+        throw cancelledError(attempt);
       }
 
       const controller = new AbortController();
+      let timedOut = false;
       const timeoutId = setTimeout(() => {
-        controller.abort(new Error(`Planner request timed out after ${timeoutMs}ms`));
+        timedOut = true;
+        controller.abort();
       }, timeoutMs);
 
-      // Link caller cancellation signal to abort controller
       const abortListener = (): void => {
         controller.abort(new DOMException('Planner request was aborted by user.', 'AbortError'));
       };
@@ -95,68 +134,118 @@ export class RemotePlanner implements Planner {
           callerSignal.removeEventListener('abort', abortListener);
         }
 
+        if (callerSignal?.aborted) {
+          throw cancelledError(attempt);
+        }
+
         const networkDuration = performance.now() - startTime;
+        const classified = classifyPlannerHttp(response, attempt);
 
-        if (response.status === 401 || response.status === 403) {
-          throw new NEyeError('PLANNER_ERROR', 'Planner gateway authentication failed on server.');
-        }
-
-        if (response.status === 413) {
-          throw new NEyeError('PLANNER_ERROR', 'SafeContext payload size exceeded server limits.');
-        }
-
-        if (response.status === 429) {
-          throw new NEyeError('PLANNER_ERROR', 'Planner rate limit exceeded. Please wait a moment.');
-        }
-
-        if (response.status >= 500 && attempts <= MAX_TRANSIENT_RETRIES) {
-          // Bounded retry for transient 5xx server errors
-          lastError = new NEyeError('NETWORK_ERROR', `Server error (${response.status}); retrying once...`);
-          await new Promise((r) => setTimeout(r, 500));
+        if (!classified.ok) {
+          lastError = classified.error;
+          const mayRetry = classified.error.retryable && attempt < PLANNER_MAX_ATTEMPTS;
+          const rateLimited = classified.error.code === 'RATE_LIMITED';
+          if (rateLimited) {
+            rateLimitRetries += 1;
+            if (rateLimitRetries > PLANNER_429_MAX_EXTRA_ATTEMPTS) {
+              throw classified.error;
+            }
+          }
+          if (!mayRetry) {
+            throw classified.error;
+          }
+          const waitMs =
+            classified.error.retryAfterMs ?? retryBackoffMs(attempt);
+          await waitBeforeRetry(options, attempt, classified.error, waitMs);
           continue;
         }
 
-        if (!response.ok) {
-          const errBody = await response.text().catch(() => 'Unknown error');
-          throw new NEyeError('PLANNER_ERROR', `Planner gateway returned error (${response.status}): ${errBody.slice(0, 150)}`);
+        let data: unknown;
+        try {
+          const text = await response.text();
+          if (!text.trim()) {
+            throw new PlannerTransportError({
+              code: 'MALFORMED_RESPONSE',
+              message: 'Planner returned an empty response.',
+              retryable: false,
+              httpStatus: response.status,
+              attempt,
+            });
+          }
+          data = JSON.parse(text) as unknown;
+        } catch (err) {
+          if (err instanceof PlannerTransportError) throw err;
+          throw new PlannerTransportError({
+            code: 'MALFORMED_RESPONSE',
+            message: 'Planner returned invalid JSON.',
+            retryable: false,
+            httpStatus: response.status,
+            attempt,
+          });
         }
 
-        const data = await response.json();
-
-        // STEP 3: Validate ActionProposal envelope from server
-        if (!data || typeof data !== 'object' || !data.actionProposal) {
-          throw new NEyeError('PLANNER_ERROR', 'Planner gateway returned malformed response envelope.');
+        if (!data || typeof data !== 'object' || !('actionProposal' in data)) {
+          throw new PlannerTransportError({
+            code: 'MALFORMED_RESPONSE',
+            message: 'Planner gateway returned a malformed response envelope.',
+            retryable: false,
+            httpStatus: response.status,
+            attempt,
+          });
         }
 
-        const proposal = data.actionProposal as ActionProposal;
-        if (!proposal.actionId || !proposal.type || !proposal.reasoning) {
-          throw new NEyeError('PLANNER_ERROR', 'Returned proposal lacks required ActionProposal fields.');
+        const envelope = data as { actionProposal: unknown; metadata?: Record<string, unknown> };
+        const proposal = envelope.actionProposal as ActionProposal;
+        if (!proposal || typeof proposal !== 'object' || !proposal.actionId || !proposal.type || !proposal.reasoning) {
+          throw new PlannerTransportError({
+            code: 'MALFORMED_RESPONSE',
+            message: 'Returned proposal lacks required ActionProposal fields.',
+            retryable: false,
+            attempt,
+          });
         }
 
-        // Validate proposal target safety (reject script or selector attempts)
         if (proposal.targetId && (proposal.targetId.includes('<') || proposal.targetId.includes('javascript:'))) {
-          throw new NEyeError('PLANNER_ERROR', `Malicious targetId format detected: ${proposal.targetId}`);
+          throw new PlannerTransportError({
+            code: 'MALFORMED_RESPONSE',
+            message: 'Malicious targetId format detected.',
+            retryable: false,
+            attempt,
+          });
         }
 
-        // Close the schema at the network boundary. An unknown or authority-claiming field is
-        // rejected here rather than travelling inward as an unread property.
         let safeProposal: ActionProposal;
         try {
           safeProposal = assertProposalShape(proposal);
         } catch (err) {
-          throw new NEyeError('PLANNER_ERROR', `Rejected planner proposal: ${(err as Error).message}`);
+          throw new PlannerTransportError({
+            code: 'MALFORMED_RESPONSE',
+            message: `Rejected planner proposal: ${(err as Error).message}`,
+            retryable: false,
+            attempt,
+          });
         }
 
+        const latencyRaw = envelope.metadata?.['planningLatencyMs'];
         return {
           proposal: safeProposal,
           metadata: {
-            requestId: data.metadata?.requestId || requestId,
-            provider: data.metadata?.provider || 'remote',
-            model: data.metadata?.model || 'remote-model',
-            planningLatencyMs: Number((data.metadata?.planningLatencyMs || networkDuration).toFixed(2)),
+            requestId: String(envelope.metadata?.['requestId'] || requestId),
+            provider: String(envelope.metadata?.['provider'] || 'remote'),
+            model: String(envelope.metadata?.['model'] || 'remote-model'),
+            planningLatencyMs: Number(
+              (typeof latencyRaw === 'number' ? latencyRaw : networkDuration).toFixed(2)
+            ),
             payloadSizeBytes: bodyStr.length,
-            inputTokenCount: data.metadata?.inputTokenCount,
-            outputTokenCount: data.metadata?.outputTokenCount,
+            inputTokenCount:
+              typeof envelope.metadata?.['inputTokenCount'] === 'number'
+                ? envelope.metadata['inputTokenCount']
+                : undefined,
+            outputTokenCount:
+              typeof envelope.metadata?.['outputTokenCount'] === 'number'
+                ? envelope.metadata['outputTokenCount']
+                : undefined,
+            attempt,
           },
         };
       } catch (err) {
@@ -165,27 +254,166 @@ export class RemotePlanner implements Planner {
           callerSignal.removeEventListener('abort', abortListener);
         }
 
-        if ((err as Error).name === 'AbortError' || callerSignal?.aborted) {
-          throw new DOMException('Planner request was aborted by user.', 'AbortError');
+        if (isAbortError(err) || callerSignal?.aborted) {
+          const timeoutAbort = timedOut && !callerSignal?.aborted;
+          if (timeoutAbort) {
+            lastError = new PlannerTransportError({
+              code: 'TIMEOUT',
+              message: 'Planner request timed out.',
+              retryable: true,
+              attempt,
+            });
+            if (attempt < PLANNER_MAX_ATTEMPTS) {
+              await waitBeforeRetry(options, attempt, lastError, retryBackoffMs(attempt));
+              continue;
+            }
+            throw lastError;
+          }
+          throw cancelledError(attempt);
         }
 
-        lastError = err as Error;
-
-        // Only retry on transient fetch failure, not on NEyeError
-        if (err instanceof NEyeError && err.category === 'PLANNER_ERROR') {
-          throw err;
+        if (err instanceof PlannerTransportError) {
+          lastError = err;
+          const mayRetry = err.retryable && attempt < PLANNER_MAX_ATTEMPTS;
+          if (!mayRetry) throw err;
+          if (err.code === 'RATE_LIMITED') {
+            rateLimitRetries += 1;
+            if (rateLimitRetries > PLANNER_429_MAX_EXTRA_ATTEMPTS) throw err;
+          }
+          await waitBeforeRetry(options, attempt, err, err.retryAfterMs ?? retryBackoffMs(attempt));
+          continue;
         }
 
-        if (attempts <= MAX_TRANSIENT_RETRIES) {
-          await new Promise((r) => setTimeout(r, 500));
+        lastError = new PlannerTransportError({
+          code: 'NETWORK_FAILURE',
+          message: 'Failed to reach planner gateway.',
+          retryable: true,
+          attempt,
+        });
+        if (attempt < PLANNER_MAX_ATTEMPTS) {
+          await waitBeforeRetry(options, attempt, lastError, retryBackoffMs(attempt));
           continue;
         }
       }
     }
 
-    throw new NEyeError(
-      'NETWORK_ERROR',
-      `Failed to reach planner gateway at ${gatewayUrl}: ${lastError?.message || 'Connection refused'}`
+    throw (
+      lastError ||
+      new PlannerTransportError({
+        code: 'NETWORK_FAILURE',
+        message: 'Failed to reach planner gateway.',
+        retryable: false,
+        attempt: PLANNER_MAX_ATTEMPTS,
+      })
     );
   }
+}
+
+function classifyPlannerHttp(
+  response: Response,
+  attempt: number
+): { ok: true } | { ok: false; error: PlannerTransportError } {
+  if (response.status === 401 || response.status === 403) {
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'AUTH_FAILED',
+        message: 'Planner gateway authentication failed on server.',
+        retryable: false,
+        httpStatus: response.status,
+        attempt,
+      }),
+    };
+  }
+  if (response.status === 413) {
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'PAYLOAD_TOO_LARGE',
+        message: 'SafeContext payload size exceeded server limits.',
+        retryable: false,
+        httpStatus: 413,
+        attempt,
+      }),
+    };
+  }
+  if (response.status === 404) {
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'MISCONFIGURED',
+        message: 'Planner provider endpoint or model is misconfigured.',
+        retryable: false,
+        httpStatus: 404,
+        attempt,
+      }),
+    };
+  }
+  if (response.status === 429) {
+    const retryAfterMs = parseRetryAfterMs(
+      response.headers.get('Retry-After'),
+      PLANNER_429_DEFAULT_DELAY_MS,
+      PLANNER_RETRY_MAX_DELAY_MS
+    );
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'RATE_LIMITED',
+        message: 'Planner provider rate limited.',
+        retryable: true,
+        httpStatus: 429,
+        retryAfterMs,
+        attempt,
+      }),
+    };
+  }
+  if (response.status === 504) {
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'TIMEOUT',
+        message: 'Planner request timed out.',
+        retryable: true,
+        httpStatus: 504,
+        attempt,
+      }),
+    };
+  }
+  if (response.status === 503) {
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'UNAVAILABLE',
+        message: 'Planner provider temporarily unavailable.',
+        retryable: true,
+        httpStatus: 503,
+        attempt,
+      }),
+    };
+  }
+  if (response.status >= 500) {
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'UNAVAILABLE',
+        message: 'Planner provider returned a temporary server error.',
+        retryable: true,
+        httpStatus: response.status,
+        attempt,
+      }),
+    };
+  }
+  if (!response.ok) {
+    return {
+      ok: false,
+      error: new PlannerTransportError({
+        code: 'UNKNOWN_SAFE_FAILURE',
+        message: `Planner gateway returned error (${response.status}).`,
+        retryable: false,
+        httpStatus: response.status,
+        attempt,
+      }),
+    };
+  }
+  return { ok: true };
 }

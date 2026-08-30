@@ -59,6 +59,11 @@ describe('Egress Guard & Byte-Level Canary Proof', () => {
     expect(() => {
       validateSafeContextEgress(leakedContext);
     }).toThrow(EgressViolationError);
+    try {
+      validateSafeContextEgress(leakedContext);
+    } catch (err) {
+      expect((err as Error).message).not.toContain('CANARY_PASSWORD');
+    }
   });
 
   it('blocks egress if RawScene local-only properties leaked into payload', () => {

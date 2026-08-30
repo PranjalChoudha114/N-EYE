@@ -29,7 +29,15 @@ export function toastFromEvent(event: AssuranceEvent): ProductToast | null {
 }
 
 export function toastFromPhase(
-  phase: 'COMPLETED' | 'AWAITING_CONFIRMATION' | 'GATEWAY_UNREACHABLE' | 'RATE_LIMITED' | 'DISCONNECTED',
+  phase:
+    | 'COMPLETED'
+    | 'AWAITING_CONFIRMATION'
+    | 'GATEWAY_UNREACHABLE'
+    | 'RATE_LIMITED'
+    | 'DISCONNECTED'
+    | 'PROVIDER_UNAVAILABLE'
+    | 'OCR_UNAVAILABLE'
+    | 'ASK_USER',
   message: string
 ): ProductToast {
   if (phase === 'COMPLETED') return { kind: 'COMPLETED', message };

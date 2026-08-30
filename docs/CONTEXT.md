@@ -34,13 +34,13 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T015/T016: adversarial security & local authority hardening. T013/T014 UI preserved. |
+| **Current Phase** | T017/T018: runtime resilience + failure/recovery + execution completion. T015/T016 authority preserved. |
 | **Branch** | `main` |
-| **HEAD Commit** | T015/T016 working tree on parent `2d548b9` (T013/T014). Commit when the human asks. |
-| **Latest Verified Gate** | Gate 015/016: confirmation capability, proposal shape gate, DOM/ARIA/OCR injection corpus. Chrome E2E MANUAL. |
-| **Next Eligible Gate** | Gate 017/018: provider failure / recovery / service-worker lifetime (recommended). Formal PII P/R/F1 and performance remain later. |
-| **SIH Prototype Completion** | ~86% (planning estimate; product UI exists; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
-| **Core Architecture Completion** | ~88% (planning estimate; perception layer implemented; SELECT/SCROLL executor still incomplete) |
+| **HEAD Commit** | T017/T018 seal on parent `ea96f04`. See `git log -1` / §61. |
+| **Latest Verified Gate** | Gate 017/018: Unicode transport, classified planner retry, SELECT/SCROLL executors, TYPE_TOKEN resulting-state verification. Chrome E2E MANUAL. |
+| **Next Eligible Gate** | Gate 019/020: formal SIH measurement (PII P/R/F1, sanitization, canary leakage, visual-context, latency/resource). |
+| **SIH Prototype Completion** | ~88% (planning estimate; recovery exists; formal full-weight P/R/F1 and resource benches remain; real Chrome UI is MANUAL) |
+| **Core Architecture Completion** | ~92% (planning estimate; SELECT/SCROLL executors implemented; formal benches remain) |
 | **Company-Product Completion** | ~24% (planning estimate) |
 
 ---
@@ -79,7 +79,7 @@ Every N-Eye task step executes through an immutable lifecycle. Each stage has a 
 | 3 | **THINK REMOTELY** | Zone 4→5 (Network→Planner) | [`remote-planner.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/planner/remote-planner.ts), [`main.py`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/planner-api/src/main.py), [`gemini.py`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/planner-api/src/adapters/gemini.py) | HTTP POST `SafeContext` to FastAPI gateway. Gateway validates schema, builds structured prompt with delimited sections, invokes Gemini 2.5 Flash with `responseSchema`. Returns constrained `ActionProposal`. |
 | 4 | **VALIDATE LOCALLY** | Zone 3 (Local Authority) | [`validator.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/validator.ts), [`regrounding.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/regrounding.ts), [`stale-action.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/authority/stale-action.ts) | Verify target exists in current `RawScene`, is enabled, frame is accessible, and token scope matches. Locally classify risk (`max(planner, local)`). `ActionProposal` has no epoch field; freshness is enforced by live re-grounding at execute time. Produce `ValidatedAction`. |
 | 5 | **ACT LOCALLY** | Zone 1 (Content Script) | [`executor.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/execution/executor.ts) | Product-UI confirmation runs **before** execute when `approvedRiskLevel === 'HIGH'`. Content script re-grounds live semantics, then dispatches native DOM events. Token values resolve in the owner UI document **before** the execute message (resolved value never returns to the planner). |
-| 6 | **VERIFY LOCALLY** | Zone 3 (Local Processing) | [`verifier.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/verification/verifier.ts) | Re-observe after action. Compare pre vs post: URL, target consumption, control-set change. Epoch-only deltas return `AMBIGUOUS`, not success. TYPE_TOKEN may succeed without epoch change. |
+| 6 | **VERIFY LOCALLY** | Zone 3 (Local Processing) | [`verifier.ts`](file:///Users/pranjalchoudha/Desktop/N-Eye/apps/extension/src/verification/verifier.ts) | Re-observe after action. Compare pre vs post: URL, target consumption, control-set change. Epoch-only deltas return `AMBIGUOUS`, not success. TYPE_TOKEN/TYPE_TEXT require live `fieldState === MATCHED`, not event dispatch. HIGH + not success → ASK_USER, no replay. |
 
 ---
 
@@ -137,7 +137,7 @@ N-Eye/
 │   ├── TEST-STRATEGY.md                  # Testing strategy & canary proof matrix
 │   ├── RUNBOOK.md                        # Developer operational guide
 │   ├── RECOMMENDATIONS.md               # Backlog of proposed improvements outside current scope
-│   └── decisions/                        # Architecture Decision Records (ADR-0001 through ADR-0010)
+│   └── decisions/                        # Architecture Decision Records (ADR-0001 through ADR-0012)
 │
 ├── packages/
 │   └── protocol/                         # Shared contracts. Zone 2/3. NO runtime behavior.
@@ -151,6 +151,8 @@ N-Eye/
 │           ├── privacy.ts                # PrivacyClass, PrivacyFinding, PrivacyDecision, TokenBinding
 │           ├── safe-context.ts           # SafeContext, SafeElement, TokenCapability
 │           ├── action-proposal.ts        # ActionProposal, ValidatedAction, VerificationResult
+│           ├── unicode.ts                # Unpaired-surrogate → U+FFFD (transport safety)
+│           ├── recovery.ts               # Recovery outcomes, planner failure class, execution evidence
 │           ├── messages.ts               # ExtensionMessage, ExtensionResponse, TabInfo, TaskState
 │           ├── perception.ts             # ROI / OCR / fusion contracts (local-only)
 │           ├── assurance.ts              # Protection states + Privacy Receipt (no vault values)
@@ -183,15 +185,17 @@ N-Eye/
 │   │       ├── planner/
 │   │       │   ├── types.ts              # Planner interface contracts (PlannerMode, GatewayHealth, etc.)
 │   │       │   ├── deterministic-planner.ts # Zone 3: Offline rule-based mock planner
-│   │       │   ├── remote-planner.ts     # Zone 4: HTTP client with EgressGuard checkpoint, timeout, retry
+│   │       │   ├── remote-planner.ts     # Zone 4: HTTP client with EgressGuard, classified retry, cancel
+│   │       │   ├── transport-error.ts    # PlannerTransportError + retry budgets
 │   │       │   └── planner-manager.ts    # Zone 2: Runtime MOCK↔REMOTE switching & health checking
 │   │       ├── authority/
 │   │       │   ├── validator.ts          # Zone 3: Untrusted proposal → ValidatedAction
 │   │       │   └── regrounding.ts        # Zone 3: Live DOM node fingerprint verification
 │   │       ├── execution/
-│   │       │   └── executor.ts           # Zone 1: Native DOM event dispatcher (CLICK, TYPE_TOKEN, TYPE_TEXT)
+│   │       │   └── executor.ts           # Zone 1: Native DOM events (CLICK, TYPE_*, SELECT, bounded SCROLL)
 │   │       ├── verification/
-│   │       │   └── verifier.ts           # Zone 3: Empirical pre/post scene delta analysis
+│   │       │   ├── verifier.ts           # Zone 3: Empirical pre/post scene delta analysis
+│   │       │   └── idempotency.ts        # HIGH unverified → no automatic replay
 │   │       ├── perception/               # Zone 3: Adaptive OCR, ROI, Tesseract seam, grounding
 │   │       ├── assurance/                # Zone 2: Site-change, receipts, truthful states
 │   │       ├── ocr-assets/               # Vendored eng.traineddata + OCR PNG fixtures
@@ -312,7 +316,7 @@ N-Eye/
 
 13. **Gemini Invocation** (`gemini.py`):
     - `build_planner_prompt()` constructs a structured prompt with delimited sections: `=== SYSTEM POLICY ===`, `=== USER TASK GOAL ===`, `=== PAGE METADATA ===`, `=== AVAILABLE LOCAL TOKENS ===`, `=== VISIBLE SAFE ELEMENTS ===`, `=== PRIOR ACTION OUTCOME ===`, `=== REQUIRED OUTPUT ===`.
-    - Sends to `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent` with `responseSchema` constraining output to `ActionProposal` JSON schema.
+    - Sends to `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent` with `x-goog-api-key` header (key is not placed in the URL) and `responseSchema` constraining output to `ActionProposal` JSON schema. Request body is UTF-8 bytes after Unicode sanitization.
     - `temperature: 0.1` for deterministic reasoning.
     - Server authenticates to Gemini using `GEMINI_API_KEY` from `apps/planner-api/.env`. **The API key authenticates N-Eye's server to Google's API. It does not grant Gemini access to the user's device. Gemini sees only the SafeContext data that N-Eye explicitly sends.**
 
@@ -320,31 +324,36 @@ N-Eye/
 
 15. **Local Validation** (`validator.ts`): `validateActionProposal()`:
     - Validates `actionId` and `type` exist.
-    - `ASK_USER`, `SCROLL`, `WAIT`, `COMPLETE` do not require a target.
+    - `ASK_USER`, viewport `SCROLL`, `WAIT`, `COMPLETE` do not require a target. Targeted `SCROLL` and `SELECT` do.
+    - For action types requiring targets: verifies `targetId` exists in current `RawScene.elements`, verifies `isEnabled === true`.
+    - For `SELECT`: target must be select-like; `textValue` names the option.
+    - For `SCROLL`: finite `scrollDelta` required; pathological values rejected at the shape gate (`MAX_SCROLL_ABS_PX = 2000`).
     - For action types requiring targets: verifies `targetId` exists in current `RawScene.elements`, verifies `isEnabled === true`.
     - For `TYPE_TOKEN`: verifies `tokenId`/`tokenSymbol` exists, checks `vault.resolve()` with task/origin/target-semantic binding. **Blocks TYPE_TOKEN and TYPE_TEXT into password fields**.
     - `approvedRiskLevel = max(planner.riskLevel, classifyLocalRisk(proposal, scene))`. Planner cannot downgrade a locally HIGH action.
     - Copies `expectedFingerprint` from the scene element for live semantic re-grounding.
     - Returns `ValidatedAction { _isValidated: true, proposal, targetElementId, resolvedTokenValue, approvedRiskLevel, expectedFingerprint, timestamp }`.
 
-16. **High-Risk Confirmation** (`sidepanel.ts`): If `validatedAction.approvedRiskLevel === 'HIGH'`: shows native `<dialog>` modal. User must click Confirm or Cancel. Cancellation aborts the entire task.
+16. **High-Risk Confirmation** (`ConfirmationBroker` + overlay/Side Panel): If `validatedAction.approvedRiskLevel === 'HIGH'`: mint a scoped confirmation capability. User Confirm/Cancel. Cancellation aborts the task. Post-confirm re-observe + re-validate is mandatory (ADR-0011).
 
 17. **Execution** (`executor.ts`): `executeValidatedAction()`:
     - Guards on `action._isValidated === true`.
     - Calls `regroundTarget()`: live node must be `.isConnected` **and** live role/tag/inputType/label must match `expectedFingerprint`. Bounding-box digest is not compared (scroll would false-fail).
     - For `CLICK`: `scrollIntoView()` → `focus()` → `click()`.
-    - For `TYPE_TOKEN`/`TYPE_TEXT`: `scrollIntoView()` → `focus()` → sets `.value` → dispatches `input` + `change` events with `{ bubbles: true }`.
+    - For `TYPE_TOKEN`/`TYPE_TEXT`: `scrollIntoView()` → `focus()` → sets `.value` → dispatches `input` + `change` events with `{ bubbles: true }`. Then reads `fieldState` without logging the value.
     - For `contentEditable`: sets `.textContent` → dispatches `input` event.
-    - `SELECT` and `SCROLL` are protocol types; executor does not implement them.
+    - For `SELECT`: native `<select>` only; option matched by value/text/label. Custom widgets → `ASK_USER`.
+    - For `SCROLL`: clamp to ±800px; viewport or scroll container; no planner JS/selectors.
 
 18. **Re-observation**: After 120ms settle delay, sidepanel sends another `OBSERVE_REQUEST` to get post-action `RawScene`.
 
-19. **Verification** (`verifier.ts`): `verifyActionExecution()` compares pre and post scenes:
-    - URL changed → `VERIFIED_SUCCESS`
-    - `postEpoch > preEpoch` → `VERIFIED_SUCCESS`
+19. **Verification** (`verifier.ts`): `verifyActionExecution()` compares pre and post scenes plus local execution evidence:
+    - URL/origin changed → `VERIFIED_SUCCESS`
     - Target element disappeared → `VERIFIED_SUCCESS` (consumed by application)
-    - `TYPE_TOKEN` with event dispatch → `VERIFIED_SUCCESS` (token was injected)
-    - No observable change → `VERIFIED_FAILURE`
+    - `TYPE_TOKEN`/`TYPE_TEXT` → `VERIFIED_SUCCESS` only if `fieldState === MATCHED`
+    - `SELECT` → `selectMatched`; `SCROLL` → moved or truthful boundary
+    - `postEpoch > preEpoch` without target-correlated evidence → `AMBIGUOUS`
+    - HIGH + not `VERIFIED_SUCCESS` → trust loop `ASK_USER`, no automatic replay
 
 20. **Multi-step Loop**: Sets `priorOutcome` from verification result. Feeds back into next step's `SafeContext.priorOutcome`. Repeats up to `MAX_STEPS = 8`. Cycle detection: if same `type:targetId:tokenId` signature appears 3+ times, throws loop safety error.
 
@@ -505,7 +514,7 @@ The system prompt ([`system_prompt.py`](file:///Users/pranjalchoudha/Desktop/N-E
 | `TYPE_TOKEN` | Type a tokenized private value | `targetId`, `tokenId` or `tokenSymbol` | `MEDIUM` |
 | `TYPE_TEXT` | Type non-sensitive public text | `targetId`, `textValue` | `LOW` or `MEDIUM` |
 | `SCROLL` | Scroll the page | `scrollDelta { x, y }` | `LOW` |
-| `SELECT` | Select a dropdown option | `targetId` | `LOW` |
+| `SELECT` | Select a dropdown option | `targetId`, `textValue` | `LOW` |
 | `WAIT` | Wait for page to settle | None | `LOW` |
 | `ASK_USER` | Request user clarification | None | `LOW` |
 | `COMPLETE` | Signal task completion | None | `LOW` |
@@ -561,8 +570,10 @@ Confirmation is a `ConfirmationBroker` capability (ADR-0011): bound to task, ori
 | Action | Implementation |
 |---|---|
 | `CLICK` | `scrollIntoView()` → `focus()` → `click()` |
-| `TYPE_TOKEN` | `scrollIntoView()` → `focus()` → set `.value` → dispatch `input` + `change` events |
-| `TYPE_TEXT` | Same as `TYPE_TOKEN` but uses `proposal.textValue` instead of resolved token |
+| `TYPE_TOKEN` | set `.value` → dispatch events → read `fieldState` locally (value never logged) |
+| `TYPE_TEXT` | Same as `TYPE_TOKEN` using `proposal.textValue` |
+| `SELECT` | Native `<select>` option by value/text/label; custom widgets → ASK_USER |
+| `SCROLL` | Viewport or container; execute clamp ±800px |
 | `contentEditable` | Sets `.textContent` → dispatches `input` event |
 
 **Prohibited**: The executor does not support `eval()`, `document.querySelector()` with arbitrary selectors, `window.location` assignment, `XMLHttpRequest`, or any other form of arbitrary code execution. It only operates on live node references obtained from the `ElementRegistry` via validated `ElementId`.
@@ -576,12 +587,14 @@ Confirmation is a `ConfirmationBroker` capability (ADR-0011): bound to task, ori
 | Delta Check | Result if True |
 |---|---|
 | `preScene.url !== postScene.url` | `VERIFIED_SUCCESS` (navigation occurred) |
-| `postEpoch > preEpoch` | `VERIFIED_SUCCESS` (DOM state changed) |
 | Target element disappeared from post-scene | `VERIFIED_SUCCESS` (element consumed by app) |
-| `TYPE_TOKEN` action with event dispatch | `VERIFIED_SUCCESS` (token injected) |
-| No observable change | `VERIFIED_FAILURE` |
+| `TYPE_TOKEN`/`TYPE_TEXT` `fieldState === MATCHED` | `VERIFIED_SUCCESS` (live control holds intended value; value not recorded) |
+| `SELECT` `selectMatched` | `VERIFIED_SUCCESS` |
+| `SCROLL` moved or at boundary | `VERIFIED_SUCCESS` (boundary is truthful, not fake movement) |
+| `postEpoch > preEpoch` without target-correlated evidence | `AMBIGUOUS` |
+| Dispatch without retained value | `VERIFIED_FAILURE` |
 
-**Limitation**: The `TYPE_TOKEN` path currently returns `VERIFIED_SUCCESS` after event dispatch even if the DOM didn't visibly change (e.g., the input was already filled). This is acceptable for the prototype but should be tightened for production.
+**Limitation**: TYPE_TOKEN resulting-state is read synchronously after dispatch. An application overwrite on a later turn is not observed by that read.
 
 ---
 
@@ -930,6 +943,7 @@ pnpm test
 | ADR-0009 | Dynamic-state authority + frame provenance | **ACCEPTED** | Semantic PageEpoch; stale-action contract; namespaced frame IDs; no `all_frames`; opaque `frameId` only |
 | ADR-0010 | Overlay quick card + Side Panel Trust Center | **ACCEPTED** | Page overlay (closed Shadow DOM) is the compact surface; Side Panel owns vault/OCR; no `windows.create`; no `action.default_popup` |
 | ADR-0011 | Confirmation capability + proposal shape gate | **ACCEPTED** | Single-use confirmation bound to action/context; extra proposal keys rejected; local risk escalate-only; prompt contract v2 |
+| ADR-0012 | Runtime recovery without authority expansion | **ACCEPTED** | Unicode scalars; bounded classified planner retry; no reconstructed confirmation; SELECT/SCROLL; TYPE_TOKEN resulting-state; HIGH no-replay |
 
 ---
 
@@ -958,15 +972,16 @@ pnpm test
 7. **Service worker lifetime**: Chrome MV3 may terminate the service worker after extended inactivity during long-running tasks.
 8. **CORS in production**: Gateway currently uses `allow_origins=["*"]` which should be tightened for production deployment.
 9. **Sidepanel orchestration coupling**: `sidepanel.ts` combines UI presentation and trust loop orchestration. These could be separated for maintainability, but this is a code organization concern, not a correctness or security issue.
-10. **Verification optimism for TYPE_TOKEN**: The verifier returns `VERIFIED_SUCCESS` after token injection even without epoch change. Event dispatch is treated as success; input `.value` is not re-read.
+10. **TYPE_TOKEN async overwrite**: Resulting-state is read immediately after dispatch. A later-turn framework reset is not observed by that read.
 11. **`AMBIGUOUS` is returned for epoch-only click deltas**: When PageEpoch moved without target-correlated evidence, verification does not claim success.
-12. **SELECT / SCROLL unimplemented in executor**: Protocol allows them; `executeValidatedAction` has no branch.
-13. **Chrome unpacked Side Panel E2E**: UNVERIFIED for T011/T012 (see `docs/evidence/T011-T012-MANUAL-CHECKLIST.md`).
+12. **Custom SELECT widgets**: Native `<select>` only. Non-native widgets terminate in ASK_USER rather than executing arbitrary JS.
+13. **Chrome unpacked Side Panel E2E**: UNVERIFIED for T011–T018 (see the gate checklists under `docs/evidence/`).
 14. **`_isValidated` is a TypeScript brand/boolean**, not a cryptographic capability. Production path still requires `validateActionProposal` before execute.
 15. **Gateway CORS**: `allow_origins=["*"]` with `allow_credentials=True` (Starlette permits this combination; still too open for any non-local deployment).
 16. **`config.allowed_origins` unused**: FastAPI CORS is hardcoded, not driven by config.
 17. **`PlanRequest.clientCapabilities`**: Pydantic `Dict[str, Any]` is an unused schema hole (not forwarded to Gemini as page content).
 18. **Cross-origin frame pixels**: N-Eye does not click approximate coordinates inside inaccessible iframes. Documented limitation, not a bypass.
+19. **True MV3 service-worker kill**: Architecture and hydrate tests exist. Real Chrome termination is MANUAL / UNVERIFIED.
 
 ---
 
@@ -975,7 +990,7 @@ pnpm test
 **ACCEPTABLE PROTOTYPE DEBT** (does not block T007/008):
 - `sidepanel.ts` combines UI and orchestration in one file. Separable but functional.
 - CORS `allow_origins=["*"]` for local Chrome-extension + localhost. Must be tightened before any non-local deployment.
-- `TYPE_TOKEN` verification assumes success after event dispatch. Could add value-check verification.
+- `TYPE_TOKEN` verification reads live field state after dispatch; async overwrites after return remain a limitation.
 - Gateway health check is user-initiated (on mode switch). Could be periodic.
 - ADR-0006 consequence text says "cryptographic & byte-level protection"; implementation is regex/canary scanning, not cryptography. Do not treat canary tests as a crypto proof.
 - Protocol `visualHints` now has a producer: sanitized description + geometry only. Remote crop bytes are deferred.
@@ -996,8 +1011,8 @@ These are **planning estimates**, not scientific metrics:
 
 | Scope | Estimate | Basis |
 |---|---|---|
-| **SIH Prototype** | ~84% | SPA/frame authority exist. Formal full-weight P/R/F1 and resource benches remain. Real Chrome UI is MANUAL. |
-| **Core Architecture** | ~88% | Six trust zones + adaptive perception. SELECT/SCROLL executor incomplete. |
+| **SIH Prototype** | ~88% | Recovery + SELECT/SCROLL exist. Formal full-weight P/R/F1 and resource benches remain. Real Chrome UI is MANUAL. |
+| **Core Architecture** | ~92% | Six trust zones + adaptive perception + bounded recovery. Formal benches remain. |
 | **Company Product** | ~24% | Prototype vertical slice. No multi-browser, enclaves, multi-tenant gateway, or compliance stack. |
 
 ---
@@ -1005,7 +1020,7 @@ These are **planning estimates**, not scientific metrics:
 ## 47. Remaining Capability Map
 
 ```
-COMPLETED (Gates 001-016):
+COMPLETED (Gates 001-018):
   ✅ Repository genesis & engineering constitution
   ✅ Protocol contracts & branded types
   ✅ Active web observation (DOM, visibility, epoch, fingerprint)
@@ -1013,31 +1028,31 @@ COMPLETED (Gates 001-016):
   ✅ SafeContext construction & byte-level egress guard
   ✅ FastAPI planner gateway with Gemini adapter
   ✅ Local action validator & re-grounding
-  ✅ Native DOM executor
-  ✅ Empirical state-delta verifier
+  ✅ Native DOM executor including SELECT / bounded SCROLL
+  ✅ Empirical state-delta verifier (TYPE_TOKEN resulting-state)
   ✅ Overlay quick card + Side Panel Trust Center + theme (T013/T014)
-  ✅ Controlled test portal (Scenarios 01-12)
+  ✅ Controlled test portal (Scenarios 01-13)
   ✅ Adaptive perception + on-device Tesseract OCR + OCR privacy + visual grounding
   ✅ Human assurance: site-change, Privacy Receipt, truthful protection states
   ✅ Content-script IIFE + bounded recovery + SIH visual eval harness (T009/T010)
   ✅ SPA stale-action + frame provenance (T011/T012)
   ✅ Adversarial security: confirmation capability, proposal shape gate, DOM/ARIA/OCR injection corpus (T015/T016)
+  ✅ Runtime resilience: Unicode transport, classified planner retry, cancellation, perception fail-closed (T017/T018)
 
-NEXT (Gate 017/018 — recommended):
-  ⏳ Provider failure / recovery / service-worker lifetime
-  ⏳ Broader privacy P/R/F1 (DOM+OCR) beyond the visual canary set
-  ⏳ Formal client-resource / E2E latency benches
-  ⏳ Human Chrome verification of T011–T016 checklists
-  ⏳ SELECT/SCROLL executor if a later task requires it (REC-011)
+NEXT (Gate 019/020 — recommended):
+  ⏳ Formal SIH PII precision/recall/F1
+  ⏳ Sanitization/redaction measurement and canary leakage benchmark
+  ⏳ Visual-context accuracy and latency/resource measurement
+  ⏳ Human Chrome verification of T011–T018 checklists
 ```
 
 ---
 
-## 48. NEXT GATE — T017/T018
+## 48. NEXT GATE — T019/T020
 
-**Recommended:** provider failure / recovery / service-worker lifetime (the original post-security campaign). Formal SIH P/R/F1 and performance remain later and should not be mixed into recovery.
+**Recommended:** formal SIH measurement (PII P/R/F1, sanitization/redaction, canary leakage, visual-context accuracy, latency/resource). Do not mix hidden-site generalization or release packaging into that gate.
 
-T015/T016 closed the security/authority campaign on a deterministic corpus. Chrome unpacked security E2E is MANUAL. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
+T017/T018 closed the recovery campaign on a deterministic corpus. Chrome unpacked runtime E2E is MANUAL. Do **not** add ONNX/WebGPU unless evidence re-opens REC-017.
 
 ---
 
@@ -1213,7 +1228,7 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **MODEL_ADMISSION:** REJECTED. Evidence: `bench/visual/reports/t009-t010-latest.md`.
 
-**SELECT/SCROLL executor:** still NOT_IMPLEMENTED (REC-011). Not required for this visual bench.
+**SELECT/SCROLL executor:** implemented in T017/T018 (REC-011). Native select + bounded scroll. Custom widgets ASK_USER.
 
 **Human login on a website is not an N-Eye planner event.** Idle browsing remains LOCAL_MONITORING. REC-016 still deferred.
 
@@ -1247,7 +1262,38 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 
 **Not claimed:** “prompt-injection proof,” formal PII P/R/F1, or live-Gemini obedience.
 
-**Next eligible combined gate:** T017/T018 provider failure / recovery / service-worker lifetime.
+**Next eligible combined gate:** T019/T020 formal SIH measurement.
+
+---
+
+## 61. T017/T018 Runtime resilience (2026-08-30)
+
+**Status:** IMPLEMENTED + TESTED. Real Chrome runtime E2E: UNVERIFIED (MANUAL: `docs/evidence/T017-T018-MANUAL-CHECKLIST.md`). ADR-0012.
+
+**Starting HEAD:** `ea96f04`. Unicode unpaired-surrogate crash reproduced with `chr(0xD83D)` / `\uD83D` fixtures (not by putting lone surrogates in Python source assertions).
+
+**What this gate proves on the automated corpus:**
+- Valid Unicode preserved; unpaired surrogates → U+FFFD; provider UTF-8 encode does not crash; retries do not broaden egress.
+- 429/404/503/timeout/network/malformed/empty classified; retry bounded; cancellation stops continuation; gateway ≠ provider.
+- OCR/capture failure does not send screenshots; visual-required + insufficient structure → OCR_UNAVAILABLE.
+- SELECT native + SCROLL bounded; TYPE_TOKEN success requires live field match; HIGH unverified → no replay.
+- Hydrate/cancel cannot reconstruct confirmation. Overlay Confirm still requires a pending capability (ASK_USER ≠ Confirm).
+- Gemini API key sent as `x-goog-api-key` header, not a query string.
+
+**Fresh automated counts (post-repair suite):**
+- `@n-eye/protocol`: 27 passed
+- `@n-eye/extension`: 263 passed (live Gemini test skipped internally when gateway offline; counted as pass by vitest skip-inside-test)
+- `apps/planner-api`: 37 passed / 1 skipped (live Gemini)
+- TOTAL: 327 passed / 0 failed / 1 skipped
+- lint: 0 errors (pre-existing `no-console` warning in real-gemini integration test)
+- typecheck: pass
+- extension build: pass. `apps/extension/dist/content.js` is a self-contained IIFE (no `import`). Build identity at this working-tree build: `DEV • ea96f04*` (dirty `*` because the gate was uncommitted). After seal, do not rebuild solely to clear `*`.
+
+**Ending HEAD:** this T017/T018 seal commit on `main` (see `git log -1`). Pushed: NO.
+
+**Not claimed:** formal SIH P/R/F1, live YouTube Gemini task success, real MV3 service-worker kill, universal site guarantee.
+
+**Next eligible combined gate:** T019/T020 Formal SIH Measurement.
 
 
 

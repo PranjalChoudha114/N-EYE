@@ -43,12 +43,19 @@ Structured next action suggestion returned by planner:
 - `targetId`?: `ElementId`
 - `tokenId`?: `TokenId`
 - `tokenSymbol`?: string (e.g. `[EMAIL_1]`)
-- `textValue`?: string (non-sensitive text only; validator rejects password targets)
+- `textValue`?: string (non-sensitive text for `TYPE_TEXT`, or native SELECT option label/value)
+- `scrollDelta`?: `{ x, y }` (SCROLL only; schema rejects `|delta| > 2000`; executor clamps to ±800)
 - `reasoning`: string
 - `expectedOutcome`: string
 - `riskLevel`: `LOW` | `MEDIUM` | `HIGH` | `BLOCKED` (advisory; local `max` wins)
 
 Unknown keys, including `confirmed`, `selector`, `javascript`, `policyOverride`, `verified`, are rejected (`UNTRUSTED_AUTHORITY_CLAIM` / `MALFORMED_PROPOSAL`). `targetId` must be opaque `eN` / `fKeN`.
+
+### 2.5c Unicode transport safety
+Page-derived strings may contain unpaired UTF-16 surrogates. `sanitizeUnicodeScalars` / `sanitize_unicode` replace those code units with U+FFFD before EgressGuard serialize and before provider UTF-8 encode. Valid Unicode is preserved. See ADR-0012.
+
+### 2.5d Recovery outcomes
+Planner/perception/execution failures terminate in named outcomes (`RETRY`, `REOBSERVE`, `REPLAN`, `ASK_USER`, `BLOCK`, `DEGRADED`, `CANCELLED`, `UNSUPPORTED`, `FAILED`, `SAFE_REGROUND`). Recovery must not increase authority or egress.
 
 ### 2.5b Confirmation capability (Zone 3, local only)
 `ConfirmationRequest` / `ConfirmationGrant` in `packages/protocol/src/security.ts`. Never sent to the planner. Bound to task, origin, route, frame, action type, target id + semantic key, risk, optional token. Single-use. TTL 120s. See ADR-0011.

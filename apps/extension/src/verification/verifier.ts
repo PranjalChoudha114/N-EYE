@@ -1,4 +1,5 @@
 import type {
+  ExecutionEvidence,
   RawScene,
   ValidatedAction,
   VerificationResult,
@@ -8,15 +9,18 @@ import type {
  * ActionVerifier (Zone 3 - Trusted Verification)
  * OWNS: Empirical post-execution state-delta analysis against a fresh observation.
  * INVARIANT: Native click() returning is not success. Success requires measured evidence.
+ * PRIVACY: ExecutionEvidence must never carry raw token or field values.
  */
 export function verifyActionExecution(
   action: ValidatedAction,
   preScene: RawScene,
-  postScene: RawScene
+  postScene: RawScene,
+  execEvidence?: ExecutionEvidence
 ): VerificationResult {
   const actionId = action.proposal.actionId;
   const preEpoch = preScene.pageEpoch;
   const postEpoch = postScene.pageEpoch;
+  const evidence = execEvidence;
 
   if (action.proposal.type === 'COMPLETE') {
     return {
@@ -26,6 +30,19 @@ export function verifyActionExecution(
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
+    };
+  }
+
+  if (action.proposal.type === 'WAIT') {
+    return {
+      actionId,
+      status: 'VERIFIED_SUCCESS',
+      observedDelta: 'Bounded settle wait completed.',
+      preEpoch,
+      postEpoch,
+      timestamp: Date.now(),
+      evidence,
     };
   }
 
@@ -37,6 +54,7 @@ export function verifyActionExecution(
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
     };
   }
 
@@ -48,6 +66,7 @@ export function verifyActionExecution(
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
     };
   }
 
@@ -62,17 +81,120 @@ export function verifyActionExecution(
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
     };
   }
 
   if (action.proposal.type === 'TYPE_TOKEN' || action.proposal.type === 'TYPE_TEXT') {
+    if (evidence?.fieldState === 'MATCHED') {
+      return {
+        actionId,
+        status: 'VERIFIED_SUCCESS',
+        observedDelta: `Typed value matches the live control (value not recorded).`,
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { fieldState: 'MATCHED' },
+      };
+    }
+    if (evidence?.fieldState === 'EMPTY' || evidence?.fieldState === 'DIVERGED') {
+      return {
+        actionId,
+        status: 'VERIFIED_FAILURE',
+        observedDelta: 'Control did not retain the intended value.',
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { fieldState: evidence.fieldState },
+      };
+    }
     return {
       actionId,
-      status: 'VERIFIED_SUCCESS',
-      observedDelta: `Text dispatched into target ${action.targetElementId} with event dispatch.`,
+      status: 'AMBIGUOUS',
+      observedDelta: 'Typed-field resulting state could not be confirmed. Dispatch is not treated as success.',
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
+    };
+  }
+
+  if (action.proposal.type === 'SELECT') {
+    if (evidence?.selectMatched === true) {
+      return {
+        actionId,
+        status: 'VERIFIED_SUCCESS',
+        observedDelta: `Native select matched the requested option (option text not recorded).`,
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { selectMatched: true },
+      };
+    }
+    if (evidence?.selectMatched === false) {
+      return {
+        actionId,
+        status: 'VERIFIED_FAILURE',
+        observedDelta: 'Native select did not match the requested option.',
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { selectMatched: false },
+      };
+    }
+    return {
+      actionId,
+      status: 'AMBIGUOUS',
+      observedDelta: 'SELECT resulting state was not confirmed locally.',
+      preEpoch,
+      postEpoch,
+      timestamp: Date.now(),
+      evidence,
+    };
+  }
+
+  if (action.proposal.type === 'SCROLL') {
+    if (evidence?.scrollMoved === true) {
+      return {
+        actionId,
+        status: 'VERIFIED_SUCCESS',
+        observedDelta: 'Scroll position changed.',
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { scrollMoved: true },
+      };
+    }
+    if (evidence?.atScrollBoundary === true) {
+      return {
+        actionId,
+        status: 'VERIFIED_SUCCESS',
+        observedDelta: 'Already at scroll boundary; no additional movement.',
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { scrollMoved: false, atScrollBoundary: true },
+      };
+    }
+    if (evidence?.scrollMoved === false) {
+      return {
+        actionId,
+        status: 'VERIFIED_FAILURE',
+        observedDelta: 'Scroll was dispatched but position did not change.',
+        preEpoch,
+        postEpoch,
+        timestamp: Date.now(),
+        evidence: { scrollMoved: false },
+      };
+    }
+    return {
+      actionId,
+      status: 'AMBIGUOUS',
+      observedDelta: 'Scroll resulting state was not confirmed locally.',
+      preEpoch,
+      postEpoch,
+      timestamp: Date.now(),
+      evidence,
     };
   }
 
@@ -84,6 +206,7 @@ export function verifyActionExecution(
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
     };
   }
 
@@ -95,6 +218,7 @@ export function verifyActionExecution(
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
     };
   }
 
@@ -106,6 +230,7 @@ export function verifyActionExecution(
       preEpoch,
       postEpoch,
       timestamp: Date.now(),
+      evidence,
     };
   }
 
@@ -116,6 +241,7 @@ export function verifyActionExecution(
     preEpoch,
     postEpoch,
     timestamp: Date.now(),
+    evidence,
   };
 }
 

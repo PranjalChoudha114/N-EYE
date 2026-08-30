@@ -121,6 +121,11 @@ export class TesseractOcrEngine implements OcrEngine {
     }
   }
 
+  public async restart(): Promise<void> {
+    await this.terminate();
+    await this.ensureWorker();
+  }
+
   public get isWarm(): boolean {
     return initializedOnce && sharedWorker !== null;
   }

@@ -5,10 +5,29 @@
  */
 
 import type { ExtensionMessage, ExtensionResponse, RoiSpec, ValidatedAction } from '@n-eye/protocol';
+import type { ExecutionResult } from '../execution/executor.js';
 import { discardWireRois, wireRoisToBuffers, type CapturedRoiWire } from '../perception/capture.js';
 import type { PixelBuffer } from '../perception/pixel-buffer.js';
 
 export type PortResult<T> = { ok: true; data: T } | { ok: false; lastError: string };
+
+/**
+ * Map a Chrome message response to a port result.
+ * WHY: Executor failure (SELECT miss, ASK_USER) still returns structured data.
+ * Transport `success: false` must not drop `outcome` / field evidence.
+ */
+export function toPortResult<T>(
+  lastErrorMessage: string | undefined,
+  response: ExtensionResponse<T> | undefined
+): PortResult<T> {
+  if (lastErrorMessage) {
+    return { ok: false, lastError: lastErrorMessage };
+  }
+  if (response?.data !== undefined) {
+    return { ok: true, data: response.data };
+  }
+  return { ok: false, lastError: response?.error || 'empty response' };
+}
 
 export interface PagePorts {
   send<T>(tabId: number, message: ExtensionMessage): Promise<PortResult<T>>;
@@ -27,15 +46,7 @@ export function chromePagePorts(): PagePorts {
     send<T>(tabId: number, message: ExtensionMessage): Promise<PortResult<T>> {
       return new Promise((resolve) => {
         chrome.tabs.sendMessage(tabId, message, (response: ExtensionResponse<T>) => {
-          if (chrome.runtime.lastError) {
-            resolve({ ok: false, lastError: chrome.runtime.lastError.message || 'unknown' });
-            return;
-          }
-          if (!response?.success || response.data === undefined) {
-            resolve({ ok: false, lastError: response?.error || 'empty response' });
-            return;
-          }
-          resolve({ ok: true, data: response.data });
+          resolve(toPortResult(chrome.runtime.lastError?.message, response));
         });
       });
     },
@@ -84,8 +95,8 @@ export async function executeOnTab(
   ports: PagePorts,
   tabId: number,
   action: ValidatedAction
-): Promise<{ success: boolean; error?: string }> {
-  const result = await ports.send<{ success: boolean; error?: string }>(tabId, {
+): Promise<ExecutionResult> {
+  const result = await ports.send<ExecutionResult>(tabId, {
     type: 'EXECUTE_ACTION_REQUEST',
     action,
   });

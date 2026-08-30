@@ -95,6 +95,7 @@ const EXECUTABLE_TEXT = /(?:javascript:|data:text\/html|<\s*script|on(?:error|lo
 
 const MAX_REASONING_LENGTH = 2000;
 const MAX_TEXT_VALUE_LENGTH = 500;
+export const MAX_SCROLL_ABS_PX = 2000;
 
 function requireString(value: unknown, field: string, max: number): string {
   if (typeof value !== 'string') {
@@ -209,6 +210,12 @@ export function assertProposalShape(raw: unknown): ActionProposal {
     }
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       throw new MalformedProposalError('Proposal scrollDelta requires finite x and y.');
+    }
+    if (Math.abs(Number(x)) > MAX_SCROLL_ABS_PX || Math.abs(Number(y)) > MAX_SCROLL_ABS_PX) {
+      throw new MalformedProposalError(
+        `Proposal scrollDelta exceeds the ${MAX_SCROLL_ABS_PX}px bound.`,
+        'POLICY_VIOLATION'
+      );
     }
     proposal['scrollDelta'] = { x: Number(x), y: Number(y) };
   }

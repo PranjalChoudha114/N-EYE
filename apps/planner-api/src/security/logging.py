@@ -7,7 +7,7 @@ raw prompts, context bodies, or credentials to server stdout or files.
 
 import logging
 import sys
-from typing import Optional
+from .unicode import sanitize_unicode
 
 logger = logging.getLogger("n_eye_planner")
 logger.setLevel(logging.INFO)
@@ -43,7 +43,7 @@ def safe_log_request(
 def safe_log_error(request_id: str, error_category: str, detail: str) -> None:
     """Log safe error classification without leaking confidential request context."""
     # Sanitize detail to strip any potential long multi-line strings or credentials
-    sanitized_detail = detail.split("\n")[0][:120] if detail else "No detail"
+    sanitized_detail = sanitize_unicode(detail.split("\n")[0][:120]) if detail else "No detail"
     logger.error(
         "request_id=%s error_category=%s detail=\"%s\"",
         request_id,

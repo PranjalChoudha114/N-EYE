@@ -56,7 +56,9 @@ function mockPorts(sceneFn: () => RawScene = scene): PagePorts {
       if (tabId !== 7) return { ok: false, lastError: 'wrong tab' };
       if (message.type === 'PING') return { ok: true, data: hello() as T };
       if (message.type === 'OBSERVE_REQUEST') return { ok: true, data: sceneFn() as T };
-      if (message.type === 'EXECUTE_ACTION_REQUEST') return { ok: true, data: { success: true } as T };
+      if (message.type === 'EXECUTE_ACTION_REQUEST') {
+        return { ok: true, data: { success: true, fieldState: 'MATCHED', scrollMoved: true, selectMatched: true } as T };
+      }
       return { ok: false, lastError: 'unexpected' };
     },
     async inject() {

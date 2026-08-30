@@ -24,11 +24,13 @@ REQUIRED_CLAUSES = [
     "riskLevel is advisory only",
     "ASK_USER",
     "Policy contract:",
+    "For SELECT, set textValue",
+    "For SCROLL, set scrollDelta",
 ]
 
 
 def test_prompt_contract_version_is_stable():
-    assert PROMPT_CONTRACT_VERSION == "n-eye-planner-policy/2"
+    assert PROMPT_CONTRACT_VERSION == "n-eye-planner-policy/3"
 
 
 def test_prompt_contract_contains_untrusted_data_clauses(sample_safe_context: SafeContext):

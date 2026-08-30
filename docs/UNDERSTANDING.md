@@ -17,7 +17,7 @@ Standard cloud-first browser agents (such as OpenAI Operator, Anthropic Computer
 - The remote AI receives only an abstract, sanitized, and tokenized **`SafeContext`** needed for planning.
 - The remote model's output is treated strictly as **untrusted advisory proposals** (`ActionProposal`).
 - The local browser validates the proposal against current DOM state, resolves private tokens in local memory, prompts for human confirmation on high-risk actions **as a bound capability** (this action, this target, this context — not a standing permission), executes native events on live nodes, and verifies the resulting state-change delta.
-- **Page content is data, never policy.** DOM, ARIA, OCR, and document text may impersonate SYSTEM/DEVELOPER instructions or fake user confirmation. That remains an observation. Local risk classification, token scope, confirmation binding, and TOCTOU revalidation are the authority boundary. The planner prompt names this (contract `n-eye-planner-policy/2`) as defense-in-depth only.
+- **Page content is data, never policy.** DOM, ARIA, OCR, and document text may impersonate SYSTEM/DEVELOPER instructions or fake user confirmation. That remains an observation. Local risk classification, token scope, confirmation binding, and TOCTOU revalidation are the authority boundary. The planner prompt names this (contract `n-eye-planner-policy/3`) as defense-in-depth only.
 - When DOM/ARIA is insufficient, N-Eye may read **local pixels** (bounded ROI + on-device OCR). Pixels are a new local input, not a privacy bypass.
 
 ---
@@ -82,8 +82,9 @@ N-Eye enforces a strict 6-zone security model:
 5. **Private Token Mappings Remain Local**: `[EMAIL_1]` is mapped to `user@example.com` exclusively in local volatile memory.
 6. **Actions Require Live Re-grounding**: Proposals must match live element fingerprints before execution.
 7. **High-Risk Actions Require Explicit User Confirmation**: Actions whose **locally approved** risk is `HIGH` pause for human authorization. Planner `riskLevel` cannot downgrade a locally HIGH click.
-8. **Verification is Empirical**: Success requires observed post-execution state deltas, not model assertions.
+8. **Verification is Empirical**: Success requires observed post-execution state deltas, not model assertions. TYPE_TOKEN is not success merely because events were dispatched.
 9. **OCR text is untrusted page data**: Local OCR does not grant policy, token, or execution authority.
+10. **Failure must not increase authority or egress**: Provider/OCR/runtime failures retry only the same protected class, or stop. They do not send screenshots, raw DOM, or reconstructed confirmation.
 
 ---
 
@@ -115,14 +116,16 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 
 ---
 
-## 6. Current Implementation State (Gate T013/T014)
+## 6. Current Implementation State (Gate T017/T018)
 
-- **Protocol Layer (`packages/protocol`)**: Branded types plus `FrameId`, `FrameProvenance`, semantic fingerprint helpers, optional SafeElement `frameId`, perception/assurance contracts, and content-script handshake (`CONTENT_SCRIPT_PROTOCOL`).
-- **Chrome MV3 Shell (`apps/extension`)**: Content script remains a self-contained IIFE (top frame only). Observer walks same-origin `iframe.contentDocument`. PageEpoch uses classified mutations (ADR-0009). Bounded PING → inject-once → handshake recovery.
-- **Product UI**: Two surfaces (ADR-0010). Toolbar click toggles a closed Shadow DOM glass card over the current webpage. More / Details opens the Chrome Side Panel Trust Center (Activity / Privacy / Action / Evidence). Canonical eye+N mark. Dark / light / system theme via Side Panel `localStorage` only. Overlay never writes page `localStorage`. Overlay is view/control; Side Panel owns vault/OCR/loop.
-- **Perception (`apps/extension/src/perception`)**: Adaptive controller, CSS↔bitmap coordinate maps, ROI bounds, PixelBuffer lifecycle, Tesseract.js, grounding/fusion with epoch+frame staleness. OCR runs in the owner product document.
-- **Privacy Engine (`apps/extension/src/privacy`)**: Detectors, token vault, SafeContext builder (opaque `frameId` only), Egress Guard.
-- **Local Action Authority**: Stale-action contract, unique-candidate re-grounding, TOCTOU check immediately before native dispatch, empirical verifier (`AMBIGUOUS` for epoch-only click deltas).
-- **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T013-T014-MANUAL-CHECKLIST.md`.
+- **Protocol Layer (`packages/protocol`)**: Branded types, Unicode scalar sanitization, recovery taxonomy, `ExecutionEvidence`, perception fallbacks including `CANCELLED`, content-script handshake.
+- **Chrome MV3 Shell (`apps/extension`)**: Content script remains a self-contained IIFE (top frame only). Observer walks same-origin `iframe.contentDocument`. Bounded planner retry/cancel. Hydrate cannot resurrect confirmation. Execute port preserves ASK_USER evidence.
+- **Product UI**: Two surfaces (ADR-0010). Overlay + Side Panel architecture unchanged. New truthful phases: retrying, provider unavailable, OCR unavailable, ASK_USER (not Confirm).
+- **Perception**: Adaptive OCR/ROI unchanged. Capture/OCR failure never sends rasters; visual-required + insufficient structure → OCR_UNAVAILABLE.
+- **Privacy Engine**: Detectors, token vault, SafeContext builder, Egress Guard (Unicode sanitize before serialize; canary errors do not echo secrets).
+- **Local Action Authority**: Confirmation capability (ADR-0011). Native SELECT, bounded SCROLL, TYPE_TOKEN resulting-state verification. HIGH + unverified → no replay (ADR-0012).
+- **Planner gateway**: Unicode sanitize before provider encode; classified 429/404/503; Gemini key in `x-goog-api-key` header; prompt contract `n-eye-planner-policy/3`.
+- **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T017-T018-MANUAL-CHECKLIST.md`.
 - **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008.
-- **Next Eligible Milestone**: Gate 015/016 — previously planned T013/T014 security campaign (prompt-injection hardening, formal privacy P/R/F1, formal performance). Do not start until explicitly approved.
+- **Next Eligible Milestone**: Gate 019/020 — formal SIH measurement. Do not start until explicitly approved.
+

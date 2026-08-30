@@ -59,3 +59,4 @@ Observation is **structure-first**. Local OCR / ROI capture / adaptive visual pe
 7. OCR-derived text uses the same privacy engine as DOM text (`source: 'ocr'`). Local OCR is not a bypass.
 8. Visual evidence is bound to `PageEpoch` and frame identity. Stale evidence fail-closes rather than executing against a changed page or a different frame.
 9. Frame provenance is local authority metadata. Same-origin frames may be observed from the top document. Cross-origin frames fail closed. `all_frames` is not enabled.
+10. Failure must never increase authority or egress. Planner retries use the same protected SafeContext class. Confirmation and vault values are not reconstructed after process loss (ADR-0012).

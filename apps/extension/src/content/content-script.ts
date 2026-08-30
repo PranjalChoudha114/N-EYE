@@ -149,11 +149,9 @@ function handleMessage(
   if (message.type === 'EXECUTE_ACTION_REQUEST') {
     try {
       const result = executeValidatedAction(message.action, registry);
-      if (result.success) {
-        sendResponse({ success: true, data: result });
-      } else {
-        sendResponse({ success: false, error: result.error });
-      }
+      // Transport success means the executor ran. Action success lives on result.success.
+      // Dropping data on action failure would lose ASK_USER / fieldState evidence.
+      sendResponse({ success: true, data: result });
     } catch (err) {
       sendResponse({ success: false, error: (err as Error).message });
     }

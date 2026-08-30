@@ -18,6 +18,7 @@ from .schemas.safe_context import SafeContext
 from .adapters.base import (
     BaseProviderAdapter,
     ProviderAuthError,
+    ProviderConfigError,
     ProviderError,
     ProviderRateLimitError,
     ProviderSchemaError,
@@ -27,6 +28,7 @@ from .adapters.mock import MockProviderAdapter
 from .adapters.gemini import GeminiProviderAdapter
 from .adapters.openai_compatible import OpenAICompatibleAdapter
 from .security.logging import safe_log_error, safe_log_info, safe_log_request
+from .security.unicode import sanitize_json_value
 
 app = FastAPI(
     title="N-Eye Planner Gateway",
@@ -96,9 +98,20 @@ async def propose_plan(plan_req: PlanRequest, raw_request: Request) -> PlanRespo
             detail=f"SafeContext payload size ({payload_bytes} bytes) exceeds limit of {config.max_payload_bytes} bytes",
         )
 
-    # 2. Delegate reasoning to active provider adapter
+    # 2. Unicode-sanitize SafeContext before prompt/provider JSON (U+FFFD for unpaired surrogates).
     try:
-        proposal, in_tokens, out_tokens = await adapter.propose(plan_req.safeContext, request_id)
+        sanitized = sanitize_json_value(plan_req.safeContext.model_dump())
+        safe_context = SafeContext.model_validate(sanitized)
+    except Exception as exc:
+        safe_log_error(request_id, "UNICODE_SANITIZE_FAILED", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="SafeContext contained malformed Unicode that could not be normalized.",
+        ) from exc
+
+    # 3. Delegate reasoning to active provider adapter
+    try:
+        proposal, in_tokens, out_tokens = await adapter.propose(safe_context, request_id)
         duration_ms = (time.perf_counter() - start_time) * 1000.0
 
         safe_log_request(
@@ -124,42 +137,64 @@ async def propose_plan(plan_req: PlanRequest, raw_request: Request) -> PlanRespo
 
     except ProviderTimeoutError as exc:
         duration_ms = (time.perf_counter() - start_time) * 1000.0
-        safe_log_error(request_id, "PLANNER_TIMEOUT", str(exc))
+        safe_log_error(request_id, "PLANNER_TIMEOUT", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
             detail="Remote AI provider reasoning request timed out.",
         ) from exc
 
     except ProviderAuthError as exc:
-        safe_log_error(request_id, "PLANNER_AUTH_FAILED", str(exc))
+        safe_log_error(request_id, "PLANNER_AUTH_FAILED", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Provider authentication failed on server.",
         ) from exc
 
     except ProviderRateLimitError as exc:
-        safe_log_error(request_id, "PLANNER_RATE_LIMITED", str(exc))
+        safe_log_error(request_id, "PLANNER_RATE_LIMITED", type(exc).__name__)
+        headers = {}
+        retry_after = getattr(exc, "retry_after_seconds", None)
+        if isinstance(retry_after, (int, float)) and retry_after >= 0:
+            headers["Retry-After"] = str(int(retry_after))
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Provider rate limit exceeded. Please retry shortly.",
+            headers=headers or None,
+        ) from exc
+
+    except ProviderConfigError as exc:
+        safe_log_error(request_id, "PLANNER_MISCONFIGURED", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Provider endpoint or model is misconfigured.",
         ) from exc
 
     except ProviderSchemaError as exc:
-        safe_log_error(request_id, "PLANNER_SCHEMA_REJECTED", str(exc))
+        safe_log_error(request_id, "PLANNER_SCHEMA_REJECTED", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Provider generated invalid ActionProposal schema: {exc}",
+            detail="Provider generated an invalid ActionProposal schema.",
         ) from exc
 
     except ProviderError as exc:
-        safe_log_error(request_id, "PLANNER_PROVIDER_ERROR", str(exc))
+        safe_log_error(request_id, "PLANNER_PROVIDER_ERROR", type(exc).__name__)
+        status_code = (
+            status.HTTP_503_SERVICE_UNAVAILABLE if exc.is_retryable else status.HTTP_502_BAD_GATEWAY
+        )
         raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Upstream AI provider error: {exc}",
+            status_code=status_code,
+            detail="Upstream AI provider error.",
+        ) from exc
+
+    except UnicodeEncodeError as exc:
+        safe_log_error(request_id, "PLANNER_UNICODE_ENCODE", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provider serialization rejected malformed Unicode. No raw fallback was used.",
         ) from exc
 
     except Exception as exc:
-        safe_log_error(request_id, "PLANNER_INTERNAL_ERROR", str(exc))
+        safe_log_error(request_id, "PLANNER_INTERNAL_ERROR", type(exc).__name__)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Internal planner gateway error.",

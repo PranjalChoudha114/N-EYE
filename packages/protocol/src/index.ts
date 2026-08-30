@@ -9,3 +9,5 @@ export * from './errors.js';
 export * from './fingerprint.js';
 export * from './perception.js';
 export * from './assurance.js';
+export * from './unicode.js';
+export * from './recovery.js';

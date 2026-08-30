@@ -28,6 +28,7 @@ import { buildSafeContext } from '../privacy/safe-context-builder.js';
 import { validateSafeContextEgress } from '../privacy/egress-guard.js';
 import { PlannerManager } from '../planner/planner-manager.js';
 import type { GatewayHealth, PlannerMode } from '../planner/types.js';
+import { PLANNER_MAX_ATTEMPTS } from '../planner/transport-error.js';
 import { validateActionProposal } from '../authority/validator.js';
 import {
   buildConfirmationBinding,
@@ -36,6 +37,7 @@ import {
 } from '../authority/confirmation.js';
 import { SecurityLog } from '../authority/security-log.js';
 import { verifyActionExecution } from '../verification/verifier.js';
+import { shouldStopAfterUnverifiedHighRisk } from '../verification/idempotency.js';
 import { applyFusionLabels, runPerception } from '../perception/index.js';
 import type { OcrEngine } from '../perception/ocr-engine.js';
 import {
@@ -78,8 +80,10 @@ import {
   type ProductState,
 } from './ui-snapshot.js';
 import { delay, executeOnTab, type PagePorts } from './page-ports.js';
+import { abortableDelay } from './abortable-delay.js';
 
 export const MAX_STEPS = 8;
+export const WAIT_SETTLE_MS = 400;
 
 export interface TrustLoopDeps {
   ports: PagePorts;
@@ -106,6 +110,7 @@ export class TrustLoopController {
   private tab: TabInfo | null = null;
   private abort: AbortController | null = null;
   private observeGeneration = 0;
+  private taskGeneration = 0;
   private lastHostname: string | null = null;
   private confirmWait: { confirmationId: string; resolve: (approved: boolean) => void } | null = null;
 
@@ -114,7 +119,8 @@ export class TrustLoopController {
     this.planner = deps.planner;
     this.ocr = deps.ocr;
     this.vault = deps.vault ?? new PrivateTokenVault();
-    this.wait = deps.delayFn ?? delay;
+    const innerWait = deps.delayFn ?? delay;
+    this.wait = (ms) => abortableDelay(ms, this.abort?.signal, innerWait);
     this.state.plannerMode = this.planner.getMode();
   }
 
@@ -175,6 +181,10 @@ export class TrustLoopController {
       if (this.confirmWait) {
         this.confirmWait.resolve(false);
         this.confirmWait = null;
+      }
+      if (this.state.running) {
+        this.abort?.abort();
+        this.taskGeneration += 1;
       }
     }
     this.tab = tab;
@@ -256,6 +266,7 @@ export class TrustLoopController {
   }
 
   public cancel(): void {
+    this.taskGeneration += 1;
     this.abort?.abort();
     this.confirmations.invalidate();
     if (this.confirmWait) {
@@ -494,6 +505,7 @@ export class TrustLoopController {
 
     this.abort = new AbortController();
     const signal = this.abort.signal;
+    const taskGeneration = ++this.taskGeneration;
 
     const taskId = createTaskId(`task_${Date.now()}`);
     this.patch({
@@ -540,6 +552,7 @@ export class TrustLoopController {
           capture: (rois) => this.ports.captureRois(tabId, rois),
           goal: rawGoal,
           origin,
+          signal,
         });
         this.patch({
           latency: {
@@ -547,6 +560,10 @@ export class TrustLoopController {
             perceive: perception.invoked ? `${perception.timings.totalMs.toFixed(1)} ms` : 'skipped',
           },
         });
+
+        if (perception.fallback === 'CANCELLED' || signal.aborted || taskGeneration !== this.taskGeneration) {
+          throw new DOMException('Task cancelled by user.', 'AbortError');
+        }
 
         if (perception.fallback === 'PAGE_CHANGED') {
           this.setPipeline('PERCEIVE', 'pending');
@@ -583,8 +600,45 @@ export class TrustLoopController {
               ? perception.decision.reasons.join(', ') || 'escalated'
               : perception.decision.skippedReason || 'DOM sufficient',
             cropOutbound: 'NO',
+            recoveryPath: perception.fallback || '—',
           },
         });
+
+        const visualRequired = perception.decision.reasons.some(
+          (reason) =>
+            reason === 'UNRESOLVED_VISUAL_TARGET' ||
+            reason === 'IMAGE_TEXT' ||
+            reason === 'CANVAS_RENDERED' ||
+            reason === 'PDF_OR_DOCUMENT_PREVIEW'
+        );
+        const structureSufficient = workingScene.elements.some(
+          (el) =>
+            (el.innerTextCandidate && el.innerTextCandidate.trim().length > 1) ||
+            (el.ariaLabel && el.ariaLabel.trim().length > 1)
+        );
+        if (
+          perception.fallback &&
+          perception.decision.escalate &&
+          perception.fusedElementIds.length === 0 &&
+          visualRequired &&
+          !structureSufficient
+        ) {
+          this.applyPhase(
+            'OCR_UNAVAILABLE',
+            'On-device capture/OCR failed and page structure is insufficient. The screenshot stayed on this device.'
+          );
+          this.patch({
+            evidence: {
+              ...this.state.evidence,
+              screenshotOutBytes: 0,
+              cropOutbound: 'NO',
+              recoveryPath: perception.fallback,
+              ocrReason: perception.fallback,
+            },
+            toast: toastFromPhase('OCR_UNAVAILABLE', this.state.message),
+          });
+          break;
+        }
 
         const protectStart = performance.now();
         this.setPipeline('PROTECT', 'active');
@@ -713,7 +767,26 @@ export class TrustLoopController {
         const remoteView = remoteReasoningState();
         this.applyPhase('PLANNING', remoteView.detail);
 
-        const planResult = await this.planner.propose(safeContext, { signal });
+        const planResult = await this.planner.propose(safeContext, {
+          signal,
+          onRetry: (notice) => {
+            if (signal.aborted || taskGeneration !== this.taskGeneration) return;
+            this.applyPhase(
+              'RETRYING',
+              `Retrying planner (attempt ${notice.nextAttempt}/${PLANNER_MAX_ATTEMPTS}). Same protected context.`
+            );
+            this.patch({
+              evidence: {
+                ...this.state.evidence,
+                plannerAttempts: notice.nextAttempt,
+                recoveryPath: notice.code,
+              },
+            });
+          },
+        });
+        if (signal.aborted || taskGeneration !== this.taskGeneration) {
+          throw new DOMException('Task cancelled by user.', 'AbortError');
+        }
         const proposal = planResult.proposal;
         const metadata = planResult.metadata;
         const planMs = metadata.planningLatencyMs || performance.now() - planStart;
@@ -729,6 +802,8 @@ export class TrustLoopController {
             provider: metadata.provider,
             model: metadata.model,
             plannerLatency: `${planMs.toFixed(1)} ms`,
+            plannerAttempts: metadata.attempt ?? 1,
+            recoveryPath: (metadata.attempt ?? 1) > 1 ? 'PLANNER_RETRY' : '—',
           },
         });
         this.setPipeline('THINK', 'done');
@@ -808,12 +883,30 @@ export class TrustLoopController {
         }
 
         if (proposal.type === 'ASK_USER') {
-          this.applyPhase('AWAITING_CONFIRMATION', proposal.reasoning || 'Planner requires user input to proceed.');
+          this.applyPhase('ASK_USER', proposal.reasoning || 'Planner requires the next instruction.');
           this.patch({
-            toast: toastFromPhase('AWAITING_CONFIRMATION', 'N-Eye needs your next instruction.'),
+            toast: toastFromPhase('ASK_USER', 'N-Eye needs your next instruction. This is not a confirmation.'),
             step: { index: step, max: MAX_STEPS, summary: 'Awaiting user input.' },
+            confirmation: undefined,
           });
           break;
+        }
+
+        if (proposal.type === 'WAIT') {
+          this.setPipeline('ACT', 'active');
+          this.applyPhase('ACTING', 'Waiting for the page to settle (bounded).');
+          await this.wait(WAIT_SETTLE_MS);
+          if (signal.aborted || taskGeneration !== this.taskGeneration) {
+            throw new DOMException('Task cancelled by user.', 'AbortError');
+          }
+          this.setPipeline('ACT', 'done');
+          this.setPipeline('VERIFY', 'done');
+          priorOutcome = {
+            actionId: proposal.actionId,
+            status: 'VERIFIED',
+            summary: 'Bounded settle wait completed.',
+          };
+          continue;
         }
 
         const proposalSignature = `${proposal.type}:${proposal.targetId || ''}:${proposal.tokenId || ''}`;
@@ -1013,7 +1106,13 @@ export class TrustLoopController {
         const actStart = performance.now();
         this.setPipeline('ACT', 'active');
         this.applyPhase('ACTING');
+        if (signal.aborted || taskGeneration !== this.taskGeneration) {
+          throw new DOMException('Task cancelled by user.', 'AbortError');
+        }
         const execResult = await executeOnTab(this.ports, tabId, actionToExecute);
+        if (signal.aborted || taskGeneration !== this.taskGeneration) {
+          throw new DOMException('Task cancelled by user.', 'AbortError');
+        }
         this.patch({
           latency: { ...this.state.latency, act: `${(performance.now() - actStart).toFixed(1)} ms` },
           evidence: {
@@ -1024,6 +1123,13 @@ export class TrustLoopController {
         this.setPipeline('ACT', 'done');
 
         if (!execResult.success) {
+          if (execResult.outcome === 'ASK_USER') {
+            this.applyPhase('ASK_USER', execResult.error || 'N-Eye needs you to complete this step.');
+            this.patch({
+              toast: toastFromPhase('ASK_USER', execResult.error || 'Ask the user to complete this step.'),
+            });
+            break;
+          }
           const blocked = execResult.error || 'Execution failed';
           this.applyPhase('BLOCKED', blocked);
           this.patch({
@@ -1045,10 +1151,17 @@ export class TrustLoopController {
         this.setPipeline('VERIFY', 'active');
         this.applyPhase('VERIFYING');
         await this.wait(120);
+        if (signal.aborted || taskGeneration !== this.taskGeneration) {
+          throw new DOMException('Task cancelled by user.', 'AbortError');
+        }
         const postScene = await this.requestObservation(tabId, false);
         if (postScene) {
-          // Compare against the scene the action actually ran on, not a pre-approval snapshot.
-          const verification: VerificationResult = verifyActionExecution(actionToExecute, executionScene, postScene);
+          const verification: VerificationResult = verifyActionExecution(actionToExecute, executionScene, postScene, {
+            fieldState: execResult.fieldState,
+            scrollMoved: execResult.scrollMoved,
+            atScrollBoundary: execResult.atScrollBoundary,
+            selectMatched: execResult.selectMatched,
+          });
           this.patch({
             action: {
               ...(this.state.action as NonNullable<ProductState['action']>),
@@ -1057,6 +1170,16 @@ export class TrustLoopController {
             },
             evidence: { ...this.state.evidence, verificationResult: verification.status },
           });
+          if (shouldStopAfterUnverifiedHighRisk(actionToExecute.approvedRiskLevel, verification.status)) {
+            this.applyPhase(
+              'ASK_USER',
+              'This high-risk action could not be verified. N-Eye will not repeat it automatically.'
+            );
+            this.patch({
+              toast: toastFromPhase('ASK_USER', 'Verification was ambiguous after a high-risk action.'),
+            });
+            break;
+          }
           priorOutcome = {
             actionId: proposal.actionId,
             status: verification.status === 'VERIFIED_SUCCESS' ? 'VERIFIED' : 'FAILURE',
@@ -1084,9 +1207,13 @@ export class TrustLoopController {
         this.patch({ step: { index: this.state.step?.index ?? 1, max: MAX_STEPS, summary: (err as Error).message } });
       } else {
         const message = (err as Error).message;
-        const phase = classifyPlannerFailure(message);
+        const phase = classifyPlannerFailure(err);
         this.applyPhase(phase, message);
-        if (phase === 'GATEWAY_UNREACHABLE' || phase === 'RATE_LIMITED') {
+        if (
+          phase === 'GATEWAY_UNREACHABLE' ||
+          phase === 'RATE_LIMITED' ||
+          phase === 'PROVIDER_UNAVAILABLE'
+        ) {
           this.patch({ toast: toastFromPhase(phase, this.state.message) });
         }
         this.patch({ step: { index: this.state.step?.index ?? 1, max: MAX_STEPS, summary: `Error: ${message}` } });

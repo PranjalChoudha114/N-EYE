@@ -31,6 +31,8 @@ export interface OcrEngine {
   recognize(input: OcrRecognizeInput): Promise<OcrEngineResult>;
   warmup?(): Promise<number>;
   terminate?(): Promise<void>;
+  /** Bounded worker recycle after a load/runtime failure. Must not persist pixels. */
+  restart?(): Promise<void>;
 }
 
 export const OCR_TIMEOUT_MS = 8_000;

@@ -1,5 +1,6 @@
 import type { ActionId, ElementId, FrameId, PageEpoch, TokenId } from './identifiers.js';
 import type { TargetFingerprint } from './fingerprint.js';
+import type { ExecutionEvidence } from './recovery.js';
 
 export type ActionType =
   | 'CLICK'
@@ -62,4 +63,6 @@ export interface VerificationResult {
   preEpoch: PageEpoch;
   postEpoch: PageEpoch;
   timestamp: number;
+  /** Local resulting-state flags. Never includes raw token/field values. */
+  evidence?: ExecutionEvidence;
 }

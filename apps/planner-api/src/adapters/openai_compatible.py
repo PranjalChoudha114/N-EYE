@@ -10,6 +10,7 @@ import httpx
 from .base import (
     BaseProviderAdapter,
     ProviderAuthError,
+    ProviderConfigError,
     ProviderError,
     ProviderRateLimitError,
     ProviderSchemaError,
@@ -18,6 +19,7 @@ from .base import (
 from ..schemas.safe_context import SafeContext
 from ..schemas.action_proposal import ActionProposal
 from ..prompts.system_prompt import build_planner_prompt
+from ..security.unicode import encode_json_utf8, sanitize_json_value
 
 
 class OpenAICompatibleAdapter(BaseProviderAdapter):
@@ -48,7 +50,7 @@ class OpenAICompatibleAdapter(BaseProviderAdapter):
         if not self._api_key and "localhost" not in self._base_url:
             raise ProviderAuthError("OPENAI_API_KEY is not configured on the planner gateway.")
 
-        prompt = build_planner_prompt(context)
+        prompt = build_planner_prompt(SafeContext.model_validate(sanitize_json_value(context.model_dump())))
 
         payload = {
             "model": self._model_name,
@@ -74,10 +76,13 @@ class OpenAICompatibleAdapter(BaseProviderAdapter):
 
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(self._timeout_seconds)) as client:
-                response = await client.post(url, json=payload, headers=headers)
+                response = await client.post(url, content=encode_json_utf8(payload), headers=headers)
 
             if response.status_code in (401, 403):
                 raise ProviderAuthError(f"OpenAI API key rejected (status {response.status_code}).")
+
+            if response.status_code == 404:
+                raise ProviderConfigError("OpenAI-compatible endpoint or model was not found.")
 
             if response.status_code == 429:
                 raise ProviderRateLimitError("OpenAI API rate limit exceeded.")
@@ -89,7 +94,10 @@ class OpenAICompatibleAdapter(BaseProviderAdapter):
                 )
 
             if response.status_code != 200:
-                raise ProviderError(f"OpenAI returned HTTP {response.status_code}: {response.text[:200]}")
+                raise ProviderError(
+                    f"OpenAI returned HTTP {response.status_code}.",
+                    is_retryable=False,
+                )
 
             response_data = response.json()
             choices = response_data.get("choices", [])
@@ -108,12 +116,15 @@ class OpenAICompatibleAdapter(BaseProviderAdapter):
                 return proposal, input_tokens, output_tokens
             except Exception as parse_err:
                 raise ProviderSchemaError(
-                    f"Failed to parse OpenAI output into ActionProposal: {parse_err}"
+                    "Failed to parse OpenAI output into ActionProposal."
                 ) from parse_err
 
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError("OpenAI request timed out.") from exc
-        except (ProviderError, ProviderAuthError, ProviderRateLimitError, ProviderSchemaError):
+        except (ProviderError, ProviderAuthError, ProviderConfigError, ProviderRateLimitError, ProviderSchemaError):
             raise
-        except Exception as exc:
-            raise ProviderError(f"Unexpected error communicating with OpenAI: {exc}") from exc
+        except Exception:
+            raise ProviderError(
+                "Unexpected error communicating with OpenAI.",
+                is_retryable=True,
+            ) from None

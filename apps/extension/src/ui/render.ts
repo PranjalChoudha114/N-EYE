@@ -308,6 +308,8 @@ export function bindProductUi(els: ProductEls): ProductUi {
         row('SafeContext bytes', String(ev.payloadBytes)),
         row('Egress', ev.egressResult),
         row('Planner latency', ev.plannerLatency),
+        row('Planner attempts', String(ev.plannerAttempts)),
+        row('Recovery path', ev.recoveryPath),
       ])
     );
     els.evidenceView.append(

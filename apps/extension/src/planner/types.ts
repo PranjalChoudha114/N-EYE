@@ -6,15 +6,24 @@
  * MUST NOT: Expose provider SDKs, API keys, or browser execution authority to planners.
  */
 
-import type { ActionProposal, SafeContext } from '@n-eye/protocol';
+import type { ActionProposal, PlannerTransportCode, SafeContext } from '@n-eye/protocol';
 
 export type PlannerMode = 'MOCK' | 'REMOTE';
+
+export interface PlannerRetryNotice {
+  attempt: number;
+  nextAttempt: number;
+  code: PlannerTransportCode;
+  delayMs: number;
+}
 
 export interface PlannerOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
   gatewayUrl?: string;
   requestId?: string;
+  /** Observability only. Must not change payload class, authority, or retry budget. */
+  onRetry?: (notice: PlannerRetryNotice) => void;
 }
 
 export interface PlannerMetadata {
@@ -25,6 +34,8 @@ export interface PlannerMetadata {
   payloadSizeBytes: number;
   inputTokenCount?: number;
   outputTokenCount?: number;
+  /** 1-based attempt count. Development instrumentation, not a SIH benchmark. */
+  attempt?: number;
 }
 
 export interface PlannerProposalResult {

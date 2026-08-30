@@ -37,7 +37,11 @@ export type ProductPhase =
   | 'CANCELLED'
   | 'ERROR'
   | 'RATE_LIMITED'
-  | 'GATEWAY_UNREACHABLE';
+  | 'GATEWAY_UNREACHABLE'
+  | 'PROVIDER_UNAVAILABLE'
+  | 'RETRYING'
+  | 'OCR_UNAVAILABLE'
+  | 'ASK_USER';
 
 export type StatusTone = 'neutral' | 'ok' | 'info' | 'warning' | 'danger';
 
@@ -122,6 +126,8 @@ export interface EvidenceViewModel {
   safeContextJson: string;
   /** Latest security decision, as a reason code. Sanitized: no attack strings, no secrets. */
   securityReason: string;
+  plannerAttempts: number;
+  recoveryPath: string;
 }
 
 export interface LatencyView {
@@ -211,6 +217,8 @@ export function emptyEvidence(health: ContentScriptHealth = 'UNKNOWN'): Evidence
     observedControls: 0,
     safeContextJson: '{}',
     securityReason: '—',
+    plannerAttempts: 0,
+    recoveryPath: '—',
   };
 }
 
@@ -235,7 +243,10 @@ export function isTerminalOutcome(phase: ProductPhase): boolean {
     phase === 'ERROR' ||
     phase === 'PROTECTED' ||
     phase === 'RATE_LIMITED' ||
-    phase === 'GATEWAY_UNREACHABLE'
+    phase === 'GATEWAY_UNREACHABLE' ||
+    phase === 'PROVIDER_UNAVAILABLE' ||
+    phase === 'OCR_UNAVAILABLE' ||
+    phase === 'ASK_USER'
   );
 }
 

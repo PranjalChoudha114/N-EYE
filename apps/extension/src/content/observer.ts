@@ -245,6 +245,17 @@ function relativeBbox(
   };
 }
 
+function nativeSelectOptionHint(el: HTMLSelectElement): string {
+  // Local observation only. Option text is still untrusted page data and is sanitized
+  // again before SafeContext. Never include selected values of password-like fields.
+  const labels = Array.from(el.options)
+    .slice(0, 8)
+    .map((option) => sanitizeText(option.text || option.value, 24))
+    .filter((label) => label.length > 0);
+  if (labels.length === 0) return '';
+  return ` options:${labels.join('|')}`;
+}
+
 function inputTypeOf(el: HTMLElement): InputType | null {
   if (el instanceof HTMLInputElement) return mapInputType(el.type);
   if (el instanceof HTMLTextAreaElement) return 'textarea';
@@ -278,6 +289,7 @@ function materializeElement(
 
   const inputType = inputTypeOf(el);
   const normalizedLabelCandidate = getSanitizedLabelCandidate(el);
+  const optionHint = el instanceof HTMLSelectElement ? nativeSelectOptionHint(el) : '';
   const role = el.getAttribute('role') || el.tagName.toLowerCase();
   const tagName = el.tagName.toLowerCase();
   const relBbox = relativeBbox(bbox, viewWidth, viewHeight);
@@ -305,7 +317,7 @@ function materializeElement(
     tagName,
     role,
     ariaLabel: el.getAttribute('aria-label') ? sanitizeText(el.getAttribute('aria-label')) : null,
-    innerTextCandidate: normalizedLabelCandidate || null,
+    innerTextCandidate: sanitizeText(`${normalizedLabelCandidate}${optionHint}`) || null,
     inputType,
     isEnabled: isControlEnabled(el),
     isSelected: isSelected ? true : undefined,

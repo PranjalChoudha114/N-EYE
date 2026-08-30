@@ -11,6 +11,7 @@ import httpx
 from .base import (
     BaseProviderAdapter,
     ProviderAuthError,
+    ProviderConfigError,
     ProviderError,
     ProviderRateLimitError,
     ProviderSchemaError,
@@ -19,6 +20,7 @@ from .base import (
 from ..schemas.safe_context import SafeContext
 from ..schemas.action_proposal import ActionProposal
 from ..prompts.system_prompt import build_planner_prompt, get_action_proposal_json_schema
+from ..security.unicode import encode_json_utf8, sanitize_json_value
 
 
 class GeminiProviderAdapter(BaseProviderAdapter):
@@ -49,7 +51,7 @@ class GeminiProviderAdapter(BaseProviderAdapter):
         if not self._api_key:
             raise ProviderAuthError("GEMINI_API_KEY is not configured on the planner gateway.")
 
-        prompt = build_planner_prompt(context)
+        prompt = build_planner_prompt(SafeContext.model_validate(sanitize_json_value(context.model_dump())))
         schema = get_action_proposal_json_schema()
 
         payload = {
@@ -67,21 +69,37 @@ class GeminiProviderAdapter(BaseProviderAdapter):
             },
         }
 
-        url = f"{self._base_url}/models/{self._model_name}:generateContent?key={self._api_key}"
+        url = f"{self._base_url}/models/{self._model_name}:generateContent"
 
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(self._timeout_seconds)) as client:
                 response = await client.post(
                     url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
+                    content=encode_json_utf8(payload),
+                    headers={
+                        "Content-Type": "application/json; charset=utf-8",
+                        "x-goog-api-key": self._api_key,
+                    },
                 )
 
             if response.status_code in (401, 403):
                 raise ProviderAuthError(f"Gemini API key rejected (status {response.status_code}).")
 
+            if response.status_code == 404:
+                raise ProviderConfigError("Gemini model or endpoint was not found.")
+
             if response.status_code == 429:
-                raise ProviderRateLimitError("Gemini API rate limit or quota exceeded.")
+                retry_after_raw = response.headers.get("Retry-After")
+                retry_after = None
+                if retry_after_raw:
+                    try:
+                        retry_after = float(retry_after_raw)
+                    except ValueError:
+                        retry_after = None
+                raise ProviderRateLimitError(
+                    "Gemini API rate limit or quota exceeded.",
+                    retry_after_seconds=retry_after,
+                )
 
             if response.status_code >= 500:
                 raise ProviderError(
@@ -90,7 +108,10 @@ class GeminiProviderAdapter(BaseProviderAdapter):
                 )
 
             if response.status_code != 200:
-                raise ProviderError(f"Gemini returned HTTP {response.status_code}: {response.text[:200]}")
+                raise ProviderError(
+                    f"Gemini returned HTTP {response.status_code}.",
+                    is_retryable=False,
+                )
 
             response_data = response.json()
 
@@ -117,12 +138,20 @@ class GeminiProviderAdapter(BaseProviderAdapter):
                 return proposal, input_tokens, output_tokens
             except Exception as parse_err:
                 raise ProviderSchemaError(
-                    f"Failed to parse Gemini output into ActionProposal: {parse_err}"
+                    "Failed to parse Gemini output into ActionProposal."
                 ) from parse_err
 
+        except UnicodeEncodeError as exc:
+            raise ProviderError(
+                "Gemini request could not be UTF-8 encoded after Unicode sanitization.",
+                is_retryable=False,
+            ) from exc
         except httpx.TimeoutException as exc:
             raise ProviderTimeoutError("Gemini request timed out.") from exc
-        except (ProviderError, ProviderAuthError, ProviderRateLimitError, ProviderSchemaError):
+        except (ProviderError, ProviderAuthError, ProviderConfigError, ProviderRateLimitError, ProviderSchemaError):
             raise
-        except Exception as exc:
-            raise ProviderError(f"Unexpected error communicating with Gemini: {exc}") from exc
+        except Exception:
+            raise ProviderError(
+                "Unexpected error communicating with Gemini.",
+                is_retryable=True,
+            ) from None

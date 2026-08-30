@@ -63,6 +63,7 @@ export async function runPerception(args: {
   goal?: string;
   origin?: string;
   currentEpoch?: PageEpoch;
+  signal?: AbortSignal;
 }): Promise<PerceptionResult> {
   const totalStart = performance.now();
   const ocrCold = typeof args.engine.warmup === 'function' && !('isWarm' in args.engine && (args.engine as { isWarm?: boolean }).isWarm);
@@ -76,6 +77,19 @@ export async function runPerception(args: {
     result.timings.roiSelectionMs = Math.round(roiSelectionMs * 100) / 100;
     result.timings.totalMs = Math.round((performance.now() - totalStart) * 100) / 100;
     return result;
+  }
+
+  if (args.signal?.aborted) {
+    return {
+      ...skippedResult(args.scene, decision, ocrCold),
+      invoked: false,
+      fallback: 'CANCELLED',
+      timings: {
+        ...emptyTimings(ocrCold),
+        roiSelectionMs: Math.round(roiSelectionMs * 100) / 100,
+        totalMs: Math.round((performance.now() - totalStart) * 100) / 100,
+      },
+    };
   }
 
   const currentEpoch = args.currentEpoch ?? args.scene.pageEpoch;
@@ -112,7 +126,8 @@ export async function runPerception(args: {
   const ocrBlocks: OcrTextBlock[] = [];
 
   if (!fallback) {
-    try {
+    let restarted = false;
+    const recognizeAll = async (): Promise<void> => {
       if (args.engine.warmup && ocrCold) {
         const initStart = performance.now();
         ocrInitMs = await args.engine.warmup();
@@ -122,6 +137,10 @@ export async function runPerception(args: {
       }
       const execStart = performance.now();
       for (const spec of decision.roiSpecs) {
+        if (args.signal?.aborted) {
+          fallback = 'CANCELLED';
+          break;
+        }
         const buffer = buffers.find((b) => b.roiId === spec.roiId);
         if (!buffer || buffer.released) continue;
         const recognized = await args.engine.recognize({
@@ -137,7 +156,7 @@ export async function runPerception(args: {
         recognized.blocks.forEach((block, i) => {
           ocrBlocks.push({
             text: block.text,
-            confidence: block.confidence,
+            confidence: typeof block.confidence === 'number' ? block.confidence : undefined,
             bbox: transformRoiBoxToViewport(spec.bbox, block.bbox),
             roiId: spec.roiId,
             pageEpoch: spec.pageEpoch,
@@ -146,8 +165,22 @@ export async function runPerception(args: {
         });
       }
       ocrExecutionMs = performance.now() - execStart;
+    };
+    try {
+      await recognizeAll();
     } catch {
       fallback = fallback || 'OCR_LOAD_FAILURE';
+      if (!restarted && args.engine.restart && fallback === 'OCR_LOAD_FAILURE' && !args.signal?.aborted) {
+        restarted = true;
+        try {
+          await args.engine.restart();
+          fallback = undefined;
+          ocrBlocks.length = 0;
+          await recognizeAll();
+        } catch {
+          fallback = 'OCR_LOAD_FAILURE';
+        }
+      }
     }
   }
 

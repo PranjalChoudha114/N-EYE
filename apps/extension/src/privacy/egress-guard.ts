@@ -1,4 +1,5 @@
 import type { SafeContext } from '@n-eye/protocol';
+import { sanitizeUnicodeDeep } from '@n-eye/protocol';
 
 export class EgressViolationError extends Error {
   constructor(message: string) {
@@ -11,6 +12,7 @@ const FORBIDDEN_CANARY_PATTERNS = [
   /CANARY_[A-Z0-9_]+/i,
   /OCR_(API|OTP|SESSION|PASSWORD|EMAIL|PHONE)_T00[79]/i,
   /VISUAL_(API|OTP|SESSION|EMAIL|PHONE)_T010/i,
+  /CANARY_(PASSWORD|OTP|API|EMAIL)_T017/i,
   /sk_live_[0-9a-zA-Z]{16,}/,
   /AKIA[0-9A-Z]{16}/,
   /eyJ[A-Za-z0-9-_]+\.eyJ[A-Za-z0-9-_]+\.[A-Za-z0-9-_]+/,
@@ -52,8 +54,9 @@ export function validateSafeContextEgress(context: SafeContext): string {
     );
   }
 
-  // Serialize payload to actual bytes
-  const serialized = JSON.stringify(context);
+  // Serialize payload to actual bytes after Unicode scalar sanitization.
+  // WHY: Unpaired surrogates must not leave this boundary; valid emoji must.
+  const serialized = JSON.stringify(sanitizeUnicodeDeep(context));
 
   if (serialized.length > MAX_SAFE_CONTEXT_BYTES) {
     throw new EgressViolationError(
@@ -64,10 +67,9 @@ export function validateSafeContextEgress(context: SafeContext): string {
   // Byte-level canary scan
   for (const pattern of FORBIDDEN_CANARY_PATTERNS) {
     if (pattern.test(serialized)) {
-      const match = serialized.match(pattern);
-      throw new EgressViolationError(
-        `Egress blocked: forbidden canary credential or raw secret detected in serialized payload (${match?.[0] || 'pattern'}).`
-      );
+        throw new EgressViolationError(
+          'Egress blocked: forbidden canary credential or raw secret detected in serialized payload.'
+        );
     }
   }
 

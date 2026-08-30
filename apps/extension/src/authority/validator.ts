@@ -104,19 +104,29 @@ export function validateActionProposal(
     );
   }
 
-  // COMPLETE / WAIT / ASK_USER / SCROLL do not require a live target.
-  if (
-    proposal.type === 'COMPLETE' ||
-    proposal.type === 'WAIT' ||
-    proposal.type === 'ASK_USER' ||
-    proposal.type === 'SCROLL'
-  ) {
+  // COMPLETE / WAIT / ASK_USER do not require a live target.
+  // SCROLL may target a container or the viewport (no targetId).
+  if (proposal.type === 'COMPLETE' || proposal.type === 'WAIT' || proposal.type === 'ASK_USER') {
     return {
       _isValidated: true,
       proposal,
       approvedRiskLevel: maxRisk(classifyLocalRisk(proposal), proposal.riskLevel || 'LOW'),
       timestamp: Date.now(),
     };
+  }
+
+  if (proposal.type === 'SCROLL') {
+    if (!proposal.scrollDelta) {
+      throw new ActionValidationError('SCROLL requires a finite scrollDelta.', 'MALFORMED_PROPOSAL');
+    }
+    if (!proposal.targetId) {
+      return {
+        _isValidated: true,
+        proposal,
+        approvedRiskLevel: maxRisk(classifyLocalRisk(proposal), proposal.riskLevel || 'LOW'),
+        timestamp: Date.now(),
+      };
+    }
   }
 
   if (!proposal.targetId) {
@@ -133,6 +143,24 @@ export function validateActionProposal(
 
   if (!target.isEnabled) {
     throw new ActionValidationError(`Target element ${proposal.targetId} is disabled.`, 'INVALID_TARGET');
+  }
+
+  if (proposal.type === 'SELECT') {
+    const tag = (target.tagName || '').toLowerCase();
+    const role = (target.role || '').toLowerCase();
+    const selectLike = target.inputType === 'select' || tag === 'select' || role === 'combobox' || role === 'listbox';
+    if (!selectLike) {
+      throw new ActionValidationError(
+        `SELECT target ${proposal.targetId} is not a native select-like control.`,
+        'INVALID_TARGET'
+      );
+    }
+    if (!proposal.textValue || !proposal.textValue.trim()) {
+      throw new ActionValidationError(
+        'SELECT requires textValue naming the option label or value.',
+        'INVALID_TARGET'
+      );
+    }
   }
 
   if (target.frameProvenance?.frameKind === 'inaccessible') {

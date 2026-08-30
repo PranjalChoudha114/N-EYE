@@ -30,7 +30,8 @@ export type PerceptionFallback =
   | 'OVERSIZED_ROI'
   | 'PAGE_CHANGED'
   | 'UNSUPPORTED_VISUAL'
-  | 'FRAME_INACCESSIBLE';
+  | 'FRAME_INACCESSIBLE'
+  | 'CANCELLED';
 
 export type VisualRegionKind = 'image' | 'canvas' | 'pdf' | 'icon_control' | 'unlabeled' | 'document';
 

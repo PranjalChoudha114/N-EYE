@@ -8,6 +8,9 @@ import type { OcrEngine, OcrEngineResult, OcrRecognizeInput } from './ocr-engine
 export class MockOcrEngine implements OcrEngine {
   readonly id = 'mock-ocr';
   public recognizeCalls = 0;
+  public restartCalls = 0;
+  /** Script a one-shot failure. Cleared after restart() so bounded recovery can be tested. */
+  public failWith: Error | 'timeout' | null = null;
   private readonly scripted: Map<string, OcrEngineResult>;
 
   constructor(scripted?: Record<string, { text: string; confidence?: number; bbox?: BoundingBox }[]>) {
@@ -28,8 +31,19 @@ export class MockOcrEngine implements OcrEngine {
 
   public async recognize(input: OcrRecognizeInput): Promise<OcrEngineResult> {
     this.recognizeCalls += 1;
+    if (this.failWith === 'timeout') {
+      return { engineId: this.id, blocks: [], timedOut: true };
+    }
+    if (this.failWith) {
+      throw this.failWith;
+    }
     const hit = this.scripted.get(input.roiId);
     if (hit) return hit;
     return { engineId: this.id, blocks: [] };
+  }
+
+  public async restart(): Promise<void> {
+    this.restartCalls += 1;
+    this.failWith = null;
   }
 }
