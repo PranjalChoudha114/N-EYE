@@ -4,7 +4,6 @@ This adapter allows plugging in OpenAI, Azure OpenAI, Groq, Ollama, or any
 v1/chat/completions compatible gateway while preserving strict SafeContext contracts.
 """
 
-import json
 from typing import Optional, Tuple
 import httpx
 from .base import (
@@ -17,9 +16,9 @@ from .base import (
     ProviderTimeoutError,
 )
 from ..schemas.safe_context import SafeContext
-from ..schemas.action_proposal import ActionProposal
 from ..prompts.system_prompt import build_planner_prompt
 from ..security.unicode import encode_json_utf8, sanitize_json_value
+from .proposal_parse import coerce_action_proposal, extract_json_object
 
 
 class OpenAICompatibleAdapter(BaseProviderAdapter):
@@ -111,9 +110,10 @@ class OpenAICompatibleAdapter(BaseProviderAdapter):
             output_tokens = usage.get("completion_tokens")
 
             try:
-                parsed_json = json.loads(content)
-                proposal = ActionProposal.model_validate(parsed_json)
+                proposal = coerce_action_proposal(extract_json_object(content))
                 return proposal, input_tokens, output_tokens
+            except ProviderSchemaError:
+                raise
             except Exception as parse_err:
                 raise ProviderSchemaError(
                     "Failed to parse OpenAI output into ActionProposal."

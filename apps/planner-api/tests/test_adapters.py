@@ -122,3 +122,100 @@ async def test_mock_adapter_asks_user_instead_of_false_complete(sample_safe_cont
     proposal, _, _ = await adapter.propose(context, "req_ask")
     assert proposal.type == "ASK_USER"
     assert "completed" not in proposal.reasoning.lower()
+
+
+@pytest.mark.asyncio
+async def test_mock_adapter_clicks_hyphenated_resource_not_repositories(sample_safe_context: SafeContext):
+    from src.schemas.safe_context import SafeElement
+
+    context = sample_safe_context.model_copy(
+        update={
+            "sanitizedGoal": "Open the N-EYE repository",
+            "availableTokens": [],
+            "safeElements": [
+                SafeElement(
+                    id="e1",
+                    role="a",
+                    safeLabel="Repositories",
+                    isEnabled=True,
+                    bbox={"x": 0, "y": 0, "width": 40, "height": 20},
+                ),
+                SafeElement(
+                    id="e4",
+                    role="a",
+                    safeLabel="N-EYE",
+                    isEnabled=True,
+                    bbox={"x": 20, "y": 80, "width": 120, "height": 20},
+                ),
+            ],
+        }
+    )
+    adapter = MockProviderAdapter()
+    proposal, _, _ = await adapter.propose(context, "req_open")
+    assert proposal.type == "CLICK"
+    assert proposal.targetId == "e4"
+
+
+@pytest.mark.asyncio
+async def test_mock_adapter_clicks_unique_region_descendant(sample_safe_context: SafeContext):
+    from src.schemas.safe_context import SafeElement
+
+    context = sample_safe_context.model_copy(
+        update={
+            "sanitizedGoal": "Click the Dynamic ID Button",
+            "availableTokens": [],
+            "safeElements": [
+                SafeElement(
+                    id="e1",
+                    role="button",
+                    safeLabel="Cancel",
+                    inputType="button",
+                    isEnabled=True,
+                    bbox={"x": 0, "y": 0, "width": 80, "height": 24},
+                ),
+                SafeElement(
+                    id="e2",
+                    role="button",
+                    safeLabel="Click me",
+                    inputType="button",
+                    isEnabled=True,
+                    regionHeading="Dynamic ID Button",
+                    bbox={"x": 0, "y": 80, "width": 80, "height": 24},
+                ),
+            ],
+        }
+    )
+    adapter = MockProviderAdapter()
+    proposal, _, _ = await adapter.propose(context, "req_region")
+    assert proposal.type == "CLICK"
+    assert proposal.targetId == "e2"
+
+
+@pytest.mark.asyncio
+async def test_mock_adapter_explores_then_asks_when_region_missing(sample_safe_context: SafeContext):
+    from src.schemas.safe_context import SafeElement, PriorOutcome
+
+    page = sample_safe_context.model_copy(
+        update={
+            "sanitizedGoal": "Click the Dynamic ID Button",
+            "availableTokens": [],
+            "safeElements": [
+                SafeElement(
+                    id="e1",
+                    role="button",
+                    safeLabel="Home",
+                    inputType="button",
+                    isEnabled=True,
+                    bbox={"x": 0, "y": 0, "width": 40, "height": 20},
+                ),
+            ],
+        }
+    )
+    adapter = MockProviderAdapter()
+    first, _, _ = await adapter.propose(page, "req_explore")
+    assert first.type == "SCROLL"
+    second_ctx = page.model_copy(
+        update={"priorOutcome": PriorOutcome(actionId=first.actionId, status="VERIFIED", summary="Scroll position changed.")}
+    )
+    second, _, _ = await adapter.propose(second_ctx, "req_explore2")
+    assert second.type == "ASK_USER"

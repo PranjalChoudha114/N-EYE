@@ -62,8 +62,19 @@ export interface RawElement {
    * relabel a submit control to escape high-risk confirmation.
    */
   formSubmitting?: boolean;
+  /**
+   * Nearest visible heading/legend for the control's region.
+   * TRUST: Ranking/association only. Never folded into TargetFingerprint identity.
+   * PRIVACY: Still untrusted page text; SafeContext sanitizes before egress.
+   */
+  regionHeading?: string | null;
   /** Local frame authority. Required for execution; omitted only on legacy fixtures. */
   frameProvenance?: FrameProvenance;
+  /**
+   * Whether the live control currently holds a value.
+   * PRIVACY: Boolean only. Never the value itself. Empty password ⇒ false.
+   */
+  hasValue?: boolean;
 }
 
 /**

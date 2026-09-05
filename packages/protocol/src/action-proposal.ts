@@ -8,6 +8,7 @@ export type ActionType =
   | 'TYPE_TEXT'
   | 'SCROLL'
   | 'SELECT'
+  | 'PRESS_ENTER'
   | 'WAIT'
   | 'ASK_USER'
   | 'COMPLETE';

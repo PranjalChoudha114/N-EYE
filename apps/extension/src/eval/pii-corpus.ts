@@ -125,3 +125,24 @@ export const PII_SAMPLES: PiiSample[] = [
   { id: 'address-not-detected', split: 'eval', channel: 'dom_label', mode: 'element', innerText: '221B Baker Street, London', expectedClasses: [], rawSecrets: [], notes: 'PII_ADDRESS is not detected by current regex/heuristics.' },
   { id: 'account-not-detected', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Account 99887766', expectedClasses: [], rawSecrets: [], notes: 'PII_ACCOUNT_ID is not detected by current regex/heuristics.' },
 ];
+
+export const T027_PII_DATASET_VERSION = 't027-pii-corpus.v1';
+
+/** Frozen T027 development+holdout privacy samples. Do not retune detectors against holdout rows. */
+export const T027_PII_SAMPLES: PiiSample[] = [
+  ...PII_SAMPLES,
+  { id: 'in-mobile', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Call +91 98765 43210', expectedClasses: ['PII_PHONE'], rawSecrets: ['+91 98765 43210'] },
+  { id: 'in-mobile-plain', split: 'eval', channel: 'dom_label', mode: 'element', innerText: '9876543210', expectedClasses: ['PII_PHONE'], rawSecrets: ['9876543210'] },
+  { id: 'aadhaar-spaced', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'UID 2345 6789 0123', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['2345 6789 0123'] },
+  { id: 'pan', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'PAN ABCDE1234F', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['ABCDE1234F'] },
+  { id: 'gstin', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'GSTIN 22AAAAA0000A1Z5', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['22AAAAA0000A1Z5'] },
+  { id: 'ifsc', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'IFSC HDFC0001234', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['HDFC0001234'] },
+  { id: 'upi', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Pay name@oksbi', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['name@oksbi'] },
+  { id: 'name-label', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Full name', expectedClasses: ['PII_NAME'], rawSecrets: [] },
+  { id: 'address-label', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Street address', expectedClasses: ['PII_ADDRESS'], rawSecrets: [] },
+  { id: 'aadhaar-ocr', split: 'eval', channel: 'ocr', mode: 'ocr', ocrText: 'Aadhaar 3456 7890 1234', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['3456 7890 1234'] },
+  { id: 'upi-goal', split: 'eval', channel: 'goal', mode: 'goal', goal: 'Send money to demo@okaxis', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['demo@okaxis'] },
+  { id: 'lookalike-aadhaar-leading1', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'Order 1234 5678 9012', expectedClasses: [], rawSecrets: [], notes: '12-digit groups starting with 1 are not treated as Aadhaar-like.' },
+  { id: 'lookalike-email-not-upi', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'agent.lab@example.com', expectedClasses: ['PII_EMAIL'], rawSecrets: ['agent.lab@example.com'] },
+  { id: 'hold-pan', split: 'eval', channel: 'dom_label', mode: 'element', innerText: 'FFPNA9876Z', expectedClasses: ['PII_ACCOUNT_ID'], rawSecrets: ['FFPNA9876Z'], notes: 'Holdout-shaped PAN. Not used to tune thresholds.' },
+];

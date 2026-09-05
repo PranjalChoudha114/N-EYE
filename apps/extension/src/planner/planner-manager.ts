@@ -10,6 +10,9 @@
 import type { SafeContext } from '@n-eye/protocol';
 import { DeterministicPlanner } from './deterministic-planner.js';
 import { RemotePlanner } from './remote-planner.js';
+import { interpretGoal } from '../intelligence/goal-interpreter.js';
+import { decideReasoningSource } from '../intelligence/router.js';
+import type { IntelligenceRoutingPolicy } from '../intelligence/types.js';
 import type { GatewayHealth, PlannerMode, PlannerOptions, PlannerProposalResult } from './types.js';
 
 export class PlannerManager {
@@ -18,6 +21,11 @@ export class PlannerManager {
   private remotePlanner: RemotePlanner;
   private gatewayUrl: string = 'http://localhost:8000';
   private lastHealth: GatewayHealth = { healthy: false };
+  /**
+   * exclusive: UI MOCK/REMOTE maps 1:1 (ADR-0012 — never present Mock as Remote).
+   * capability: deterministic-first when uniquely grounded; Remote only when enabled and needed.
+   */
+  private routingPolicy: IntelligenceRoutingPolicy = 'exclusive';
 
   constructor(initialMode: PlannerMode = 'MOCK', gatewayUrl: string = 'http://localhost:8000') {
     this.mode = initialMode;
@@ -32,6 +40,14 @@ export class PlannerManager {
 
   public getMode(): PlannerMode {
     return this.mode;
+  }
+
+  public setRoutingPolicy(policy: IntelligenceRoutingPolicy): void {
+    this.routingPolicy = policy;
+  }
+
+  public getRoutingPolicy(): IntelligenceRoutingPolicy {
+    return this.routingPolicy;
   }
 
   public setGatewayUrl(url: string): void {
@@ -87,20 +103,52 @@ export class PlannerManager {
 
   /**
    * Dispatches the planning request to the active planner implementation.
+   * TRUST: Capability routing never widens the payload. Remote failure does not fall back to Mock.
    */
   public async propose(
     context: SafeContext,
     options?: PlannerOptions
   ): Promise<PlannerProposalResult> {
     if (this.mode === 'MOCK') {
-      return this.mockPlanner.proposeAction(context, options);
+      const result = await this.mockPlanner.proposeAction(context, options);
+      return {
+        ...result,
+        metadata: { ...result.metadata, reasoningProvenance: 'DETERMINISTIC_LOCAL' },
+      };
     }
 
-    // REMOTE mode
-    return this.remotePlanner.proposeAction(context, {
+    if (this.routingPolicy === 'capability') {
+      const interpreted = interpretGoal(context.sanitizedGoal);
+      const deterministic = await this.mockPlanner.proposeAction(context, { ...options, dryRun: true });
+      const decision = decideReasoningSource({
+        mode: this.mode,
+        policy: 'capability',
+        interpreted,
+        deterministicProposal: deterministic.proposal,
+      });
+      if (decision.source === 'DETERMINISTIC_LOCAL') {
+        const committed = await this.mockPlanner.proposeAction(context, options);
+        return {
+          ...committed,
+          metadata: { ...committed.metadata, reasoningProvenance: 'DETERMINISTIC_LOCAL' },
+        };
+      }
+      if (decision.source === 'ABSTAIN') {
+        return {
+          ...deterministic,
+          metadata: { ...deterministic.metadata, reasoningProvenance: 'DETERMINISTIC_LOCAL' },
+        };
+      }
+    }
+
+    const remote = await this.remotePlanner.proposeAction(context, {
       ...options,
       gatewayUrl: this.gatewayUrl,
     });
+    return {
+      ...remote,
+      metadata: { ...remote.metadata, reasoningProvenance: 'REMOTE_PROVIDER' },
+    };
   }
 
   public reset(): void {

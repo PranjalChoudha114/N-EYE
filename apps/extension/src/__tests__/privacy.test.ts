@@ -228,4 +228,105 @@ describe('NEVER_SEND secrets stay out of sanitizedGoal', () => {
     expect(JSON.stringify(safe.visualHints || [])).not.toContain('AIza');
     expect(JSON.stringify(safe.visualHints || [])).not.toContain('ghp_');
   });
+
+  it('classifies synthetic India identifiers into existing privacy classes', () => {
+    const mobile: RawElement = {
+      id: createElementId('in-m'),
+      tagName: 'div',
+      role: null,
+      ariaLabel: null,
+      innerTextCandidate: 'Call +91 98765 43210',
+      inputType: null,
+      isEnabled: true,
+      bbox: { x: 0, y: 0, width: 100, height: 30 },
+    };
+    expect(detectElementPrivacy(mobile).some((f) => f.privacyClass === 'PII_PHONE')).toBe(true);
+
+    const aadhaar: RawElement = {
+      ...mobile,
+      id: createElementId('in-a'),
+      innerTextCandidate: 'UID 2345 6789 0123',
+    };
+    const aadhaarFindings = detectElementPrivacy(aadhaar);
+    expect(aadhaarFindings.some((f) => f.privacyClass === 'PII_ACCOUNT_ID')).toBe(true);
+    expect(evaluatePrivacyPolicy(aadhaarFindings).find((d) => d.privacyClass === 'PII_ACCOUNT_ID')?.decision).toBe(
+      'TOKENIZE'
+    );
+
+    const upi: RawElement = {
+      ...mobile,
+      id: createElementId('in-u'),
+      innerTextCandidate: 'Pay name@oksbi',
+    };
+    expect(detectElementPrivacy(upi).some((f) => f.privacyClass === 'PII_ACCOUNT_ID')).toBe(true);
+
+    const lookalike: RawElement = {
+      ...mobile,
+      id: createElementId('in-l'),
+      innerTextCandidate: 'Order 1234 5678 9012',
+    };
+    expect(detectElementPrivacy(lookalike).some((f) => f.privacyClass === 'PII_ACCOUNT_ID')).toBe(false);
+
+    const notEmail: RawElement = {
+      ...mobile,
+      id: createElementId('in-ne'),
+      innerTextCandidate: 'not-an-email@localhost',
+    };
+    expect(detectElementPrivacy(notEmail).some((f) => f.privacyClass === 'PII_ACCOUNT_ID')).toBe(false);
+  });
+
+  it('empty password is a sensitive control, filled password is a sensitive value', () => {
+    const empty: RawElement = {
+      id: createElementId('e-empty-pwd'),
+      tagName: 'input',
+      role: 'textbox',
+      ariaLabel: null,
+      innerTextCandidate: 'Password',
+      inputType: 'password',
+      isEnabled: true,
+      hasValue: false,
+      bbox: { x: 0, y: 0, width: 100, height: 30 },
+    };
+    const emptyFindings = detectElementPrivacy(empty);
+    expect(emptyFindings.some((f) => f.privacyClass === 'SECRET_PASSWORD' && f.valuePresent === false)).toBe(true);
+    expect(emptyFindings.some((f) => f.privacyClass === 'SECRET_PASSWORD' && f.valuePresent !== false)).toBe(false);
+
+    const filled: RawElement = {
+      ...empty,
+      id: createElementId('e-filled-pwd'),
+      hasValue: true,
+    };
+    const filledFindings = detectElementPrivacy(filled);
+    expect(filledFindings.some((f) => f.privacyClass === 'SECRET_PASSWORD' && f.valuePresent !== false)).toBe(true);
+    expect(evaluatePrivacyPolicy(filledFindings).find((d) => d.privacyClass === 'SECRET_PASSWORD')?.decision).toBe(
+      'NEVER_SEND'
+    );
+  });
+
+  it('empty OTP/email/tel labeled controls are not private VALUES', () => {
+    const emptyOtp: RawElement = {
+      id: createElementId('e-otp'),
+      tagName: 'input',
+      role: 'textbox',
+      ariaLabel: 'One-time code',
+      innerTextCandidate: 'OTP',
+      inputType: 'text',
+      isEnabled: true,
+      hasValue: false,
+      bbox: { x: 0, y: 0, width: 80, height: 24 },
+    };
+    const otp = detectElementPrivacy(emptyOtp);
+    expect(otp.some((f) => f.privacyClass === 'SECRET_OTP' && f.valuePresent === false)).toBe(true);
+    expect(otp.some((f) => f.privacyClass === 'SECRET_OTP' && f.valuePresent !== false)).toBe(false);
+
+    const emptyTel: RawElement = {
+      ...emptyOtp,
+      id: createElementId('e-tel'),
+      inputType: 'tel',
+      ariaLabel: 'Phone',
+      innerTextCandidate: 'Phone',
+    };
+    const tel = detectElementPrivacy(emptyTel);
+    expect(tel.some((f) => f.privacyClass === 'PII_PHONE' && f.valuePresent === false)).toBe(true);
+  });
 });

@@ -200,12 +200,12 @@ export function paintOverlayCard(
   els.askHint.classList.toggle('nq-hidden', !asking);
   setSafeText(els.askHint, asking ? state.askUser?.hint || 'Rewrite your request below, then continue. This is not an approval.' : '');
   const extraLabel =
-    state.phase === 'AWAITING_CONFIRMATION' ? 'Review' : state.receipt ? 'View result' : '';
+    state.phase === 'AWAITING_CONFIRMATION' ? 'Review' : state.taskReport && !state.running ? 'View Report' : '';
   els.extra.classList.toggle(
     'nq-hidden',
     !extraLabel || state.running || state.phase === 'AWAITING_CONFIRMATION'
   );
-  setSafeText(els.extra, extraLabel || 'View result');
+  setSafeText(els.extra, extraLabel || 'View Report');
   els.modeMock.classList.toggle('is-active', state.plannerMode === 'MOCK');
   els.modeRemote.classList.toggle('is-active', state.plannerMode === 'REMOTE');
   els.modeMock.disabled = state.running;

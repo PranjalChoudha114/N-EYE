@@ -1,0 +1,194 @@
+{
+  "manifest": {
+    "schemaVersion": "n-eye-bench/1",
+    "gate": "T019-T020",
+    "gitSha": "64638ad42da2fa401fa2f471d4f39e116770380f",
+    "gitShaShort": "64638ad",
+    "dirty": true,
+    "dirtySummary": [
+      "M apps/extension/src/__tests__/adaptive-perception.test.ts",
+      "M apps/extension/src/__tests__/canary.test.ts",
+      "M apps/extension/src/__tests__/completion-arbiter.test.ts",
+      "M apps/extension/src/__tests__/composite-search.test.ts",
+      "M apps/extension/src/__tests__/coordinates.test.ts",
+      "M apps/extension/src/__tests__/observer.test.ts",
+      "M apps/extension/src/__tests__/privacy.test.ts",
+      "M apps/extension/src/__tests__/regrounding.test.ts",
+      "M apps/extension/src/__tests__/risk-classifier.test.ts",
+      "M apps/extension/src/__tests__/trust-loop.test.ts",
+      "M apps/extension/src/authority/proposal-schema.ts",
+      "M apps/extension/src/authority/regrounding.ts",
+      "M apps/extension/src/authority/validator.ts",
+      "M apps/extension/src/content/observer.ts",
+      "M apps/extension/src/content/selectors.ts",
+      "M apps/extension/src/eval/pii-corpus.ts",
+      "M apps/extension/src/eval/privacy-bench.ts",
+      "M apps/extension/src/execution/executor.ts",
+      "M apps/extension/src/overlay/overlay-card.ts",
+      "M apps/extension/src/perception/adaptive-controller.ts"
+    ],
+    "timestamp": "2026-09-04T14:40:56.319Z",
+    "os": "Darwin 25.6.0",
+    "arch": "arm64",
+    "cpu": "unknown",
+    "ramBytes": 25769803776,
+    "node": "v26.7.0",
+    "pnpm": "11.24.0",
+    "python": "Python 3.14.6",
+    "browser": "happy-dom (automated) + Chrome unpacked MANUAL for product UI",
+    "ocrEngine": "tesseract.js@7",
+    "providerMode": "MOCK for task/planner benches; live Gemini not required",
+    "notes": [
+      "No personal device identifiers beyond CPU model / RAM class.",
+      "home redacted: [present]",
+      "macOS productVersion: 26.6",
+      "T009/T010 reports are historical and are not this gate’s RESULT files.",
+      "Chrome version is MANUAL / UNVERIFIED in this automated pack."
+    ]
+  },
+  "performance": {
+    "classification": "RESULT",
+    "runtime": "happy-dom",
+    "stages": {
+      "observation": {
+        "count": 40,
+        "min": 5.2638749999999845,
+        "max": 7.186624999999935,
+        "p50": 5.677000000000021,
+        "p95": 6.660417000000052,
+        "mean": 5.854424925000001
+      },
+      "privacyDetection": {
+        "count": 40,
+        "min": 0.019124999999917236,
+        "max": 0.029500000000098225,
+        "p50": 0.019624999999905413,
+        "p95": 0.028290999999967426,
+        "mean": 0.020988574999995534
+      },
+      "sanitizationAndSafeContext": {
+        "count": 20,
+        "min": 0.38716599999997925,
+        "max": 0.6192089999999553,
+        "p50": 0.4287500000000364,
+        "p95": 0.5721669999999222,
+        "mean": 0.44946260000000393
+      },
+      "mockPlanner": {
+        "count": 20,
+        "min": 0.017416000000025633,
+        "max": 0.5240840000000162,
+        "p50": 0.02054099999998016,
+        "p95": 0.060582999999951426,
+        "mean": 0.054022849999995515
+      },
+      "validation": {
+        "count": 20,
+        "min": 0.0009590000000798682,
+        "max": 0.006874999999922693,
+        "p50": 0.001125000000001819,
+        "p95": 0.003584000000046217,
+        "mean": 0.0017479000000037103
+      },
+      "executionTypeText": {
+        "count": 15,
+        "min": 0.15341699999999037,
+        "max": 1.7082920000000286,
+        "p50": 0.19399999999995998,
+        "p95": 1.7082920000000286,
+        "mean": 0.2942277333333247
+      },
+      "verification": {
+        "count": 15,
+        "min": 5.3312499999999545,
+        "max": 7.658832999999959,
+        "p50": 5.518333000000098,
+        "p95": 7.658832999999959,
+        "mean": 5.668986199999995
+      }
+    },
+    "payload": {
+      "safeContextBytes": 8348,
+      "screenshotOutboundBytes": 0,
+      "observedControls": 81
+    },
+    "resources": {
+      "distPresent": true,
+      "jsCssBytes": 298743,
+      "jsCssGzipBytes": 90302,
+      "ocrAssetBytes": 8123867,
+      "files": [
+        {
+          "path": "assets/sidepanel-CHCmgt3-.css",
+          "bytes": 19857
+        },
+        {
+          "path": "assets/sidepanel-DI7nyoND.js",
+          "bytes": 198875
+        },
+        {
+          "path": "assets/sidepanel-DI7nyoND.js.map",
+          "bytes": 696461
+        },
+        {
+          "path": "assets/ui-snapshot-t85XYKvo.js",
+          "bytes": 4291
+        },
+        {
+          "path": "assets/ui-snapshot-t85XYKvo.js.map",
+          "bytes": 19173
+        },
+        {
+          "path": "background.js",
+          "bytes": 6876
+        },
+        {
+          "path": "background.js.map",
+          "bytes": 34741
+        },
+        {
+          "path": "build-identity.txt",
+          "bytes": 69
+        },
+        {
+          "path": "content.js",
+          "bytes": 67899
+        },
+        {
+          "path": "content.js.map",
+          "bytes": 236237
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 1411
+        },
+        {
+          "path": "ocr/eng.traineddata",
+          "bytes": 4113088
+        },
+        {
+          "path": "ocr/tesseract-core-simd-lstm.wasm.js",
+          "bytes": 3899472
+        },
+        {
+          "path": "ocr/worker.min.js",
+          "bytes": 111307
+        },
+        {
+          "path": "overlay/open-panel.html",
+          "bytes": 536
+        },
+        {
+          "path": "overlay/open-panel.js",
+          "bytes": 945
+        },
+        {
+          "path": "src/sidepanel/index.html",
+          "bytes": 515
+        }
+      ],
+      "memoryProxyBytes": 57249408,
+      "memoryProxyLabel": "PROXY: Node process.memoryUsage().heapUsed after bench, not Chrome extension RSS"
+    }
+  }
+}

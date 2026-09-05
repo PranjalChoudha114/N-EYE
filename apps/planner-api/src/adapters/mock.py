@@ -13,20 +13,60 @@ from ..schemas.action_proposal import ActionProposal
 
 _STOP = {
     "the", "a", "an", "in", "into", "on", "to", "for", "box", "field", "input", "bar", "area", "please",
+    "my", "me", "this",
 }
 
 
 def _hints(phrase: str) -> list[str]:
-    return [t for t in re.split(r"[^a-z0-9]+", phrase.lower()) if len(t) >= 2 and t not in _STOP]
+    """Keep hyphenated names (N-EYE) as one unit. Splitting on '-' left only 'eye'."""
+    text = re.sub(r"[\u2010-\u2015\u2212]", "-", (phrase or "").lower())
+    out: list[str] = []
+    seen: set[str] = set()
+
+    def add(token: str) -> None:
+        if token and token not in seen:
+            seen.add(token)
+            out.append(token)
+
+    hyphenated = re.findall(r"[a-z0-9]+(?:-[a-z0-9]+)+", text)
+    hyphen_parts = set()
+    for unit in hyphenated:
+        add(unit)
+        add(unit.replace("-", ""))
+        hyphen_parts.update(part for part in unit.split("-") if len(part) >= 2)
+    for token in re.split(r"[^a-z0-9]+", text):
+        if len(token) >= 2 and token not in _STOP and token not in hyphen_parts:
+            add(token)
+    return out
 
 
 def _parse_goal(goal: str) -> Optional[dict]:
     g = (goal or "").strip()
     if not g:
         return None
-    search = re.match(r'^(?:please\s+)?search\s+for\s+["\']?(.+?)["\']?\s*$', g, re.I)
+    find_open = re.match(
+        r'^(?:please\s+)?(?:find|locate)\s+["\']?(.+?)["\']?\s+and\s+(?:open|click|go\s+to)(?:\s+it)?\s*$',
+        g,
+        re.I,
+    )
+    if find_open:
+        return {"kind": "click_labeled", "hints": _hints(find_open.group(1))}
+    open_res = re.match(
+        r'^(?:please\s+)?(?:open|go\s+to|navigate\s+to|visit)\s+(?:the\s+)?(?:my\s+)?["\']?(.+?)["\']?\s*$',
+        g,
+        re.I,
+    )
+    if open_res:
+        return {"kind": "click_labeled", "hints": _hints(open_res.group(1))}
+    search = re.match(
+        r'^(?:please\s+)?search(?:\s+(?!for\b)(.+?))?\s+for\s+["\']?(.+?)["\']?(?:\s+in(?:to)?\s+(?:the\s+)?(.+?))?\s*$',
+        g,
+        re.I,
+    )
     if search:
-        return {"kind": "type_text", "text": search.group(1).strip(), "hints": ["search"], "search": True}
+        query = search.group(2).strip()
+        hints = ["search"] + _hints(search.group(1) or "") + _hints(search.group(3) or "")
+        return {"kind": "type_text", "text": query, "hints": hints, "search": True}
     type_in = re.match(
         r'^(?:please\s+)?(?:type|enter)\s+["\']?(.+?)["\']?\s+(?:in(?:to)?|on)\s+(?:the\s+)?(.+?)\s*$',
         g,
@@ -37,6 +77,9 @@ def _parse_goal(goal: str) -> Optional[dict]:
     fill = re.match(r'^(?:please\s+)?fill\s+(?:the\s+)?(.+?)\s+with\s+["\']?(.+?)["\']?\s*$', g, re.I)
     if fill:
         return {"kind": "type_text", "text": fill.group(2).strip(), "hints": _hints(fill.group(1)), "search": False}
+    click = re.match(r'^(?:please\s+)?click\s+(?:the\s+)?(.+?)\s*$', g, re.I)
+    if click:
+        return {"kind": "click_labeled", "hints": _hints(click.group(1))}
     return None
 
 
@@ -84,6 +127,132 @@ def _pick_unique(elements: list[SafeElement], hints: list[str]) -> Optional[Safe
     return winners[0]
 
 
+def _click_capable(el: SafeElement) -> bool:
+    if not el.isEnabled:
+        return False
+    role = (el.role or "").lower()
+    t = el.inputType or ""
+    if role in {"button", "link", "a", "tab", "menuitem", "summary"}:
+        return True
+    if t in {"submit", "button"}:
+        return True
+    if role in {"canvas", "img", "image"} and (el.safeLabel or "").strip():
+        return True
+    return False
+
+
+def _hint_score(hay: str, hints: list[str]) -> int:
+    compact = re.sub(r"[-_\s]", "", hay)
+    score = 0
+    for hint in hints:
+        if not hint:
+            continue
+        if hint in hay:
+            score += 3
+            continue
+        collapsed = hint.replace("-", "")
+        if len(collapsed) >= 3 and collapsed in compact:
+            score += 3
+    return score
+
+
+def _effective_click_hints(hints: list[str]) -> list[str]:
+    chrome = {"button", "link", "icon", "control", "tab", "menu"}
+    strong = [h for h in hints if len(h) >= 3 and h not in chrome]
+    if strong:
+        return strong
+    residual = [h for h in hints if h not in chrome]
+    return residual or hints
+
+
+def _pick_click(elements: list[SafeElement], hints: list[str]) -> tuple[Optional[SafeElement], str]:
+    capable = [e for e in elements if _click_capable(e)]
+    click_hints = _effective_click_hints(hints)
+    own: list[tuple[SafeElement, int]] = []
+    for e in capable:
+        hay = f"{e.safeLabel}".lower()
+        score = _hint_score(hay, click_hints)
+        if score > 0:
+            own.append((e, score))
+    if own:
+        max_s = max(p[1] for p in own)
+        winners = [p[0] for p in own if p[1] == max_s]
+        if len(winners) != 1:
+            return None, "ambiguous"
+        return winners[0], "own"
+    region: list[tuple[SafeElement, int]] = []
+    for e in capable:
+        heading = (e.regionHeading or "").lower()
+        if not heading:
+            continue
+        score = _hint_score(heading, click_hints)
+        if score > 0:
+            region.append((e, score))
+    if not region:
+        return None, "none"
+    max_s = max(p[1] for p in region)
+    winners = [p[0] for p in region if p[1] == max_s]
+    if len(winners) != 1:
+        return None, "ambiguous"
+    return winners[0], "region"
+
+
+def _prior_was_scroll(context: SafeContext) -> bool:
+    if not context.priorOutcome or not context.priorOutcome.summary:
+        return False
+    return "scroll" in context.priorOutcome.summary.lower()
+
+
+def _near_unique_search(el: SafeElement, elements: list[SafeElement]) -> bool:
+    fields = [
+        e
+        for e in elements
+        if e.isEnabled and (e.inputType == "search" or (e.role or "").lower() == "searchbox")
+    ]
+    if len(fields) != 1:
+        return False
+    search = fields[0]
+    dy = abs((el.bbox.y + el.bbox.height / 2) - (search.bbox.y + search.bbox.height / 2))
+    close_y = dy <= max(search.bbox.height, el.bbox.height) + 16
+    close_x = abs(el.bbox.x - (search.bbox.x + search.bbox.width)) < 96
+    return close_y and close_x
+
+
+def _score_search_submit(el: SafeElement, elements: list[SafeElement]) -> int:
+    if not el.isEnabled:
+        return -1
+    role = (el.role or "").lower()
+    if role in {"canvas", "img", "image"}:
+        return -1
+    t = el.inputType or ""
+    is_control = role == "button" or t in {"submit", "button"} or role == "link" or el.formSubmitting is True
+    if not is_control:
+        return -1
+    trimmed = (el.safeLabel or "").strip()
+    score = 0
+    if t == "submit" or el.formSubmitting is True:
+        score += 5
+    if role == "button" or t in {"submit", "button"}:
+        score += 2
+    if _near_unique_search(el, elements) and role != "link" and not trimmed:
+        score += 4
+    if not trimmed:
+        if not (el.formSubmitting is True or t == "submit" or _near_unique_search(el, elements)):
+            return -1
+        return max(score, 1) if score > 0 else -1
+    if re.match(r"^search$", trimmed, re.I):
+        score += 6
+    elif re.search(r"\bsearch\b", trimmed, re.I):
+        score += 4
+    if re.search(r"\bsubmit\b", trimmed, re.I):
+        score += 4
+    if re.search(r"\bfind\b", trimmed, re.I) and not re.search(r"\bsearch\b", trimmed, re.I):
+        score += 2
+    if re.match(r"^go$", trimmed, re.I):
+        score += 3
+    return score
+
+
 class MockProviderAdapter(BaseProviderAdapter):
     """Deterministic offline planner adapter for CI, local tests, and fallbacks."""
 
@@ -119,17 +288,26 @@ class MockProviderAdapter(BaseProviderAdapter):
 
         if intent and intent["kind"] == "type_text":
             if prior_ok and intent["search"]:
-                search_btn = next(
-                    (
-                        e
-                        for e in context.safeElements
-                        if e.isEnabled
-                        and (e.role == "button" or e.inputType == "submit")
-                        and re.search(r"search|go|find|submit", e.safeLabel, re.I)
-                    ),
-                    None,
-                )
-                if search_btn:
+                scored = [(e, _score_search_submit(e, list(context.safeElements))) for e in context.safeElements]
+                positive = [p for p in scored if p[1] > 0]
+                candidates = []
+                if positive:
+                    max_s = max(p[1] for p in positive)
+                    candidates = [p[0] for p in positive if p[1] == max_s]
+                if len(candidates) > 1:
+                    return (
+                        ActionProposal(
+                            actionId=f"{action_suffix}_ask",
+                            type="ASK_USER",
+                            reasoning="Typed text may be present, but multiple search/submit controls match. N-Eye will not guess. This is not completion.",
+                            expectedOutcome="User completes search.",
+                            riskLevel="LOW",
+                        ),
+                        80,
+                        25,
+                    )
+                if len(candidates) == 1:
+                    search_btn = candidates[0]
                     return (
                         ActionProposal(
                             actionId=f"{action_suffix}_search",
@@ -138,6 +316,20 @@ class MockProviderAdapter(BaseProviderAdapter):
                             reasoning="Text may be present. Proposing search/submit. Completion is still local.",
                             expectedOutcome="Search is submitted.",
                             riskLevel="HIGH" if search_btn.inputType == "submit" else "LOW",
+                        ),
+                        110,
+                        35,
+                    )
+                field = _pick_unique(list(context.safeElements), intent["hints"])
+                if field:
+                    return (
+                        ActionProposal(
+                            actionId=f"{action_suffix}_enter",
+                            type="PRESS_ENTER",
+                            targetId=field.id,
+                            reasoning="No unique visible search/submit control. Proposing constrained Enter on the unique typed field.",
+                            expectedOutcome="Search is submitted.",
+                            riskLevel="HIGH",
                         ),
                         110,
                         35,
@@ -178,6 +370,60 @@ class MockProviderAdapter(BaseProviderAdapter):
                 ),
                 100,
                 40,
+            )
+
+        if intent and intent["kind"] == "click_labeled" and prior_ok and not _prior_was_scroll(context):
+            return (
+                ActionProposal(
+                    actionId=f"{action_suffix}_done",
+                    type="COMPLETE",
+                    reasoning="Mock believes the click goal is done. Local proof still required.",
+                    expectedOutcome="Local arbiter confirms success or asks the user.",
+                    riskLevel="LOW",
+                ),
+                80,
+                25,
+            )
+
+        if intent and intent["kind"] == "click_labeled":
+            hints = intent["hints"]
+            click_el, reason = _pick_click(list(context.safeElements), hints)
+            if click_el:
+                return (
+                    ActionProposal(
+                        actionId=f"{action_suffix}_click",
+                        type="CLICK",
+                        targetId=click_el.id,
+                        reasoning=f"Found unique action control '{click_el.safeLabel}'.",
+                        expectedOutcome="Control is activated.",
+                        riskLevel="HIGH" if (click_el.inputType == "submit" or "submit" in click_el.safeLabel.lower()) else "LOW",
+                    ),
+                    110,
+                    35,
+                )
+            if reason == "none" and not prior_ok:
+                return (
+                    ActionProposal(
+                        actionId=f"{action_suffix}_explore",
+                        type="SCROLL",
+                        scrollDelta={"x": 0, "y": 480},
+                        reasoning="No unique supported control in the current observation. Bounded scroll is exploration, not completion.",
+                        expectedOutcome="Newly visible task-relevant controls can be observed.",
+                        riskLevel="LOW",
+                    ),
+                    80,
+                    25,
+                )
+            return (
+                ActionProposal(
+                    actionId=f"{action_suffix}_ask",
+                    type="ASK_USER",
+                    reasoning="No unique supported control matched this request. N-Eye will not invent success.",
+                    expectedOutcome="User indicates the target or clicks locally.",
+                    riskLevel="LOW",
+                ),
+                80,
+                25,
             )
 
         email_token = next(

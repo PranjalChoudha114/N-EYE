@@ -11,6 +11,9 @@ import type {
 import { sanitizeUnicodeDeep } from '@n-eye/protocol';
 import { redactKnownSecretPatterns } from './detectors.js';
 import type { PrivateTokenVault } from './vault.js';
+import { interpretGoal, scoreLabelAgainstHints } from '../intelligence/goal-interpreter.js';
+
+const TASK_CONTEXT_CAP = 64;
 
 const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const PHONE_REGEX = /(?:\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g;
@@ -53,6 +56,46 @@ function sanitizeGoal(
   cleanGoal = cleanGoal.replace(/CANARY_[A-Z0-9_]+/gi, '[REDACTED_CANARY]');
 
   return cleanGoal.trim().slice(0, 300);
+}
+
+function rankTaskConditionedElements(elements: SafeElement[], goal: string): SafeElement[] {
+  if (elements.length === 0) return elements;
+  const interpreted = interpretGoal(goal);
+  const hints = [...interpreted.labelHints, ...interpreted.fieldHints];
+  const family = interpreted.family;
+  const fieldHintHay = interpreted.fieldHints.join(' ');
+  const scored = elements.map((el, index) => {
+    const role = (el.role || '').toLowerCase();
+    const label = (el.safeLabel || '').toLowerCase();
+    let score = scoreLabelAgainstHints(
+      `${el.safeLabel} ${el.role || ''} ${el.inputType || ''} ${el.regionHeading || ''}`,
+      hints
+    );
+    // Task-conditioned boosts only. Do not harvest password/email/submit merely because they exist.
+    if (family === 'SEARCH') {
+      if (el.inputType === 'search' || role === 'searchbox') score += 8;
+      if (el.inputType === 'submit' || el.formSubmitting === true || /\bsearch\b|\bsubmit\b|^go$/.test(label)) score += 6;
+    }
+    if (family === 'FORM_FILL') {
+      if (fieldHintHay.includes('email') && el.inputType === 'email') score += 6;
+      if (fieldHintHay.includes('password') && el.inputType === 'password') score += 4;
+      if (fieldHintHay.includes('search') && (el.inputType === 'search' || role === 'searchbox')) score += 6;
+    }
+    return { el, score, index };
+  });
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  if (elements.length <= TASK_CONTEXT_CAP) {
+    return scored.map((s) => s.el);
+  }
+  const keptIds = new Set<string>();
+  const out: SafeElement[] = [];
+  for (const row of scored) {
+    if (out.length >= TASK_CONTEXT_CAP) break;
+    if (keptIds.has(row.el.id)) continue;
+    keptIds.add(row.el.id);
+    out.push(row.el);
+  }
+  return out.length > 0 ? out : elements.slice(0, TASK_CONTEXT_CAP);
 }
 
 function sanitizePublicText(
@@ -117,8 +160,9 @@ export function buildSafeContext(
         safeLabel = el.inputType === 'password' ? 'Password Field' : 'Auth Control';
       } else if (decision.decision === 'TOKENIZE' && decision.tokenRole) {
         const finding = findingById.get(decision.findingId);
-        // Only rewrite labels that actually contained a private value, not the field type itself.
-        if (finding?.textSpan) {
+        // Only rewrite labels that actually contained a private value, not a nearby heading.
+        const labelSource = `${el.innerTextCandidate || ''} ${el.ariaLabel || ''}`;
+        if (finding?.textSpan && labelSource.includes(finding.textSpan)) {
           safeLabel = `${decision.tokenRole} (${el.inputType || 'field'})`;
         }
       } else if (decision.decision === 'MASK') {
@@ -128,6 +172,14 @@ export function buildSafeContext(
 
     safeLabel = safeLabel.replace(/CANARY_[A-Z0-9_]+/gi, '[PROTECTED_FIELD]').slice(0, 100);
     safeLabel = sanitizePublicText(safeLabel, decisions, findings);
+
+    const regionHeadingRaw = el.regionHeading ? sanitizePublicText(el.regionHeading, decisions, findings) : '';
+    const regionHeading =
+      regionHeadingRaw &&
+      regionHeadingRaw !== '[PROTECTED_FIELD]' &&
+      regionHeadingRaw !== '[REDACTED_PII]'
+        ? regionHeadingRaw.slice(0, 80)
+        : undefined;
 
     const safeEl: SafeElement = {
       id: el.id,
@@ -141,6 +193,8 @@ export function buildSafeContext(
         el.frameProvenance && el.frameProvenance.frameId !== 'top'
           ? el.frameProvenance.frameId
           : undefined,
+      regionHeading,
+      formSubmitting: el.formSubmitting === true ? true : undefined,
       bbox: {
         x: el.bbox.x,
         y: el.bbox.y,
@@ -180,7 +234,7 @@ export function buildSafeContext(
         height: rawScene.viewport.height,
       },
     },
-    safeElements,
+    safeElements: rankTaskConditionedElements(safeElements, sanitizedGoal),
     availableTokens: vault.getSafeCapabilities(),
     visualHints: visualHints.length > 0 ? visualHints : undefined,
   };

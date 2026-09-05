@@ -17,7 +17,9 @@ export type AskUserReason =
   | 'COMPLETION_UNPROVEN'
   | 'HIGH_UNVERIFIED'
   | 'SEARCH_SUBMIT_MISSING'
-  | 'PARTIAL_GOAL';
+  | 'PARTIAL_GOAL'
+  | 'TARGET_NOT_FOUND'
+  | 'ENGINE_FAILURE';
 
 export interface AskUserView {
   reason: AskUserReason;
@@ -35,6 +37,8 @@ const DISMISS = 'Cancel';
 const HINT = 'Rewrite your request below, then continue. This is not an approval.';
 
 const RULES: Array<{ reason: AskUserReason; tests: RegExp[] }> = [
+  { reason: 'TARGET_NOT_FOUND', tests: [/no unique matching target/i, /was not found in current scene/i, /target_not_found/i, /requires a targetid/i] },
+  { reason: 'ENGINE_FAILURE', tests: [/cannot read propert/i, /targetcurrent/i, /stopped without changing anything/i] },
   { reason: 'AMBIGUOUS_TARGET', tests: [/multiple matching/i, /will not guess which/i] },
   { reason: 'MULTIPLE_CANDIDATES', tests: [/multiple equivalent/i] },
   { reason: 'CUSTOM_SELECT', tests: [/custom widgets/i, /unique native select/i] },
@@ -46,6 +50,8 @@ const RULES: Array<{ reason: AskUserReason; tests: RegExp[] }> = [
       /search actually occurred/i,
       /no longer holds the requested text/i,
       /complete this step/i,
+      /enter was sent/i,
+      /form was not submitted/i,
     ],
   },
   { reason: 'HIGH_UNVERIFIED', tests: [/high-risk action could not be verified/i] },
@@ -61,7 +67,7 @@ const HUMAN: Record<AskUserReason, string> = {
   UNKNOWN_GOAL:
     'I cannot safely decide the next step for this request. Name a specific button or field, then continue.',
   AMBIGUOUS_TARGET:
-    'I found more than one possible match. Name the control more specifically, then continue.',
+    'N-Eye found more than one control that could match. Because it could not prove which one you intended, it stopped without changing the page.',
   UNSUPPORTED_CONTROL:
     'I cannot safely use this control yet. Try a different control, or complete this step on the page.',
   NO_SUPPORTED_ACTION:
@@ -82,6 +88,10 @@ const HUMAN: Record<AskUserReason, string> = {
     'The text may be entered, but I found no unique search button to click. Click search on the page, or rewrite.',
   PARTIAL_GOAL:
     'This step needs you. Finish it on the page, or rewrite the remaining request and continue.',
+  TARGET_NOT_FOUND:
+    "I couldn't find one safe, unique control that matches your request, so I stopped without clicking anything.",
+  ENGINE_FAILURE:
+    'Something went wrong while checking this page. N-Eye stopped without changing anything.',
 };
 
 export function classifyAskUser(detail: string): AskUserReason {

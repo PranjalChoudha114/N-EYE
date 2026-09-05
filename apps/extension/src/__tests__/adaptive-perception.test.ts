@@ -117,6 +117,34 @@ describe('Adaptive perception controller', () => {
     expect(decision.escalate).toBe(true);
     expect(decision.reasons).toContain('ICON_ONLY_CONTROL');
   });
+
+  it('skips decorative visual escalation when the goal uniquely grounds on DOM', () => {
+    const canvas: VisualRegion = {
+      regionId: 'canvas_deco',
+      kind: 'canvas',
+      reason: 'CANVAS_RENDERED',
+      pageEpoch: createPageEpoch(1),
+      bbox: { x: 20, y: 20, width: 240, height: 80 },
+    };
+    const withCanvas = scene({
+      visualRegions: [canvas],
+      elements: [
+        el({
+          id: createElementId('e1'),
+          tagName: 'a',
+          role: 'link',
+          innerTextCandidate: 'N-EYE',
+          ariaLabel: 'N-EYE',
+          inputType: null,
+        }),
+      ],
+    });
+    const undecorated = decidePerception(withCanvas);
+    expect(undecorated.escalate).toBe(true);
+    const tasked = decidePerception(withCanvas, { goal: 'Open the N-EYE repository' });
+    expect(tasked.escalate).toBe(false);
+    expect(tasked.skippedReason).toMatch(/Task-conditioned/i);
+  });
 });
 
 describe('ROI bounds and pixel lifecycle', () => {

@@ -12,14 +12,14 @@ import {
 import type { ElementRegistry } from './registry.js';
 import { detectElementPrivacy } from '../privacy/detectors.js';
 import { collectVisualRegions, collectClickableVisualSurfaces } from '../perception/visual-regions.js';
-import { INTERACTIVE_SELECTOR } from './selectors.js';
+import { INTERACTIVE_SELECTOR, POPUP_OWNED_SELECTOR } from './selectors.js';
 import { discoverFrames, frameIdPrefix, provenanceOf, shiftBoxToTopViewport } from './frames.js';
 
 /**
  * PageObserver (Zone 1 - Content Script Execution)
  * OWNS: Local DOM traversal, interactable element extraction, visibility filtering, and TargetFingerprint computation.
  * TRUST BOUNDARY: Executes in untrusted webpage context.
- * INVARIANT: NEVER reads raw passwords or input values. Output is marked `_isLocalOnly: true`.
+ * INVARIANT: NEVER copies raw passwords or input values into RawScene. Presence (hasValue) is a boolean only.
  */
 const MAX_LABEL_LENGTH = 120;
 
@@ -58,7 +58,52 @@ export function isElementVisible(el: HTMLElement): boolean {
   return true;
 }
 
-export function getSanitizedLabelCandidate(el: HTMLElement): string {
+/**
+ * Visible text for semantic identity.
+ * WHY: textContent includes hidden descendants, which can impersonate a control's meaning.
+ */
+export function visibleControlText(el: HTMLElement): string {
+  const parts: string[] = [];
+  const walk = (node: Node): void => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || '';
+      if (text.trim()) parts.push(text);
+      return;
+    }
+    if (!(node instanceof HTMLElement)) return;
+    if (node.hasAttribute('hidden') || node.getAttribute('aria-hidden') === 'true') return;
+    const attrStyle = node.getAttribute('style') || '';
+    if (/\bdisplay\s*:\s*none\b/i.test(attrStyle) || /\bvisibility\s*:\s*hidden\b/i.test(attrStyle)) return;
+    try {
+      const style = node.ownerDocument.defaultView?.getComputedStyle(node);
+      if (style && (style.display === 'none' || style.visibility === 'hidden')) return;
+    } catch {
+      // Computed style unavailable in some test roots.
+    }
+    for (const child of Array.from(node.childNodes)) walk(child);
+  };
+  walk(el);
+  return parts.join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function textExcludingNode(root: Node, exclude: Node): string {
+  if (root === exclude) return '';
+  if (root.nodeType === Node.TEXT_NODE) {
+    return root.textContent || '';
+  }
+  let out = '';
+  for (const child of Array.from(root.childNodes)) {
+    if (child === exclude) continue;
+    if (child instanceof Element && child.contains(exclude)) {
+      out += textExcludingNode(child, exclude);
+    } else {
+      out += child.textContent || '';
+    }
+  }
+  return out;
+}
+
+function nativeHostAccessibleName(el: HTMLElement): string {
   const doc = el.ownerDocument;
   if (
     el instanceof HTMLInputElement ||
@@ -68,34 +113,50 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
     if (el.id) {
       try {
         const labelElem = doc.querySelector(`label[for="${CSS.escape(el.id)}"]`);
-        if (labelElem && labelElem.textContent?.trim()) {
-          return sanitizeText(labelElem.textContent);
+        if (labelElem instanceof HTMLElement) {
+          const text = sanitizeText(textExcludingNode(labelElem, el) || labelElem.textContent);
+          if (text) return text;
         }
       } catch {
         // Fallback for special selector characters
       }
     }
     const parentLabel = el.closest('label');
-    if (parentLabel && parentLabel.textContent?.trim()) {
-      return sanitizeText(parentLabel.textContent);
+    if (parentLabel instanceof HTMLElement) {
+      const text = sanitizeText(textExcludingNode(parentLabel, el) || parentLabel.textContent);
+      if (text) return text;
     }
   }
+  return '';
+}
+
+function labelledByAccessibleName(el: HTMLElement): string {
+  const labelledBy = el.getAttribute('aria-labelledby');
+  if (!labelledBy) return '';
+  const doc = el.ownerDocument;
+  const textParts = labelledBy
+    .split(/\s+/)
+    .map((id) => doc.getElementById(id)?.textContent?.trim() || '')
+    .filter(Boolean);
+  return textParts.length > 0 ? sanitizeText(textParts.join(' ')) : '';
+}
+
+/**
+ * Accessible name (W3C AccName order, HTML subset).
+ * WHY: Selenium "Text input" comes from label[for], not the DOM id or input type.
+ * MUST NOT: Concatenate nearby headings or use name= as identity.
+ */
+export function getSanitizedLabelCandidate(el: HTMLElement): string {
+  const byRef = labelledByAccessibleName(el);
+  if (byRef) return byRef;
 
   const ariaLabel = el.getAttribute('aria-label');
   if (ariaLabel && ariaLabel.trim()) {
     return sanitizeText(ariaLabel);
   }
 
-  const labelledBy = el.getAttribute('aria-labelledby');
-  if (labelledBy) {
-    const ids = labelledBy.split(/\s+/);
-    const textParts = ids
-      .map((id) => doc.getElementById(id)?.textContent?.trim() || '')
-      .filter(Boolean);
-    if (textParts.length > 0) {
-      return sanitizeText(textParts.join(' '));
-    }
-  }
+  const native = nativeHostAccessibleName(el);
+  if (native) return native;
 
   const role = el.getAttribute('role') || el.tagName.toLowerCase();
   if (
@@ -106,11 +167,18 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
     role === 'tab' ||
     role === 'menuitem' ||
     role === 'switch' ||
-    role === 'option'
+    role === 'option' ||
+    role === 'treeitem'
   ) {
-    if (el.textContent && el.textContent.trim()) {
-      return sanitizeText(el.textContent);
+    const visible = visibleControlText(el);
+    if (visible) {
+      return sanitizeText(visible);
     }
+  }
+
+  const svgName = svgAccessibleName(el);
+  if (svgName) {
+    return svgName;
   }
 
   if ('placeholder' in el && typeof el.placeholder === 'string' && el.placeholder.trim()) {
@@ -122,11 +190,174 @@ export function getSanitizedLabelCandidate(el: HTMLElement): string {
     return sanitizeText(title, 80);
   }
 
-  const name = el.getAttribute('name');
-  if (name && name.trim()) {
-    return sanitizeText(name, 60);
-  }
+  // MUST NOT: HTML name= is not AccName and pollutes "text"/"input" ranking.
+  return '';
+}
 
+/**
+ * Task-relevant role. Author ARIA wins; otherwise HTML host language.
+ * WHY: TYPE must filter by textbox, not because tagName "input" overlapped the word "input".
+ */
+export function normalizeControlRole(el: HTMLElement, inputType: InputType | null): string {
+  const explicit = (el.getAttribute('role') || '').trim();
+  if (explicit) return explicit;
+  if (el instanceof HTMLTextAreaElement) return 'textbox';
+  if (el instanceof HTMLSelectElement) return 'combobox';
+  if (el instanceof HTMLAnchorElement) return 'link';
+  if (el instanceof HTMLButtonElement) return 'button';
+  if (el instanceof HTMLInputElement) {
+    if (inputType === 'search') return 'searchbox';
+    if (inputType === 'checkbox') return 'checkbox';
+    if (inputType === 'radio') return 'radio';
+    if (inputType === 'submit' || inputType === 'button' || inputType === 'file') return 'button';
+    if (
+      inputType === 'password' ||
+      inputType === 'text' ||
+      inputType === 'email' ||
+      inputType === 'tel' ||
+      inputType === 'number'
+    ) {
+      return 'textbox';
+    }
+    return 'textbox';
+  }
+  if (el.isContentEditable) return 'textbox';
+  return el.tagName.toLowerCase();
+}
+
+/** Whether a value is present. NEVER copies the value (passwords stay out of RawScene). */
+export function controlHasValue(el: HTMLElement): boolean {
+  if (el instanceof HTMLInputElement) {
+    if (el.type === 'checkbox' || el.type === 'radio') return el.checked;
+    if (el.type === 'file') return el.files !== null && el.files.length > 0;
+    return el.value.length > 0;
+  }
+  if (el instanceof HTMLTextAreaElement) return el.value.length > 0;
+  if (el instanceof HTMLSelectElement) return el.value.length > 0;
+  return false;
+}
+
+/**
+ * Accessible name from a descendant SVG title/aria-label when the control has no visible text.
+ * WHY: Icon-only buttons often expose meaning only on the SVG, not as button text.
+ * TRUST: Still untrusted page text. Hidden SVG titles are ignored.
+ */
+export function svgAccessibleName(el: HTMLElement): string {
+  const svg =
+    typeof SVGElement !== 'undefined' && el instanceof SVGElement
+      ? el
+      : el.querySelector('svg');
+  if (!svg) return '';
+  if (svg instanceof HTMLElement && !isElementVisible(svg)) return '';
+  if (svg.getAttribute('aria-hidden') === 'true' || svg.hasAttribute('hidden')) return '';
+  const svgAria = svg.getAttribute('aria-label');
+  if (svgAria && svgAria.trim()) return sanitizeText(svgAria, 80);
+  const titled = svg.querySelector('title');
+  const titleText = titled?.textContent?.trim();
+  if (titleText) return sanitizeText(titleText, 80);
+  return '';
+}
+
+const REGION_HEADING_SELECTOR = 'h1, h2, h3, h4, h5, h6, [role="heading"], legend, figcaption';
+const SEMANTIC_REGION_TAGS = new Set(['section', 'article', 'form', 'fieldset', 'aside', 'nav']);
+const SEMANTIC_REGION_ROLES = new Set(['region', 'group', 'search', 'form', 'article']);
+
+function headingVisibleText(node: HTMLElement): string {
+  if (!isElementVisible(node)) return '';
+  return sanitizeText(visibleControlText(node) || node.textContent, 80);
+}
+
+function labelledRegionName(container: HTMLElement): string {
+  const labelledBy = container.getAttribute('aria-labelledby');
+  if (labelledBy) {
+    const doc = container.ownerDocument;
+    const parts = labelledBy
+      .split(/\s+/)
+      .map((id) => {
+        const ref = doc.getElementById(id);
+        return ref instanceof HTMLElement ? headingVisibleText(ref) : '';
+      })
+      .filter(Boolean);
+    if (parts.length > 0) return sanitizeText(parts.join(' '), 80);
+  }
+  const ariaLabel = container.getAttribute('aria-label');
+  if (ariaLabel && ariaLabel.trim()) return sanitizeText(ariaLabel, 80);
+  return '';
+}
+
+function headingBeforeTarget(container: HTMLElement, target: HTMLElement): string {
+  let last = '';
+  for (const child of Array.from(container.children)) {
+    if (!(child instanceof HTMLElement)) continue;
+    if (child === target || child.contains(target)) {
+      return last;
+    }
+    if (child.matches(REGION_HEADING_SELECTOR)) {
+      const text = headingVisibleText(child);
+      if (text) last = text;
+      continue;
+    }
+    if (child.matches(INTERACTIVE_SELECTOR)) continue;
+    for (const grand of Array.from(child.children)) {
+      if (!(grand instanceof HTMLElement)) continue;
+      if (grand.matches(REGION_HEADING_SELECTOR)) {
+        const text = headingVisibleText(grand);
+        if (text) last = text;
+      }
+    }
+  }
+  return last;
+}
+
+function parentForRegion(el: HTMLElement): HTMLElement | null {
+  if (el.parentElement) return el.parentElement;
+  const root = el.getRootNode();
+  if (typeof ShadowRoot !== 'undefined' && root instanceof ShadowRoot && root.host instanceof HTMLElement) {
+    return root.host;
+  }
+  return null;
+}
+
+function isDocumentRoot(el: HTMLElement): boolean {
+  const tag = el.tagName.toLowerCase();
+  return tag === 'html' || tag === 'body' || el === el.ownerDocument.documentElement;
+}
+
+/**
+ * Nearest meaningful region heading for a control.
+ * WHY: Goals name regions ("Dynamic ID Button") while the actionable child is generic ("Click me").
+ * MUST NOT: Concatenate whole-page text or fold this string into fingerprint identity.
+ */
+export function nearestRegionHeading(el: HTMLElement): string {
+  let current: HTMLElement | null = parentForRegion(el);
+  let hops = 0;
+  while (current && hops < 8) {
+    if (!isDocumentRoot(current)) {
+      const tag = current.tagName.toLowerCase();
+      const role = (current.getAttribute('role') || '').toLowerCase();
+      if (SEMANTIC_REGION_TAGS.has(tag) || SEMANTIC_REGION_ROLES.has(role)) {
+        const labelled = labelledRegionName(current);
+        if (labelled) return labelled;
+        const preceding = headingBeforeTarget(current, el);
+        // WHY: Do not walk past a form/section to inherit a later sibling heading.
+        return preceding;
+      }
+      const preceding = headingBeforeTarget(current, el);
+      if (preceding) return preceding;
+      let sib: Element | null = current.previousElementSibling;
+      let sibHops = 0;
+      while (sib && sibHops < 4) {
+        if (sib instanceof HTMLElement && sib.matches(REGION_HEADING_SELECTOR)) {
+          const text = headingVisibleText(sib);
+          if (text) return text;
+        }
+        sib = sib.previousElementSibling;
+        sibHops += 1;
+      }
+    }
+    current = parentForRegion(current);
+    hops += 1;
+  }
   return '';
 }
 
@@ -197,8 +428,53 @@ export function isFormSubmitControl(el: HTMLElement): boolean {
   return false;
 }
 
+const MAX_POPUP_OWNED = 24;
+
+function resolvePopupId(root: Document | ShadowRoot, id: string): HTMLElement | null {
+  if (!id) return null;
+  if (root instanceof Document) {
+    const byId = root.getElementById(id);
+    return byId instanceof HTMLElement ? byId : null;
+  }
+  try {
+    const local = root.querySelector(`#${CSS.escape(id)}`);
+    return local instanceof HTMLElement ? local : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Combobox/listbox ownership is browser evidence, not a site adapter.
+ * WHY: Dynamic SEARCH_COMMIT often lives in a popup named by aria-controls, not the combobox itself.
+ */
+export function collectAriaOwnedPopupControls(root: Document | ShadowRoot, already: HTMLElement[]): HTMLElement[] {
+  const seen = new Set(already);
+  const extra: HTMLElement[] = [];
+  const hosts = root.querySelectorAll<HTMLElement>('[aria-controls], [aria-owns]');
+  for (const host of hosts) {
+    const ids = `${host.getAttribute('aria-controls') || ''} ${host.getAttribute('aria-owns') || ''}`
+      .split(/\s+/)
+      .filter(Boolean);
+    for (const id of ids) {
+      const popup = resolvePopupId(root, id);
+      if (!popup) continue;
+      for (const node of popup.querySelectorAll<HTMLElement>(POPUP_OWNED_SELECTOR)) {
+        if (seen.has(node)) continue;
+        seen.add(node);
+        extra.push(node);
+        if (extra.length >= MAX_POPUP_OWNED) return extra;
+      }
+    }
+  }
+  return extra;
+}
+
 export function collectCandidates(root: Document | ShadowRoot): HTMLElement[] {
   const elements: HTMLElement[] = Array.from(root.querySelectorAll<HTMLElement>(INTERACTIVE_SELECTOR));
+  for (const owned of collectAriaOwnedPopupControls(root, elements)) {
+    elements.push(owned);
+  }
 
   const allNodes = root.querySelectorAll('*');
   for (const node of allNodes) {
@@ -208,6 +484,21 @@ export function collectCandidates(root: Document | ShadowRoot): HTMLElement[] {
   }
 
   return elements;
+}
+
+function visualRegionOwnsElement(
+  region: BoundingBox,
+  el: BoundingBox
+): boolean {
+  const sameCorner = Math.abs(el.x - region.x) < 4 && Math.abs(el.y - region.y) < 4;
+  if (sameCorner) return true;
+  const x1 = Math.max(region.x, el.x);
+  const y1 = Math.max(region.y, el.y);
+  const x2 = Math.min(region.x + region.width, el.x + el.width);
+  const y2 = Math.min(region.y + region.height, el.y + el.height);
+  const inter = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+  const regionArea = Math.max(1, region.width * region.height);
+  return inter / regionArea >= 0.8;
 }
 
 export function isControlEnabled(el: HTMLElement): boolean {
@@ -256,10 +547,16 @@ function nativeSelectOptionHint(el: HTMLSelectElement): string {
   return ` options:${labels.join('|')}`;
 }
 
-function inputTypeOf(el: HTMLElement): InputType | null {
+export function inputTypeOf(el: HTMLElement): InputType | null {
   if (el instanceof HTMLInputElement) return mapInputType(el.type);
   if (el instanceof HTMLTextAreaElement) return 'textarea';
   if (el instanceof HTMLSelectElement) return 'select';
+  if (el instanceof HTMLButtonElement) {
+    const t = (el.type || 'submit').toLowerCase();
+    if (t === 'submit') return 'submit';
+    if (t === 'reset') return 'button';
+    return 'button';
+  }
   const role = (el.getAttribute('role') || '').toLowerCase();
   if (role === 'searchbox') return 'search';
   if (role === 'textbox') return 'text';
@@ -293,7 +590,7 @@ function materializeElement(
   const inputType = inputTypeOf(el);
   const normalizedLabelCandidate = getSanitizedLabelCandidate(el);
   const optionHint = el instanceof HTMLSelectElement ? nativeSelectOptionHint(el) : '';
-  const role = el.getAttribute('role') || el.tagName.toLowerCase();
+  const role = normalizeControlRole(el, inputType);
   const tagName = el.tagName.toLowerCase();
   const relBbox = relativeBbox(bbox, viewWidth, viewHeight);
   const fingerprint = createTargetFingerprint(
@@ -304,6 +601,11 @@ function materializeElement(
     relBbox,
     computeElementNeighborhoodHint(el)
   );
+  const regionHeadingRaw = nearestRegionHeading(el);
+  const regionHeading =
+    regionHeadingRaw && regionHeadingRaw.toLowerCase() !== normalizedLabelCandidate.toLowerCase()
+      ? regionHeadingRaw
+      : '';
 
   const elemId = registry.register(el, epoch, fingerprint, {
     idPrefix: frameIdPrefixValue,
@@ -328,6 +630,8 @@ function materializeElement(
     fingerprint,
     frameProvenance,
     formSubmitting: isFormSubmitControl(el) ? true : undefined,
+    regionHeading: regionHeading || undefined,
+    hasValue: controlHasValue(el) ? true : false,
   };
 }
 
@@ -401,9 +705,7 @@ export function observePage(registry: ElementRegistry, epoch: PageEpoch): RawSce
   const visualRegions = collectVisualRegions(epoch);
   for (const region of visualRegions) {
     region.frameId = TOP_FRAME_ID;
-    const associated = rawElements.find(
-      (el) => Math.abs(el.bbox.x - region.bbox.x) < 4 && Math.abs(el.bbox.y - region.bbox.y) < 4
-    );
+    const associated = rawElements.find((el) => visualRegionOwnsElement(region.bbox, el.bbox));
     if (associated) {
       region.associatedElementId = associated.id;
     }

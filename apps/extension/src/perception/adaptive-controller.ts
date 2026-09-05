@@ -1,5 +1,7 @@
 import type { BoundingBox, EscalationReason, PageEpoch, RawScene, RoiSpec, VisualRegion } from '@n-eye/protocol';
 import { createPageEpoch } from '@n-eye/protocol';
+import { interpretGoal } from '../intelligence/goal-interpreter.js';
+import { pickUniqueClickTarget, pickUniqueTypeTextTarget } from '../planner/mock-grammar.js';
 import {
   MAX_SIMULTANEOUS_ROIS,
   ROI_LIFETIME_MS,
@@ -106,6 +108,16 @@ export function decidePerception(
   const unique = uniqueReasons(reasons);
   const shouldEscalate = unique.length > 0 && (candidateRegions.length > 0 || unlabeledControls.length > 0);
 
+  // Task-conditioned: if the interpreted goal uniquely grounds on DOM/ARIA, skip decorative OCR.
+  if (options?.goal && shouldEscalate && !goalWantsVisual && structureSufficientForGoal(scene, options.goal)) {
+    return {
+      escalate: false,
+      reasons: [],
+      roiSpecs: [],
+      skippedReason: 'Task-conditioned: DOM uniquely grounds this goal; visual escalation skipped',
+    };
+  }
+
   if (!shouldEscalate) {
     return {
       escalate: false,
@@ -166,4 +178,25 @@ export function decidePerception(
 
 export function isDomSufficient(scene: RawScene): boolean {
   return !decidePerception(scene).escalate;
+}
+
+function structureSufficientForGoal(scene: RawScene, goal: string): boolean {
+  const interpreted = interpretGoal(goal);
+  if (interpreted.family === 'UNSUPPORTED' || interpreted.family === 'SCROLL') return false;
+  const elements = scene.elements.map((el) => ({
+    ...el,
+    safeLabel: el.innerTextCandidate || el.ariaLabel || '',
+  }));
+  if (interpreted.family === 'SEARCH' || interpreted.family === 'FORM_FILL') {
+    return pickUniqueTypeTextTarget(elements, interpreted.fieldHints).ok;
+  }
+  if (
+    interpreted.family === 'CLICK' ||
+    interpreted.family === 'NAVIGATE' ||
+    interpreted.family === 'FIND' ||
+    interpreted.family === 'RECOVERY'
+  ) {
+    return pickUniqueClickTarget(elements, interpreted.labelHints).ok;
+  }
+  return false;
 }

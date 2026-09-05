@@ -42,9 +42,9 @@ export function protectedContextHint(bytes: number): string {
   return `Technical: SafeContext serialized bytes: ${bytes}`;
 }
 
-export function aiConnectionLabel(provider: string, model?: string): string {
-  if (!provider || provider === '—' || provider === 'Not recorded') return 'Not recorded';
-  return model ? `${provider} · ${model}` : provider;
+export function isPlaceholderLabel(text: string | undefined | null): boolean {
+  const t = (text || '').trim();
+  return t.length === 0 || t === '—' || t === '-' || t === '–' || t === 'unknown';
 }
 
 export function compactContainsForbiddenJargon(text: string): boolean {
@@ -58,3 +58,30 @@ export const STAYED_ON_DEVICE_HINT =
   'This value was kept in local N-Eye memory for this request. It was not sent to the AI. The website may still see what you type on the page.';
 export const AI_CONNECTION_HINT = 'Shows which planning mode handled this request.';
 export const RECHECKED_PAGE_HINT = 'N-Eye rechecked the control before acting because webpages can change.';
+
+/**
+ * Engine exceptions are not product language.
+ * WHY: Missing targets and incomplete action views must never surface as TypeError text.
+ */
+export function isEngineExceptionText(text: string): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lower.includes('cannot read propert') ||
+    lower.includes('is not a function') ||
+    lower.includes('undefined is not') ||
+    lower.includes('targetcurrent') ||
+    /\bpageepoch mismatch\b/i.test(text) ||
+    /selector resolution failure/i.test(text)
+  );
+}
+
+export function humanizeUnsafeError(detail: string, fallback: string): string {
+  if (!detail.trim()) return fallback;
+  if (isEngineExceptionText(detail)) return fallback;
+  return detail;
+}
+
+export const MISSING_TARGET_HUMAN =
+  "I couldn't find one safe, unique control that matches your request, so I stopped without clicking anything.";
+export const ENGINE_FAILURE_HUMAN =
+  'Something went wrong while checking this page. N-Eye stopped without changing anything.';

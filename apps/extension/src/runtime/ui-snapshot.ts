@@ -17,6 +17,7 @@ import type { ProductToast } from '../ui/notification-map.js';
 import type { ReceiptViewModel } from '../ui/receipt-map.js';
 import type { AskUserView } from '../ui/ask-user.js';
 import type { VisualizerModel } from '../assurance/privacy-visualizer.js';
+import type { VerifiedTaskReport } from './task-report.js';
 
 export type ProductPhase =
   | 'IDLE'
@@ -116,7 +117,10 @@ export interface EvidenceViewModel {
   contentScriptHealth: ContentScriptHealth;
   pageEpoch: number;
   frameNote: string;
+  /** Human-formatted egress line. Not authoritative. */
   egressResult: string;
+  /** Typed egress audit. Report facts must use this, not string parsing. */
+  egressAudit?: 'PASS' | 'BLOCKED' | 'NOT_ATTEMPTED';
   plannerLatency: string;
   validationResult: string;
   executionResult: string;
@@ -129,6 +133,11 @@ export interface EvidenceViewModel {
   securityReason: string;
   plannerAttempts: number;
   recoveryPath: string;
+  reasoningProvenance: string;
+  nalisVersion: string;
+  nalisHealth: string;
+  memoryCount: number;
+  learningEnabled: boolean;
 }
 
 export interface LatencyView {
@@ -140,6 +149,8 @@ export interface LatencyView {
   act: string;
   verify: string;
   total: string;
+  /** Human wait for confirmation. Never mixed into system processing time. */
+  approvalWait: string;
 }
 
 export interface ProductState {
@@ -180,6 +191,41 @@ export interface ProductState {
   advisories: string[];
   latency: LatencyView;
   goal: string;
+  /** Evidence-backed report. Present after a terminal task. Never model-authored. */
+  taskReport?: VerifiedTaskReport | null;
+}
+
+export function emptyValidation(): ValidationChecks {
+  return {
+    targetCurrent: null,
+    frameCurrent: null,
+    pageCurrent: null,
+    tokenScopeValid: null,
+    riskPolicy: null,
+  };
+}
+
+export function actionValidationOf(action: ActionViewModel | undefined): ValidationChecks {
+  return action?.validation ?? emptyValidation();
+}
+
+export function mergeActionView(
+  current: ActionViewModel | undefined,
+  patch: Partial<ActionViewModel>
+): ActionViewModel {
+  const base: ActionViewModel =
+    current ?? {
+      proposalText: '—',
+      targetLabel: '—',
+      risk: 'LOW',
+      reasoning: '',
+      validation: emptyValidation(),
+    };
+  return {
+    ...base,
+    ...patch,
+    validation: patch.validation ?? base.validation ?? emptyValidation(),
+  };
 }
 
 export function idlePipeline(): PipelineState {
@@ -210,7 +256,8 @@ export function emptyEvidence(health: ContentScriptHealth = 'UNKNOWN'): Evidence
     contentScriptHealth: health,
     pageEpoch: 0,
     frameNote: '—',
-    egressResult: 'NOT_ATTEMPTED',
+      egressResult: 'NOT_ATTEMPTED',
+      egressAudit: 'NOT_ATTEMPTED',
     plannerLatency: '—',
     validationResult: '—',
     executionResult: '—',
@@ -222,6 +269,11 @@ export function emptyEvidence(health: ContentScriptHealth = 'UNKNOWN'): Evidence
     securityReason: '—',
     plannerAttempts: 0,
     recoveryPath: '—',
+    reasoningProvenance: '—',
+    nalisVersion: '1.0.0',
+    nalisHealth: '—',
+    memoryCount: 0,
+    learningEnabled: true,
   };
 }
 
@@ -235,6 +287,7 @@ export function emptyLatency(): LatencyView {
     act: '—',
     verify: '—',
     total: '—',
+    approvalWait: '—',
   };
 }
 
@@ -307,5 +360,6 @@ export function createIdleState(): ProductState {
     advisories: [],
     latency: emptyLatency(),
     goal: 'Enter my email and continue',
+    taskReport: null,
   };
 }

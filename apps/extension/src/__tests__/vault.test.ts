@@ -94,4 +94,21 @@ describe('PrivateTokenVault Security Invariants', () => {
     expect(caps[0]?.tokenSymbol).toBe('[EMAIL_1]');
     expect(JSON.stringify(caps)).not.toContain('raw.secret.never.leak');
   });
+
+  it('denies resolution on cross-tab access when tabId is supplied', () => {
+    const vault = new PrivateTokenVault();
+    vault.registerToken('[EMAIL_1]', 'PII_EMAIL', 'secret.user@example.com', taskId, 1, origin, ['email']);
+    expect(() => {
+      vault.resolve('[EMAIL_1]', taskId, origin, 'email', 99);
+    }).toThrow(/Cross-tab/);
+    expect(vault.resolve('[EMAIL_1]', taskId, origin, 'email', 1)).toBe('secret.user@example.com');
+  });
+
+  it('does not treat wildcard target semantics as authorized', () => {
+    const vault = new PrivateTokenVault();
+    vault.registerToken('[EMAIL_1]', 'PII_EMAIL', 'secret.user@example.com', taskId, 1, origin, ['*']);
+    expect(() => {
+      vault.resolve('[EMAIL_1]', taskId, origin, 'password');
+    }).toThrow(TokenResolutionError);
+  });
 });

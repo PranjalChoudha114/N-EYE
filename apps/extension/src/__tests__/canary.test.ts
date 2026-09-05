@@ -6,7 +6,7 @@
  * RawScenes, TargetFingerprints, or outbound SafeContext bytes.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { observePage } from '../content/observer.js';
 import { ElementRegistry } from '../content/registry.js';
 import { createPageEpoch, createTaskId } from '@n-eye/protocol';
@@ -15,9 +15,14 @@ import { evaluatePrivacyPolicy, resetTokenCounters } from '../privacy/policy.js'
 import { PrivateTokenVault } from '../privacy/vault.js';
 import { buildSafeContext } from '../privacy/safe-context-builder.js';
 import { validateSafeContextEgress } from '../privacy/egress-guard.js';
+import { RemotePlanner } from '../planner/remote-planner.js';
 
 describe('Privacy Canary & Byte-Level Egress Proof Suite', () => {
   let registry: ElementRegistry;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   const CANARIES_T005 = {
     EMAIL: 'CANARY_EMAIL_T005@example.com',
@@ -114,5 +119,48 @@ describe('Privacy Canary & Byte-Level Egress Proof Suite', () => {
     expect(serializedBytes).not.toContain(CANARIES_T005.CSRF);
     expect(serializedBytes).not.toContain(CANARIES_T005.ARIA_EMAIL);
     expect(serializedBytes).not.toContain(CANARIES_T005.PLACEHOLDER_EMAIL);
+  });
+
+  it('Remote /v1/plan POST body is the guarded SafeContext and excludes NEVER_SEND canaries', async () => {
+    resetTokenCounters();
+    const taskId = createTaskId('task-canary-remote-body');
+    const origin = 'https://portal.example.com';
+    const vault = new PrivateTokenVault();
+    const rawScene = observePage(registry, createPageEpoch(1));
+    const rawGoal = `Login using email and password: ${CANARIES_T005.TASK_SECRET}`;
+    const combinedFindings = [...rawScene.privacyFindings, ...detectGoalPrivacy(rawGoal)];
+    const decisions = evaluatePrivacyPolicy(combinedFindings);
+    for (const d of decisions) {
+      if (d.decision === 'TOKENIZE' && d.tokenRole) {
+        vault.registerToken(d.tokenRole, d.privacyClass, CANARIES_T005.EMAIL, taskId, 1, origin, ['email', 'text']);
+      }
+    }
+    const safeContext = buildSafeContext(rawScene, rawGoal, decisions, vault, taskId, combinedFindings);
+    const planner = new RemotePlanner('http://localhost:8000');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          actionProposal: {
+            actionId: 'act_1',
+            type: 'COMPLETE',
+            reasoning: 'done',
+            expectedOutcome: 'done',
+            riskLevel: 'LOW',
+          },
+          metadata: { requestId: 'req_c', provider: 'mock', model: 'm', planningLatencyMs: 1 },
+        }),
+        { status: 200 }
+      )
+    );
+    await planner.proposeAction(safeContext);
+    const body = String((fetchSpy.mock.calls[0]?.[1] as RequestInit | undefined)?.body || '');
+    expect(body).toContain('"safeContext"');
+    expect(body).not.toContain(CANARIES_T005.PASSWORD);
+    expect(body).not.toContain(CANARIES_T005.OTP);
+    expect(body).not.toContain(CANARIES_T005.API_KEY);
+    expect(body).not.toContain(CANARIES_T005.SESSION);
+    expect(body).not.toContain(CANARIES_T005.TASK_SECRET);
+    expect(body).not.toMatch(/data:image\/|rawScreenshot|pngBase64/i);
+    expect(JSON.parse(body).safeContext).toBeTruthy();
   });
 });

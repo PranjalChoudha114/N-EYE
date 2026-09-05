@@ -246,6 +246,7 @@ export class RemotePlanner implements Planner {
                 ? envelope.metadata['outputTokenCount']
                 : undefined,
             attempt,
+            reasoningProvenance: 'REMOTE_PROVIDER',
           },
         };
       } catch (err) {

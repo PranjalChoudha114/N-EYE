@@ -8,7 +8,7 @@ import {
   TOP_FRAME_ID,
 } from '@n-eye/protocol';
 import type { ElementRegistry } from '../content/registry.js';
-import { collectCandidates, computeElementNeighborhoodHint, getSanitizedLabelCandidate, mapInputType } from '../content/observer.js';
+import { collectCandidates, computeElementNeighborhoodHint, getSanitizedLabelCandidate, inputTypeOf, normalizeControlRole } from '../content/observer.js';
 import { discoverFrames, ownerFrameId } from '../content/frames.js';
 import { decideStaleActionOutcome, defaultFrameId, liveInteractable, semanticKeyOf } from './stale-action.js';
 
@@ -30,23 +30,13 @@ export interface RegroundResult {
   candidateCount: number;
 }
 
-function liveInputType(liveNode: HTMLElement): ReturnType<typeof mapInputType> | null {
-  if (liveNode instanceof HTMLInputElement) return mapInputType(liveNode.type);
-  if (liveNode instanceof HTMLTextAreaElement) return 'textarea';
-  if (liveNode instanceof HTMLSelectElement) return 'select';
-  const role = (liveNode.getAttribute('role') || '').toLowerCase();
-  if (role === 'searchbox') return 'search';
-  if (role === 'textbox') return 'text';
-  if (liveNode.isContentEditable) return 'text';
-  return null;
-}
-
 export function computeLiveFingerprint(liveNode: HTMLElement): TargetFingerprint {
   const view = liveNode.ownerDocument.defaultView || window;
   const viewWidth = Math.max(view.innerWidth || 1, 1);
   const viewHeight = Math.max(view.innerHeight || 1, 1);
   const rect = liveNode.getBoundingClientRect();
-  const role = liveNode.getAttribute('role') || liveNode.tagName.toLowerCase();
+  const inputType = inputTypeOf(liveNode);
+  const role = normalizeControlRole(liveNode, inputType);
   const tagName = liveNode.tagName.toLowerCase();
   const relBbox = {
     xPercent: Math.max(0, Math.min(100, (rect.x / viewWidth) * 100)),
@@ -57,7 +47,7 @@ export function computeLiveFingerprint(liveNode: HTMLElement): TargetFingerprint
   return createTargetFingerprint(
     role,
     tagName,
-    liveInputType(liveNode),
+    inputType,
     getSanitizedLabelCandidate(liveNode),
     relBbox,
     computeElementNeighborhoodHint(liveNode)
@@ -134,7 +124,7 @@ export interface RegroundAuthority {
 /** A token must never land in a credential or upload control, whatever the label says. */
 function tokenScopeStillValid(node: HTMLElement, authority?: RegroundAuthority): boolean {
   if (!authority?.usesToken) return true;
-  const type = liveInputType(node);
+  const type = inputTypeOf(node);
   return type !== 'password' && type !== 'file';
 }
 
@@ -145,7 +135,7 @@ function tokenScopeStillValid(node: HTMLElement, authority?: RegroundAuthority):
 function riskStillValid(node: HTMLElement, authority?: RegroundAuthority): boolean {
   if (!authority) return true;
   if (authority.approvedRiskLevel === 'HIGH') return true;
-  const type = liveInputType(node);
+  const type = inputTypeOf(node);
   if (type === 'file') return false;
   const isSubmitControl =
     (node instanceof HTMLInputElement && ['submit', 'image'].includes(node.type.toLowerCase()) && node.form !== null) ||

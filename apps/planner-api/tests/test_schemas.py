@@ -68,6 +68,15 @@ def test_reject_raw_frame_url_as_frame_id(sample_safe_context: SafeContext):
         SafeContext.model_validate(data)
 
 
+def test_accepts_region_heading_and_form_submitting(sample_safe_context: SafeContext):
+    data = sample_safe_context.model_dump()
+    data["safeElements"][1]["regionHeading"] = "Dynamic ID Button"
+    data["safeElements"][1]["formSubmitting"] = True
+    reconstructed = SafeContext.model_validate(data)
+    assert reconstructed.safeElements[1].regionHeading == "Dynamic ID Button"
+    assert reconstructed.safeElements[1].formSubmitting is True
+
+
 def test_accepts_opaque_frame_id(sample_safe_context: SafeContext):
     data = sample_safe_context.model_dump()
     data["safeElements"][1]["frameId"] = "f1"

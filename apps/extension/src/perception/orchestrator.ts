@@ -157,7 +157,10 @@ export async function runPerception(args: {
           ocrBlocks.push({
             text: block.text,
             confidence: typeof block.confidence === 'number' ? block.confidence : undefined,
-            bbox: transformRoiBoxToViewport(spec.bbox, block.bbox),
+            bbox: transformRoiBoxToViewport(spec.bbox, block.bbox, {
+              width: buffer.width,
+              height: buffer.height,
+            }),
             roiId: spec.roiId,
             pageEpoch: spec.pageEpoch,
             blockId: `${spec.roiId}_b${i + 1}`,
@@ -190,10 +193,17 @@ export async function runPerception(args: {
 
   const privacyMs = 0;
   const groundStart = performance.now();
+  const roiOwners = new Map<string, (typeof args.scene.elements)[number]['id']>();
+  for (const region of args.scene.visualRegions || []) {
+    if (region.associatedElementId) {
+      roiOwners.set(`roi_${region.regionId}`, region.associatedElementId);
+    }
+  }
   const fused = groundAndFuse({
     elements: args.scene.elements,
     ocrBlocks,
     pageEpoch: args.scene.pageEpoch,
+    roiOwners,
   });
   const groundingMs = performance.now() - groundStart;
   if (fused.fallback && !fallback) {

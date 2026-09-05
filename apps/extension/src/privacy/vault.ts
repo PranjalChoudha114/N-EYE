@@ -65,7 +65,8 @@ export class PrivateTokenVault {
     tokenIdentifier: TokenId | string,
     taskId: TaskId,
     origin: string,
-    targetSemantic: string
+    targetSemantic: string,
+    tabId?: number
   ): string {
     // Lookup by tokenId or tokenSymbol
     let binding: TokenBinding | undefined;
@@ -101,9 +102,15 @@ export class PrivateTokenVault {
       );
     }
 
+    if (tabId !== undefined && binding.tabId !== tabId) {
+      throw new TokenResolutionError(
+        `Token ${binding.tokenSymbol} is bound to tab ${binding.tabId}, not ${tabId}. Cross-tab access denied.`
+      );
+    }
+
     const normTarget = targetSemantic.toLowerCase();
     const isAllowed = binding.allowedTargetSemantics.some(
-      (allowed) => normTarget.includes(allowed) || allowed === '*'
+      (allowed) => allowed !== '*' && (normTarget.includes(allowed))
     );
 
     if (!isAllowed) {

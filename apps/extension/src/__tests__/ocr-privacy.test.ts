@@ -21,7 +21,7 @@ import { applyFusionLabels } from '../perception/grounding.js';
 
 const CANARIES = {
   EMAIL: 'OCR_EMAIL_T007@example.com',
-  PHONE: 'OCR_PHONE_T007_9000000000',
+  PHONE: 'OCR_PHONE_T007 +1-415-555-0100',
   OTP: 'OCR_OTP_T007_928441',
   API: 'OCR_API_T007_SECRET',
   SESSION: 'OCR_SESSION_T007_SECRET',

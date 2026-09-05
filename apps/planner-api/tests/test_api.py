@@ -25,7 +25,7 @@ def test_plan_endpoint_success(test_client: TestClient, sample_safe_context: Saf
     assert response.status_code == 200
     data = response.json()
     assert "actionProposal" in data
-    assert data["actionProposal"]["type"] in ["TYPE_TOKEN", "CLICK", "COMPLETE", "ASK_USER", "TYPE_TEXT"]
+    assert data["actionProposal"]["type"] in ["TYPE_TOKEN", "CLICK", "COMPLETE", "ASK_USER", "TYPE_TEXT", "PRESS_ENTER"]
     assert "metadata" in data
     assert data["metadata"]["requestId"] == "req_test_01"
 

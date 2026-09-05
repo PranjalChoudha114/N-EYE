@@ -39,6 +39,15 @@ class SafeElement(BaseModel):
         max_length=16,
         pattern=r"^f[0-9]+$",
     )
+    regionHeading: Optional[str] = Field(
+        default=None,
+        description="Sanitized nearest region heading/legend. Ranking only, not live identity.",
+        max_length=80,
+    )
+    formSubmitting: Optional[bool] = Field(
+        default=None,
+        description="True when this control submits an owning form. Structure, not label.",
+    )
     bbox: BoundingBox
 
 

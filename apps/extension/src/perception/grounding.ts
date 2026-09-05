@@ -44,12 +44,20 @@ function confidenceFromOcr(value: number | undefined): PerceptionConfidence {
   return 'LOW';
 }
 
-export function transformRoiBoxToViewport(roiOrigin: BoundingBox, local: BoundingBox): BoundingBox {
+export function transformRoiBoxToViewport(
+  roiOrigin: BoundingBox,
+  local: BoundingBox,
+  buffer?: { width: number; height: number }
+): BoundingBox {
+  // OCR boxes are in the captured buffer's pixels. ROI specs are CSS viewport.
+  // Tab-capture DPR and canvas CSS≠intrinsic both require this scale. Identity when omitted.
+  const scaleX = buffer && buffer.width > 0 ? roiOrigin.width / buffer.width : 1;
+  const scaleY = buffer && buffer.height > 0 ? roiOrigin.height / buffer.height : 1;
   return {
-    x: roiOrigin.x + local.x,
-    y: roiOrigin.y + local.y,
-    width: local.width,
-    height: local.height,
+    x: roiOrigin.x + local.x * scaleX,
+    y: roiOrigin.y + local.y * scaleY,
+    width: local.width * scaleX,
+    height: local.height * scaleY,
   };
 }
 
@@ -60,18 +68,56 @@ export interface GroundingOutput {
   fallback?: 'OCR_LOW_CONFIDENCE' | 'NO_TEXT' | 'GROUNDING_AMBIGUOUS';
 }
 
+/** Minimum VisualBindingScore before OCR may become a live target. Uncertainty reduces authority. */
+export const VISUAL_BIND_MIN_SCORE = 0.34;
+/** best − secondBest must clear this margin or the block stays unbound (ASK_USER, not a guess). */
+export const VISUAL_BIND_UNIQUENESS_MARGIN = 0.12;
+
+function intersectionArea(a: BoundingBox, b: BoundingBox): number {
+  const x1 = Math.max(a.x, b.x);
+  const y1 = Math.max(a.y, b.y);
+  const x2 = Math.min(a.x + a.width, b.x + b.width);
+  const y2 = Math.min(a.y + a.height, b.y + b.height);
+  return Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
+}
+
+function visualBindingScore(args: {
+  block: OcrTextBlock;
+  el: RawElement;
+  roiOwnerId?: ElementId;
+}): number {
+  const { block, el, roiOwnerId } = args;
+  const ocrArea = Math.max(1, block.bbox.width * block.bbox.height);
+  const inter = intersectionArea(block.bbox, el.bbox);
+  const containment = inter / ocrArea;
+  const overlap = iou(block.bbox, el.bbox);
+  const dist = centerDistance(block.bbox, el.bbox);
+  const diag = Math.hypot(el.bbox.width, el.bbox.height) || 1;
+  const proximity = dist <= 48 ? 0.15 : dist <= Math.max(120, diag * 0.6) ? 0.05 : 0;
+  const role = (el.role || el.tagName || '').toLowerCase();
+  const liveSurface = role === 'canvas' || role === 'img' || role === 'image' ? 0.05 : 0;
+  const owner = roiOwnerId && roiOwnerId === el.id ? 0.5 : 0;
+  const sameFrame =
+    !block.frameId || !el.frameProvenance?.frameId || block.frameId === el.frameProvenance.frameId;
+  if (!sameFrame) return 0;
+  return owner + 0.4 * containment + 0.2 * overlap + proximity + liveSurface;
+}
+
 /**
  * Visual grounding + DOM/OCR fusion (Zone 3).
  * OWNS: Associating OCR evidence with opaque local targets.
  * COORDINATE TRANSFORM: OCR boxes are ROI-local; grounding uses viewport space.
- * MUST NOT: Emit a second target when DOM and OCR describe the same control.
+ * MUST NOT: Grant a live target from nearest-neighbor or IoU-of-unequal-boxes alone.
+ * Painted text on a large canvas has low IoU but high containment / ROI ownership.
  */
 export function groundAndFuse(args: {
   elements: RawElement[];
   ocrBlocks: OcrTextBlock[];
   pageEpoch: PageEpoch;
+  /** roiId → live element that owns that visual region (from observation, not OCR). */
+  roiOwners?: ReadonlyMap<string, ElementId>;
 }): GroundingOutput {
-  const { elements, ocrBlocks, pageEpoch } = args;
+  const { elements, ocrBlocks, pageEpoch, roiOwners } = args;
   const candidates: VisualCandidate[] = [];
   const groundings: VisualGrounding[] = [];
   const fusedElementIds: ElementId[] = [];
@@ -95,24 +141,29 @@ export function groundAndFuse(args: {
   for (const block of usableBlocks) {
     const conf = confidenceFromOcr(block.confidence);
     const ocrNorm = normalizeLabel(block.text);
-    const nearby = elements
+    const roiOwnerId = block.roiId ? roiOwners?.get(block.roiId) : undefined;
+
+    const scored = elements
       .map((el) => ({
         el,
-        iou: iou(block.bbox, el.bbox),
-        dist: centerDistance(block.bbox, el.bbox),
+        score: visualBindingScore({ block, el, roiOwnerId }),
       }))
-      .filter((hit) => hit.iou >= 0.12 || hit.dist <= 48)
-      .sort((a, b) => b.iou - a.iou || a.dist - b.dist);
+      .sort((a, b) => b.score - a.score);
 
-    const best = nearby[0];
-    const second = nearby[1];
-    if (best && second && Math.abs(best.iou - second.iou) < 0.05 && Math.abs(best.dist - second.dist) < 8) {
+    const best = scored[0];
+    const second = scored[1];
+    const uniqueEnough =
+      best &&
+      best.score >= VISUAL_BIND_MIN_SCORE &&
+      (!second || best.score - second.score >= VISUAL_BIND_UNIQUENESS_MARGIN);
+
+    if (best && second && best.score >= VISUAL_BIND_MIN_SCORE && !uniqueEnough) {
       ambiguous = true;
       continue;
     }
 
     // LOW OCR confidence may emit an OCR-only hint; it must not become a DOM target.
-    if (best && conf !== 'LOW') {
+    if (uniqueEnough && best && conf !== 'LOW') {
       const el = best.el;
       const domNorm = normalizeLabel(el.innerTextCandidate || el.ariaLabel || '');
       const duplicate = Boolean(domNorm) && (domNorm === ocrNorm || domNorm.includes(ocrNorm) || ocrNorm.includes(domNorm));

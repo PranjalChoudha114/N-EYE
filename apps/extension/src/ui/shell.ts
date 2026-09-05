@@ -41,12 +41,14 @@ export interface ProductEls {
   panelPrivacy: HTMLElement;
   panelAction: HTMLElement;
   panelEvidence: HTMLElement;
+  panelReport: HTMLElement;
   pipeline: HTMLElement;
   stepLine: HTMLElement;
   activityMeta: HTMLElement;
   privacyViz: HTMLElement;
   actionView: HTMLElement;
   evidenceView: HTMLElement;
+  reportView: HTMLElement;
   confirm: HTMLDialogElement;
   confirmWhat: HTMLElement;
   confirmTarget: HTMLElement;
@@ -129,7 +131,7 @@ export function mountProductShell(doc: Document): ProductEls {
   });
   const run = h('button', { id: 'n-run', class: 'n-btn n-btn-primary', type: 'button' }, ['Run']);
   const cancel = h('button', { id: 'n-cancel', class: 'n-btn n-btn-danger hidden', type: 'button' }, ['Cancel']);
-  const extra = h('button', { id: 'n-extra', class: 'n-btn n-btn-quiet hidden', type: 'button' }, ['View result']);
+  const extra = h('button', { id: 'n-extra', class: 'n-btn n-btn-quiet hidden', type: 'button' }, ['View Report']);
   const askHint = h('p', { id: 'n-ask-hint', class: 'n-caption n-ask-callout hidden' });
   const receipt = h('section', { id: 'n-receipt', class: 'n-receipt hidden', 'aria-label': 'Privacy Receipt' });
 
@@ -171,6 +173,8 @@ export function mountProductShell(doc: Document): ProductEls {
   const panelEvidence = h('section', { id: 'n-panel-evidence', class: 'n-panel hidden', role: 'tabpanel' }, [
     evidenceView,
   ]);
+  const reportView = h('div', { id: 'n-report-view', class: 'n-report' });
+  const panelReport = h('section', { id: 'n-panel-report', class: 'n-panel hidden', role: 'tabpanel' }, [reportView]);
 
   const tabs = h('div', { class: 'n-tabs', role: 'tablist', 'aria-label': 'Trust Center' }, [
     h('button', { class: 'n-tab is-active', type: 'button', role: 'tab', 'aria-selected': 'true', 'data-tab': 'activity' }, [
@@ -189,6 +193,10 @@ export function mountProductShell(doc: Document): ProductEls {
       iconRead(),
       'Evidence',
     ]),
+    h('button', { class: 'n-tab', type: 'button', role: 'tab', 'aria-selected': 'false', 'data-tab': 'report' }, [
+      iconProve(),
+      'Report',
+    ]),
   ]);
 
   const center = h('section', { id: 'n-center', class: 'n-center' }, [
@@ -197,6 +205,7 @@ export function mountProductShell(doc: Document): ProductEls {
     panelPrivacy,
     panelAction,
     panelEvidence,
+    panelReport,
   ]);
 
   const confirmWhat = h('p', { id: 'n-confirm-what' });
@@ -281,12 +290,14 @@ export function mountProductShell(doc: Document): ProductEls {
     panelPrivacy,
     panelAction,
     panelEvidence,
+    panelReport,
     pipeline,
     stepLine,
     activityMeta,
     privacyViz,
     actionView,
     evidenceView,
+    reportView,
     confirm,
     confirmWhat,
     confirmTarget,

@@ -19,6 +19,8 @@ export function describeAction(proposal: ActionProposal | null, targetLabel?: st
       return 'Scroll the page';
     case 'SELECT':
       return `Choose an option in ${target}`;
+    case 'PRESS_ENTER':
+      return `Press Enter in ${target}`;
     case 'WAIT':
       return 'Wait for the page to settle';
     case 'ASK_USER':

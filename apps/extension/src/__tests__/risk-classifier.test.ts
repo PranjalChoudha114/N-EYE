@@ -50,7 +50,7 @@ function sceneOf(t: RawElement): RawScene {
 describe('Local risk classification cannot be downgraded by the planner', () => {
   it('Submit / Delete / Upload / Send / Publish / Transfer are HIGH even when planner says LOW', () => {
     const cases: Array<[string, Partial<RawElement>]> = [
-      ['submit input', { inputType: 'submit', innerTextCandidate: 'Go' }],
+      ['form-associated submit', { formSubmitting: true, inputType: 'submit', innerTextCandidate: 'Go' }],
       ['formSubmitting structure', { formSubmitting: true, innerTextCandidate: 'Continue' }],
       ['Delete account', { innerTextCandidate: 'Delete account' }],
       ['Upload document', { innerTextCandidate: 'Upload document' }],
@@ -64,6 +64,11 @@ describe('Local risk classification cannot be downgraded by the planner', () => 
       const t = target(attrs);
       expect(classifyLocalRisk(click(t, 'LOW'), t)).toBe('HIGH');
     }
+  });
+
+  it('a standalone default button is not HIGH just because HTML type is submit', () => {
+    const t = target({ innerTextCandidate: 'Go', inputType: 'submit', formSubmitting: false });
+    expect(classifyLocalRisk(click(t, 'LOW'), t)).toBe('LOW');
   });
 
   it('a harmless Continue click stays LOW unless the planner escalates', () => {

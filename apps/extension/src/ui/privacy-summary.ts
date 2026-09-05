@@ -14,6 +14,8 @@ export interface TokenizedFact {
 
 export interface PrivacySummary {
   sensitiveCount: number;
+  /** Empty password/email/tel controls. Not private values. */
+  sensitiveControlCount?: number;
   keptLocal: string[];
   tokenized: TokenizedFact[];
   screenshotBytes: number;
@@ -39,8 +41,12 @@ export function buildPrivacySummary(
     });
   }
 
+  const valueFindings = findings.filter((f) => f.valuePresent !== false);
+  const controlOnly = findings.filter((f) => f.valuePresent === false);
+
   return {
-    sensitiveCount: findings.length,
+    sensitiveCount: valueFindings.length,
+    sensitiveControlCount: controlOnly.length,
     keptLocal,
     tokenized,
     screenshotBytes: options?.screenshotBytes ?? 0,

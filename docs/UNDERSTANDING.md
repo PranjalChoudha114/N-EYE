@@ -17,7 +17,7 @@ Standard cloud-first browser agents (such as OpenAI Operator, Anthropic Computer
 - The remote AI receives only an abstract, sanitized, and tokenized **`SafeContext`** needed for planning.
 - The remote model's output is treated strictly as **untrusted advisory proposals** (`ActionProposal`).
 - The local browser validates the proposal against current DOM state, resolves private tokens in local memory, prompts for human confirmation on high-risk actions **as a bound capability** (this action, this target, this context — not a standing permission), executes native events on live nodes, and verifies the resulting state-change delta.
-- **Page content is data, never policy.** DOM, ARIA, OCR, and document text may impersonate SYSTEM/DEVELOPER instructions or fake user confirmation. That remains an observation. Local risk classification, token scope, confirmation binding, and TOCTOU revalidation are the authority boundary. The planner prompt names this (contract `n-eye-planner-policy/3`) as defense-in-depth only.
+- **Page content is data, never policy.** DOM, ARIA, OCR, and document text may impersonate SYSTEM/DEVELOPER instructions or fake user confirmation. That remains an observation. Local risk classification, token scope, confirmation binding, and TOCTOU revalidation are the authority boundary. The planner prompt names this (contract `n-eye-planner-policy/5`) as defense-in-depth only.
 - When DOM/ARIA is insufficient, N-Eye may read **local pixels** (bounded ROI + on-device OCR). Pixels are a new local input, not a privacy bypass.
 
 ---
@@ -57,6 +57,9 @@ Every N-Eye task step executes through an immutable lifecycle:
                      │
                      ▼
 8. VERIFY LOCALLY    — Observe post-state; prove genuine delta (epoch progression / DOM mutation).
+                     │
+                     ▼
+9. REPORT            — Build View Report from the local evidence ledger. Claims without evidence are not facts.
 ```
 
 ---
@@ -106,27 +109,30 @@ To prevent architecture drift, N-Eye explicitly rejects the following patterns:
 | Capability | SIH Prototype Scope (Current Baseline) | Future Company Scale |
 |---|---|---|
 | **Browser Support** | Google Chrome (Manifest V3) | Cross-browser (Chromium, Firefox, Safari, Edge) |
-| **Observation** | DOM semantics, ARIA, geometry, visibility, epoch, same-origin frame provenance | Multi-tab tracking, cross-origin iframe DOM, deep shadow DOM |
+| **Observation** | DOM semantics, ARIA, geometry, visibility, epoch, same-origin frame provenance, open Shadow DOM, nearest region heading (ranking only) | Multi-tab tracking, cross-origin iframe DOM, closed shadow access |
 | **Perception** | Adaptive on-device OCR (Tesseract.js) when DOM/ARIA is insufficient | WebGPU-accelerated local VLM / visual grounding |
 | **Privacy Engine** | Deterministic regex + heuristics + in-memory vault (DOM + OCR) | Local ML-based PII classifiers + hardware enclave vault |
 | **Egress Guard** | Byte-level canary scan + 256KB size bounds | Cryptographic zero-knowledge egress proofs |
 | **Planner Gateway** | Localhost FastAPI + Gemini / Mock adapters | Enterprise multi-tenant gateway with policy routing |
 | **Persistence** | In-memory ephemeral (10-minute TTL) | Encrypted enterprise audit vault + compliance logging |
-| **Evaluation** | Synthetic test portal (Scenarios 01–09) + `bench/visual` harness | Large-scale WebArena / VisualWebArena benchmark harness |
+| **Evaluation** | Synthetic test portal (Scenarios 01–15) + `bench/visual` harness | Large-scale WebArena / VisualWebArena benchmark harness |
 
 ---
 
-## 6. Current Implementation State (Gate T019/T020)
+## 6. Current Implementation State
 
 - **Protocol Layer (`packages/protocol`)**: Branded types, Unicode scalar sanitization, recovery taxonomy, `ExecutionEvidence`, perception fallbacks including `CANCELLED`, content-script handshake.
 - **Chrome MV3 Shell (`apps/extension`)**: Content script remains a self-contained IIFE (top frame only). Observer walks same-origin `iframe.contentDocument`. Bounded planner retry/cancel. Hydrate cannot resurrect confirmation. Execute port preserves ASK_USER evidence.
-- **Product UI**: Two surfaces (ADR-0010). Overlay + Side Panel architecture, logo files, tabs, and theme modes unchanged. Compact copy is human-first; technical terms stay on Evidence / View technical details. ASK_USER is rewrite + Continue/Cancel (clarification). Confirmation remains Allow once / Don't allow (authorization). Visual tokens/CSS were refined for a premium dark/light presentation with no functional change.
-- **Perception**: Adaptive OCR/ROI. Capture/OCR failure never sends rasters; visual-required + insufficient structure → OCR_UNAVAILABLE. OCR-fused labels on registered canvas/img nodes may become unique local CLICK targets. Unlabeled visual surfaces still ASK_USER. Planner coordinates remain forbidden.
-- **Privacy Engine**: Detectors, token vault, SafeContext builder, Egress Guard. NEVER_SEND spans (API keys, JWTs) are stripped from `sanitizedGoal` and public labels, not only blocked at egress.
-- **Local Action Authority**: Confirmation capability (ADR-0011). After Allow once, live re-observation uniquely re-grounds the approved semantic identity (role/tag/inputType/normalized label); reminted opaque `eN` is not the granted target. Unique equivalent replacement may execute; meaning/action/risk/origin/frame change or ambiguous replacement fails closed. Native SELECT, bounded SCROLL, TYPE_TOKEN/TYPE_TEXT resulting-state verification. Local completion arbiter: planner COMPLETE ≠ task success. SEARCH / type-then-act requires typed query **and** a verified search outcome (URL/origin transition), not TYPE_TEXT MATCHED or click() alone. ASK_USER Continue is a fresh trust loop, not Allow once; live MATCHED typing is adopted from a new observation so remaining submit is not forgotten. HIGH + unverified → no replay (ADR-0012).
-- **Planner gateway**: Unicode sanitize before provider encode; classified 429/404/503; Gemini key in `x-goog-api-key` header; prompt contract `n-eye-planner-policy/3`.
-- **Formal SIH measurement**: Labeled privacy corpus + visual/performance/task/canary benches. Machine-readable JSON under `bench/`. See `docs/evidence/T019-T020-MEASUREMENT-REPORT.md`.
-- **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T019-T020-MANUAL-CHECKLIST.md`.
-- **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008.
-- **Next Eligible Milestone**: Gate 021/022 — hidden generalization + clean-profile real Chrome E2E + reproducibility/release engineering. Do not start until explicitly approved.
+- **Product UI**: Two surfaces (ADR-0010). Overlay + Side Panel architecture, logo files, tabs, and theme modes unchanged. Compact copy is human-first; technical terms stay on Evidence / View technical details / View Report technical section. ASK_USER is rewrite + Continue/Cancel (clarification). Confirmation remains Allow once / Don't allow (authorization). After a terminal task, **View Report** is available (ADR-0018): human ten-section summary plus expandable technical details, built only from the local evidence ledger. Green UI is not success.
+- **Perception**: Adaptive OCR/ROI, task-conditioned skip when the interpreted goal uniquely grounds on DOM/ARIA. Capture/OCR failure never sends rasters; visual-required + insufficient structure → OCR_UNAVAILABLE. OCR boxes bind to a unique live canvas/img via containment / ROI ownership / uniqueness margin (not IoU-of-unequal-boxes alone). Fused labels on those nodes may become unique local CLICK targets. Unlabeled, ambiguous, occluded, or stale-epoch surfaces still ASK_USER. Planner coordinates remain forbidden. Scenario 08 Chrome remains HUMAN REQUIRED after T029-R1.
+- **Privacy Engine**: Detectors, token vault, SafeContext builder, Egress Guard. NEVER_SEND spans (API keys, JWTs) are stripped from `sanitizedGoal` and public labels, not only blocked at egress. Existing classes cover synthetic India identifiers (mobile, Aadhaar-like, PAN, GSTIN, IFSC, UPI VPA) as `PII_PHONE` / `PII_ACCOUNT_ID`. Free-text names/addresses are not claimed as detected.
+- **Local Action Authority**: Confirmation capability (ADR-0011). After Allow once, live re-observation uniquely re-grounds the approved semantic identity (role/tag/inputType/normalized label); reminted opaque `eN` is not the granted target. Unique equivalent replacement may execute; meaning/action/risk/origin/frame change or ambiguous replacement fails closed. Native SELECT, bounded SCROLL, constrained PRESS_ENTER (HIGH, form `requestSubmit` or Enter-only), TYPE_TOKEN/TYPE_TEXT resulting-state verification. Local completion arbiter: planner COMPLETE ≠ task success. SEARCH / type-then-act requires typed query **and** a verified search outcome (URL/origin transition), not TYPE_TEXT MATCHED, click(), or Enter dispatch alone. TYPE then CLICK / SELECT then CONTINUE keep remaining subgoals (including RECOVERY `CONTINUE`); PRESS_ENTER + navigation is not click-goal success. ASK_USER Continue is a fresh trust loop, not Allow once; live MATCHED typing is adopted from a new observation so remaining submit is not forgotten. HIGH + unverified → no replay (ADR-0012). CLICK verification uses semantic identity, not reminted `eN`; autocomplete control-set churn is AMBIGUOUS, not success. Navigation evidence strips URL query/hash.
+- **Planner gateway**: Unicode sanitize before provider encode; classified 429/404/503; Gemini key in `x-goog-api-key` header; prompt contract `n-eye-planner-policy/5` (region heading + exploration-is-not-completion). Provider JSON is coerced (thought-parts / fences / extra keys); authority-claim extras fail closed.
+- **Goal intelligence**: N-Eye Intelligence / NI (ADR-0017; historical internal identifier NALIS) — deterministic interpreter + TaskGraph + semantic affordances + verification-gated session memory. Exclusive MOCK/REMOTE routing (ADR-0013). **T029:** TaskGraph is implemented and unit-tested; the live trust loop does not yet call `createTaskGraph` (T029-F009). Click grounding is two-pass (own label, then unique region descendant); exact unique AccName may break a token-coverage tie. SEARCH_COMMIT may be a submit control **or** a unique labeled popup option/menuitem/treeitem with search/find semantics; two Search popups ASK_USER; ambiguous submits do not PRESS_ENTER. Bounded SCROLL exploration is not completion (ADR-0016). Composite search-then-open does not stuff the open clause into the query. Local language model REJECTED for the critical path (ADR-0015). Personalization cannot lower risk or skip confirmation. NI proposes; local N-Eye remains the authority.
+- **Formal SIH measurement**: T019 corpus plus T027 PII/visual/performance packs and T029 Judge-Kill `t029-judge-kill/1` (Node/happy-dom contracts, not Chrome E2E). Machine-readable JSON under `bench/`. See `docs/evidence/T027-T028-SCORECARD.md` and `docs/evidence/T029-JUDGE-KILL-MATRIX.md`. Node/Tesseract RESULT is not a Chrome judge score.
+- **Chrome overlay + Side Panel E2E**: **UNVERIFIED** (manual load of `apps/extension/dist/`). See `docs/evidence/T027-T028-MANUAL-CHECKLIST.md`.
+- **Local visual model / WebGPU / ONNX**: **NOT_IMPLEMENTED** by decision. MODEL_ADMISSION = REJECTED. See ADR-0008 (visual) and ADR-0015 (language).
+- **Next Eligible Milestone**: Human T029-R1 Chrome checklist (especially Scenario 08 RC08). T030 freeze only after that evidence. T029-R1 did **not** fabricate Chrome PASS. See `docs/evidence/T029-R1-REAL-CHROME-CHECKLIST.md`.
+
+A UI control is one logical object with AccName, role, affordances, and privacy presence. DOM id, OCR words, and coordinates are evidence, not identity. Success is a verified postcondition on fresh page state. View Report facts require typed local evidence (`egressAudit`, ledger events), not formatted strings or planner prose.
 

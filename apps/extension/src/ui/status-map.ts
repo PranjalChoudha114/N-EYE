@@ -5,6 +5,7 @@
 
 import type { ProductPhase, StatusTone } from '../runtime/ui-snapshot.js';
 import { PlannerTransportError } from '../planner/transport-error.js';
+import { ENGINE_FAILURE_HUMAN, humanizeUnsafeError } from './human-copy.js';
 
 export interface StatusCopy {
   headline: string;
@@ -85,7 +86,11 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
     case 'COMPLETED':
       return { headline: 'Completed', message: detail || 'The task finished.', tone: 'ok' };
     case 'BLOCKED':
-      return { headline: 'Action blocked', message: detail || 'N-Eye refused this action.', tone: 'danger' };
+      return {
+        headline: 'Action blocked',
+        message: humanizeUnsafeError(detail || '', 'N-Eye refused this action.'),
+        tone: 'danger',
+      };
     case 'CANCELLED':
       return { headline: 'Cancelled', message: detail || 'The task was stopped.', tone: 'neutral' };
     case 'RATE_LIMITED':
@@ -127,7 +132,11 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
         tone: 'warning',
       };
     case 'ERROR':
-      return { headline: 'Error', message: detail || 'The task failed.', tone: 'danger' };
+      return {
+        headline: 'Could not finish',
+        message: humanizeUnsafeError(detail || '', ENGINE_FAILURE_HUMAN),
+        tone: 'danger',
+      };
     default:
       return { headline: 'Ready', message: detail || 'N-Eye is idle.', tone: 'neutral' };
   }

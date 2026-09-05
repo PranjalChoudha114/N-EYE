@@ -124,7 +124,10 @@ export interface PrivacyBenchResult {
   fnReview: Array<{ id: string; expected: string[]; predicted: string[]; notes?: string }>;
 }
 
-export function runPrivacyBench(samples: PiiSample[] = PII_SAMPLES): PrivacyBenchResult {
+export function runPrivacyBench(
+  samples: PiiSample[] = PII_SAMPLES,
+  options?: { datasetVersion?: string; extraClasses?: PrivacyClass[] }
+): PrivacyBenchResult {
   resetTokenCounters();
   const classNames: PrivacyClass[] = [
     'PII_EMAIL',
@@ -134,6 +137,7 @@ export function runPrivacyBench(samples: PiiSample[] = PII_SAMPLES): PrivacyBenc
     'SECRET_API_KEY',
     'SECRET_AUTH_TOKEN',
     'SECRET_SESSION',
+    ...(options?.extraClasses || []),
   ];
   const counts = new Map<string, { tp: number; fp: number; fn: number; tn: number }>();
   for (const c of classNames) counts.set(c, { tp: 0, fp: 0, fn: 0, tn: 0 });
@@ -279,8 +283,8 @@ export function runPrivacyBench(samples: PiiSample[] = PII_SAMPLES): PrivacyBenc
 
   const micro = precisionRecallF1(microTp, microFp, microFn);
   return {
-    datasetVersion: PII_DATASET_VERSION,
-    datasetHash: datasetHash(),
+    datasetVersion: options?.datasetVersion || PII_DATASET_VERSION,
+    datasetHash: datasetHash(samples),
     n: samples.length,
     classes,
     micro: { tp: microTp, fp: microFp, fn: microFn, ...micro },

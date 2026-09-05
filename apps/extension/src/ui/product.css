@@ -752,6 +752,35 @@ html[data-theme='light'] .n-mark {
   color: var(--n-text);
 }
 
+.n-report {
+  display: grid;
+  gap: 12px;
+}
+
+.n-report-result {
+  margin: 0;
+  font: var(--n-type-headline);
+  letter-spacing: 0.02em;
+}
+
+.n-report-section h3 {
+  margin: 0 0 4px;
+  font: var(--n-type-label);
+  letter-spacing: 0.04em;
+  color: var(--n-text-quiet);
+  text-transform: uppercase;
+}
+
+.n-report-section p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.n-report-time p {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+}
+
 .n-evidence {
   display: grid;
   gap: 8px;

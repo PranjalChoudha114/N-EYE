@@ -71,6 +71,37 @@ export function mapCssBoxToElementBuffer(
   );
 }
 
+/**
+ * Screenshot bitmap pixel → CSS viewport point.
+ * scale = viewportSize / bitmapSize from the actual capture, not a copied DPR constant.
+ */
+export function mapBitmapPointToCss(
+  point: { x: number; y: number },
+  viewport: Size2D,
+  bitmap: Size2D
+): { x: number; y: number } {
+  const scaleX = viewport.width / Math.max(bitmap.width, 1);
+  const scaleY = viewport.height / Math.max(bitmap.height, 1);
+  return { x: point.x * scaleX, y: point.y * scaleY };
+}
+
+/**
+ * Screenshot bitmap box → CSS viewport box (inverse of mapCssBoxToBitmap).
+ */
+export function mapBitmapBoxToCss(box: Rect2D, viewport: Size2D, bitmap: Size2D): Rect2D | null {
+  const scaleX = viewport.width / Math.max(bitmap.width, 1);
+  const scaleY = viewport.height / Math.max(bitmap.height, 1);
+  return clipBoxToBounds(
+    {
+      x: box.x * scaleX,
+      y: box.y * scaleY,
+      width: box.width * scaleX,
+      height: box.height * scaleY,
+    },
+    viewport
+  );
+}
+
 export function boxesOverlap(a: Rect2D, b: Rect2D): boolean {
   return !(a.x + a.width < b.x || b.x + b.width < a.x || a.y + a.height < b.y || b.y + b.height < a.y);
 }

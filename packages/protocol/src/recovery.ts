@@ -72,4 +72,10 @@ export interface ExecutionEvidence {
   scrollMoved?: boolean;
   atScrollBoundary?: boolean;
   selectMatched?: boolean;
+  /**
+   * True when the live clicked node changed identity or explicit state after dispatch
+   * (DOM id, disconnection, aria-pressed/expanded/disabled). Never includes the raw id.
+   * TRUST: click() returning is not this flag.
+   */
+  targetIdentityChanged?: boolean;
 }

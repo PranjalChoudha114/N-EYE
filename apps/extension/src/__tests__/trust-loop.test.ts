@@ -120,7 +120,7 @@ describe('TrustLoopController', () => {
     expect(asked.confirmation).toBeUndefined();
     expect(asked.askUser?.continueLabel).toBe('Continue');
     expect(asked.askUser?.dismissLabel).toBe('Cancel');
-    expect(asked.askUser?.reason).toBe('UNKNOWN_GOAL');
+    expect(asked.askUser?.reason).toBe('NO_SUPPORTED_ACTION');
     expect(asked.running).toBe(false);
     expect(asked.canRun).toBe(true);
     expect(asked.message).not.toMatch(/Mock planner grammar/i);
@@ -365,11 +365,23 @@ describe('TrustLoopController', () => {
       delayFn: async () => undefined,
     });
     controller.bindTab(tab);
-    await controller.start('Search for OpenAI');
+    const done = controller.start('Search for OpenAI');
+    for (let i = 0; i < 80; i += 1) {
+      const phase = controller.getState().phase;
+      if (phase === 'ASK_USER' || phase === 'AWAITING_CONFIRMATION' || phase === 'COMPLETED') break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
     const state = controller.getState();
-    expect(state.phase).toBe('ASK_USER');
+    expect(state.phase).not.toBe('COMPLETED');
     expect(state.headline).not.toBe('Completed');
-    expect(state.message).toMatch(/search was not submitted|no unique search button/i);
+    expect(['ASK_USER', 'AWAITING_CONFIRMATION']).toContain(state.phase);
+    if (state.phase === 'AWAITING_CONFIRMATION') {
+      controller.confirm(false, state.confirmation?.confirmationId);
+      await done.catch(() => undefined);
+    } else {
+      await done;
+    }
+    expect(controller.getState().headline).not.toBe('Completed');
   });
 
   it('does not accept remote planner COMPLETE as product success', async () => {

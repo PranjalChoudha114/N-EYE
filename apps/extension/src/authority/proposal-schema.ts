@@ -47,6 +47,7 @@ const ALLOWED_TYPES = new Set<ActionType>([
   'SCROLL',
   'SELECT',
   'WAIT',
+  'PRESS_ENTER',
   'ASK_USER',
   'COMPLETE',
 ]);
@@ -84,6 +85,10 @@ const AUTHORITY_CLAIM_KEYS = new Set<string>([
   'frameId',
   'origin',
   'systemPrompt',
+  'hotkey',
+  'keyName',
+  'keys',
+  'keyboard',
 ]);
 
 /** Opaque element identity: `e12` in the top document, `f1e12` inside a same-origin frame. */
@@ -218,6 +223,25 @@ export function assertProposalShape(raw: unknown): ActionProposal {
       );
     }
     proposal['scrollDelta'] = { x: Number(x), y: Number(y) };
+  }
+
+  // PRESS_ENTER is a single constrained key. Arbitrary key injection is not in the vocabulary.
+  if (type === 'PRESS_ENTER') {
+    if (proposal['textValue'] !== undefined) {
+      throw new MalformedProposalError(
+        'PRESS_ENTER must not carry textValue. Arbitrary keys are not executable.',
+        'POLICY_VIOLATION'
+      );
+    }
+    if (proposal['tokenId'] !== undefined || proposal['tokenSymbol'] !== undefined) {
+      throw new MalformedProposalError('PRESS_ENTER cannot bind a vault token.', 'POLICY_VIOLATION');
+    }
+    if (proposal['scrollDelta'] !== undefined) {
+      throw new MalformedProposalError('PRESS_ENTER cannot carry scrollDelta.', 'POLICY_VIOLATION');
+    }
+    if (proposal['targetId'] === undefined) {
+      throw new MalformedProposalError('PRESS_ENTER requires an opaque targetId.', 'INVALID_TARGET');
+    }
   }
 
   return proposal as unknown as ActionProposal;

@@ -7,6 +7,7 @@
  */
 
 import type { ActionProposal, PlannerTransportCode, SafeContext } from '@n-eye/protocol';
+import type { ReasoningProvenance } from '../intelligence/types.js';
 
 export type PlannerMode = 'MOCK' | 'REMOTE';
 
@@ -24,6 +25,11 @@ export interface PlannerOptions {
   requestId?: string;
   /** Observability only. Must not change payload class, authority, or retry budget. */
   onRetry?: (notice: PlannerRetryNotice) => void;
+  /**
+   * Local Mock only: compute a proposal without committing planner task state.
+   * WHY: Capability routing must not burn exploration/step budgets on a discarded Mock path.
+   */
+  dryRun?: boolean;
 }
 
 export interface PlannerMetadata {
@@ -36,6 +42,8 @@ export interface PlannerMetadata {
   outputTokenCount?: number;
   /** 1-based attempt count. Development instrumentation, not a SIH benchmark. */
   attempt?: number;
+  /** Which reasoning source produced this proposal. Not execution authority. */
+  reasoningProvenance?: ReasoningProvenance;
 }
 
 export interface PlannerProposalResult {

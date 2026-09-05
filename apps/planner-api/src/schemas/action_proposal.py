@@ -14,6 +14,7 @@ ActionType = Literal[
     "TYPE_TEXT",
     "SCROLL",
     "SELECT",
+    "PRESS_ENTER",
     "WAIT",
     "ASK_USER",
     "COMPLETE",

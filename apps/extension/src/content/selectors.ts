@@ -4,7 +4,11 @@
  */
 
 export const INTERACTIVE_SELECTOR =
-  'button, input, select, textarea, a[href], [role="button"], [role="link"], [role="checkbox"], [role="tab"], [role="radio"], [role="menuitem"], [role="textbox"], [role="searchbox"], [role="combobox"], [role="switch"], [role="option"], [contenteditable="true"], [contenteditable=""]';
+  'button, input, select, textarea, a[href], [role="button"], [role="link"], [role="checkbox"], [role="tab"], [role="radio"], [role="menuitem"], [role="textbox"], [role="searchbox"], [role="combobox"], [role="switch"], [role="option"], [role="treeitem"], [contenteditable="true"], [contenteditable=""], summary, input[type="image"]';
+
+/** Popup descendants referenced by aria-controls / aria-owns. Bounded; not a DOM crawl. */
+export const POPUP_OWNED_SELECTOR =
+  '[role="option"], [role="menuitem"], [role="treeitem"], button, a[href], [role="button"], [role="link"]';
 
 export const SEMANTIC_ATTRIBUTE_NAMES = new Set([
   'hidden',

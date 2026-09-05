@@ -5,7 +5,6 @@ responseSchema definitions. The provider returns validated JSON matching
 N-Eye's ActionProposal contract, leaving zero browser authority with the remote model.
 """
 
-import json
 from typing import Optional, Tuple
 import httpx
 from .base import (
@@ -18,9 +17,9 @@ from .base import (
     ProviderTimeoutError,
 )
 from ..schemas.safe_context import SafeContext
-from ..schemas.action_proposal import ActionProposal
 from ..prompts.system_prompt import build_planner_prompt, get_action_proposal_json_schema
 from ..security.unicode import encode_json_utf8, sanitize_json_value
+from .proposal_parse import coerce_action_proposal, extract_json_object, first_text_part
 
 
 class GeminiProviderAdapter(BaseProviderAdapter):
@@ -115,27 +114,24 @@ class GeminiProviderAdapter(BaseProviderAdapter):
 
             response_data = response.json()
 
-            # Extract generated content part
+            # Extract generated content part. Gemini thinking/tool parts may precede JSON text.
             candidates = response_data.get("candidates", [])
             if not candidates:
                 raise ProviderSchemaError("Gemini returned empty candidate list.")
 
             content_parts = candidates[0].get("content", {}).get("parts", [])
-            if not content_parts or "text" not in content_parts[0]:
-                raise ProviderSchemaError("Gemini returned candidate without valid text content.")
-
-            raw_text = content_parts[0]["text"].strip()
+            raw_text = first_text_part(content_parts)
 
             # Extract token usage metadata if provided
             usage = response_data.get("usageMetadata", {})
             input_tokens = usage.get("promptTokenCount")
             output_tokens = usage.get("candidatesTokenCount")
 
-            # Parse and validate against Pydantic ActionProposal
             try:
-                parsed_json = json.loads(raw_text)
-                proposal = ActionProposal.model_validate(parsed_json)
+                proposal = coerce_action_proposal(extract_json_object(raw_text))
                 return proposal, input_tokens, output_tokens
+            except ProviderSchemaError:
+                raise
             except Exception as parse_err:
                 raise ProviderSchemaError(
                     "Failed to parse Gemini output into ActionProposal."

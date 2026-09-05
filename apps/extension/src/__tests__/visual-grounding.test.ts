@@ -6,7 +6,7 @@ import {
   type OcrTextBlock,
   type RawElement,
 } from '@n-eye/protocol';
-import { applyFusionLabels, groundAndFuse, isVisualEvidenceStale } from '../perception/grounding.js';
+import { applyFusionLabels, groundAndFuse, isVisualEvidenceStale, transformRoiBoxToViewport } from '../perception/grounding.js';
 
 function button(id: string, label: string | null, bbox: { x: number; y: number; width: number; height: number }): RawElement {
   return {
@@ -150,5 +150,112 @@ describe('Visual grounding and DOM/OCR fusion', () => {
     expect(isVisualEvidenceStale(createPageEpoch(1), createPageEpoch(1), createFrameId('f1'), createFrameId('f2'))).toBe(
       true
     );
+  });
+
+  it('binds a small OCR word inside a large canvas via containment, not IoU', () => {
+    const canvas: RawElement = {
+      id: createElementId('e1'),
+      tagName: 'canvas',
+      role: 'canvas',
+      ariaLabel: null,
+      innerTextCandidate: null,
+      inputType: null,
+      isEnabled: true,
+      bbox: { x: 20, y: 20, width: 420, height: 72 },
+    };
+    const fused = groundAndFuse({
+      elements: [canvas],
+      ocrBlocks: [
+        {
+          text: 'NEXT STEP',
+          confidence: 0.91,
+          bbox: { x: 48, y: 36, width: 70, height: 18 },
+          roiId: 'roi_canvas_1',
+          pageEpoch: createPageEpoch(1),
+          blockId: 'b1',
+        },
+      ],
+      pageEpoch: createPageEpoch(1),
+    });
+    expect(fused.fusedElementIds).toContain('e1');
+    expect(applyFusionLabels([canvas], fused.candidates)[0]?.innerTextCandidate).toMatch(/NEXT STEP/i);
+  });
+
+  it('uses ROI ownership when the OCR box is degenerate', () => {
+    const canvas: RawElement = {
+      id: createElementId('e1'),
+      tagName: 'canvas',
+      role: 'canvas',
+      ariaLabel: null,
+      innerTextCandidate: null,
+      inputType: null,
+      isEnabled: true,
+      bbox: { x: 20, y: 20, width: 420, height: 72 },
+    };
+    const fused = groundAndFuse({
+      elements: [canvas],
+      ocrBlocks: [
+        {
+          text: 'NEXT STEP',
+          confidence: 0.9,
+          bbox: { x: 0, y: 0, width: 0, height: 0 },
+          roiId: 'roi_canvas_1',
+          pageEpoch: createPageEpoch(1),
+          blockId: 'b1',
+        },
+      ],
+      pageEpoch: createPageEpoch(1),
+      roiOwners: new Map([['roi_canvas_1', canvas.id]]),
+    });
+    expect(fused.fusedElementIds).toContain('e1');
+  });
+
+  it('scales OCR buffer pixels into CSS ROI space (DPR/tab-capture)', () => {
+    const css = transformRoiBoxToViewport(
+      { x: 10, y: 20, width: 420, height: 72 },
+      { x: 72, y: 40, width: 160, height: 40 },
+      { width: 840, height: 144 }
+    );
+    expect(css.x).toBeCloseTo(46, 5);
+    expect(css.y).toBeCloseTo(40, 5);
+    expect(css.width).toBeCloseTo(80, 5);
+    expect(css.height).toBeCloseTo(20, 5);
+  });
+
+  it('keeps 1x buffer pixels identical to CSS ROI space', () => {
+    const css = transformRoiBoxToViewport(
+      { x: 10, y: 20, width: 420, height: 72 },
+      { x: 36, y: 12, width: 80, height: 20 },
+      { width: 420, height: 72 }
+    );
+    expect(css).toEqual({ x: 46, y: 32, width: 80, height: 20 });
+  });
+
+  it('binds a small OCR word using scrolled viewport boxes (no extra scrollX)', () => {
+    const canvas: RawElement = {
+      id: createElementId('e1'),
+      tagName: 'canvas',
+      role: 'canvas',
+      ariaLabel: null,
+      innerTextCandidate: null,
+      inputType: null,
+      isEnabled: true,
+      bbox: { x: 20, y: 480, width: 420, height: 72 },
+    };
+    const fused = groundAndFuse({
+      elements: [canvas],
+      ocrBlocks: [
+        {
+          text: 'NEXT STEP',
+          confidence: 0.91,
+          bbox: { x: 48, y: 496, width: 70, height: 18 },
+          roiId: 'roi_canvas_1',
+          pageEpoch: createPageEpoch(1),
+          blockId: 'b1',
+        },
+      ],
+      pageEpoch: createPageEpoch(1),
+    });
+    expect(fused.fusedElementIds).toContain('e1');
   });
 });

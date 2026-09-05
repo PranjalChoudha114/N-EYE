@@ -1,0 +1,115 @@
+{
+  "manifest": {
+    "schemaVersion": "n-eye-bench/1",
+    "gate": "T019-T020",
+    "gitSha": "64638ad42da2fa401fa2f471d4f39e116770380f",
+    "gitShaShort": "64638ad",
+    "dirty": true,
+    "dirtySummary": [
+      "M apps/extension/src/__tests__/adaptive-perception.test.ts",
+      "M apps/extension/src/__tests__/canary.test.ts",
+      "M apps/extension/src/__tests__/completion-arbiter.test.ts",
+      "M apps/extension/src/__tests__/composite-search.test.ts",
+      "M apps/extension/src/__tests__/coordinates.test.ts",
+      "M apps/extension/src/__tests__/observer.test.ts",
+      "M apps/extension/src/__tests__/privacy.test.ts",
+      "M apps/extension/src/__tests__/regrounding.test.ts",
+      "M apps/extension/src/__tests__/risk-classifier.test.ts",
+      "M apps/extension/src/__tests__/trust-loop.test.ts",
+      "M apps/extension/src/authority/proposal-schema.ts",
+      "M apps/extension/src/authority/regrounding.ts",
+      "M apps/extension/src/authority/validator.ts",
+      "M apps/extension/src/content/observer.ts",
+      "M apps/extension/src/content/selectors.ts",
+      "M apps/extension/src/eval/pii-corpus.ts",
+      "M apps/extension/src/eval/privacy-bench.ts",
+      "M apps/extension/src/execution/executor.ts",
+      "M apps/extension/src/overlay/overlay-card.ts",
+      "M apps/extension/src/perception/adaptive-controller.ts"
+    ],
+    "timestamp": "2026-09-04T14:40:56.319Z",
+    "os": "Darwin 25.6.0",
+    "arch": "arm64",
+    "cpu": "unknown",
+    "ramBytes": 25769803776,
+    "node": "v26.7.0",
+    "pnpm": "11.24.0",
+    "python": "Python 3.14.6",
+    "browser": "happy-dom (automated) + Chrome unpacked MANUAL for product UI",
+    "ocrEngine": "tesseract.js@7",
+    "providerMode": "MOCK for task/planner benches; live Gemini not required",
+    "notes": [
+      "No personal device identifiers beyond CPU model / RAM class.",
+      "home redacted: [present]",
+      "macOS productVersion: 26.6",
+      "T009/T010 reports are historical and are not this gate’s RESULT files.",
+      "Chrome version is MANUAL / UNVERIFIED in this automated pack."
+    ]
+  },
+  "canary": {
+    "channels": [
+      {
+        "channel": "serialized-safecontext-or-blocked-payload",
+        "pass": true,
+        "hits": []
+      },
+      {
+        "channel": "privacy-summary",
+        "pass": true,
+        "hits": []
+      },
+      {
+        "channel": "privacy-receipt",
+        "pass": true,
+        "hits": []
+      },
+      {
+        "channel": "product-state-snapshot",
+        "pass": true,
+        "hits": []
+      },
+      {
+        "channel": "vault-realValue-not-in-safecontext",
+        "pass": true,
+        "hits": []
+      }
+    ],
+    "tested": 5,
+    "passed": 5
+  },
+  "reportCanaryPass": true,
+  "classLatency": {
+    "searchAffordance": {
+      "count": 40,
+      "min": 0.0009579999999687061,
+      "max": 0.017792000000042663,
+      "p50": 0.0010420000000408436,
+      "p95": 0.00770799999997962,
+      "mean": 0.002639525000004994
+    },
+    "indiaPrivacy": {
+      "count": 30,
+      "min": 0.0012499999999704414,
+      "max": 0.009749999999996817,
+      "p50": 0.0013339999999857355,
+      "p95": 0.006250000000022737,
+      "mean": 0.002044433333331123
+    },
+    "missingTargetCopy": {
+      "count": 30,
+      "min": 0.00012499999996862243,
+      "max": 0.015166999999962627,
+      "p50": 0.00016699999997626946,
+      "p95": 0.0012919999999780885,
+      "mean": 0.0007457999999966584
+    },
+    "reportBuild": {
+      "count": 20,
+      "min": 0.0027919999999994616,
+      "max": 0.025083999999992557,
+      "p50": 0.004542000000014923,
+      "p95": 0.02237499999995407,
+      "mean": 0.008864750000000754
+    }
+  }
+}

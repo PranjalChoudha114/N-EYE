@@ -9,6 +9,7 @@ import {
 } from '@n-eye/protocol';
 import type { PrivateTokenVault } from '../privacy/vault.js';
 import { assertProposalShape, MalformedProposalError } from './proposal-schema.js';
+import { isTypeTextCapable } from '../planner/mock-grammar.js';
 
 export class ActionValidationError extends Error {
   public readonly reasonCode: SecurityReasonCode;
@@ -37,7 +38,9 @@ const HIGH_CLICK_LABEL =
  *       "Continue". Structure (form submit control, file input) is not label-derived.
  */
 function structurallyConsequential(target: RawElement): boolean {
-  return target.inputType === 'submit' || target.inputType === 'file' || target.formSubmitting === true;
+  // Identity may record inputType=submit for <button type="submit">. HIGH still requires
+  // form association (or a file control). A standalone default button is not a form submit.
+  return target.inputType === 'file' || target.formSubmitting === true;
 }
 
 function maxRisk(a: RiskLevel, b: RiskLevel): RiskLevel {
@@ -56,7 +59,8 @@ export function classifyLocalRisk(proposal: ActionProposal, target?: RawElement)
   // Writing into a file input is an upload decision, whatever the action verb says.
   if (target.inputType === 'file') return 'HIGH';
 
-  if (proposal.type === 'CLICK' || proposal.type === 'SELECT') {
+  if (proposal.type === 'CLICK' || proposal.type === 'SELECT' || proposal.type === 'PRESS_ENTER') {
+    if (proposal.type === 'PRESS_ENTER') return 'HIGH';
     const label = `${target.innerTextCandidate || ''} ${target.ariaLabel || ''}`;
     if (structurallyConsequential(target) || HIGH_CLICK_LABEL.test(label)) {
       return 'HIGH';
@@ -76,7 +80,8 @@ export function validateActionProposal(
   scene: RawScene,
   vault: PrivateTokenVault,
   taskId: TaskId,
-  origin: string
+  origin: string,
+  tabId?: number
 ): ValidatedAction {
   if (!untrustedProposal || !untrustedProposal.actionId || !untrustedProposal.type) {
     throw new ActionValidationError(
@@ -163,6 +168,21 @@ export function validateActionProposal(
     }
   }
 
+  if (proposal.type === 'PRESS_ENTER') {
+    if (target.inputType === 'password' || target.inputType === 'file') {
+      throw new ActionValidationError(
+        'PRESS_ENTER is not permitted on password or file controls.',
+        'POLICY_VIOLATION'
+      );
+    }
+    if (!isTypeTextCapable(target)) {
+      throw new ActionValidationError(
+        `PRESS_ENTER target ${proposal.targetId} is not a typeable field.`,
+        'INVALID_TARGET'
+      );
+    }
+  }
+
   if (target.frameProvenance?.frameKind === 'inaccessible') {
     throw new ActionValidationError(
       `Target element ${proposal.targetId} belongs to an inaccessible frame. Execution blocked.`,
@@ -199,7 +219,7 @@ export function validateActionProposal(
     }
 
     const targetSemantic = target.inputType || target.role || target.tagName;
-    resolvedTokenValue = vault.resolve(tokenIdentifier, taskId, origin, targetSemantic);
+    resolvedTokenValue = vault.resolve(tokenIdentifier, taskId, origin, targetSemantic, tabId);
   }
 
   const approvedRiskLevel = maxRisk(classifyLocalRisk(proposal, target), proposal.riskLevel || 'LOW');

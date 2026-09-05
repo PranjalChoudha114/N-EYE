@@ -35,6 +35,11 @@ export interface PrivacyFinding {
   textSpan?: string;
   detector: string;
   reason: string;
+  /**
+   * false = sensitive control with no current value (empty password field).
+   * Omit or true = a value/pattern is present. Legacy fixtures omit this field.
+   */
+  valuePresent?: boolean;
 }
 
 export interface PrivacyDecision {

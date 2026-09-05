@@ -74,7 +74,13 @@ function searchScene(url = 'https://lab.example/form', extra: RawScene['elements
     pageEpoch: createPageEpoch(2),
     url,
     origin: 'https://lab.example',
-    title: 'Lab',
+    title: (() => {
+      try {
+        return new URL(url).searchParams.get('q') || 'Lab';
+      } catch {
+        return 'Lab';
+      }
+    })(),
     viewport: { width: 800, height: 600 },
     timestamp: Date.now(),
     elements: [
@@ -202,15 +208,15 @@ describe('Composite SEARCH / type-then-act', () => {
     expect(decision.message).toBe('Typed text and search action were verified locally.');
   });
 
-  it('CASE D: missing submit control is ASK_USER, not complete', async () => {
+  it('CASE D: missing unique submit control proposes constrained Enter, not false complete', async () => {
     const planner = new DeterministicPlanner();
     await planner.proposeAction(context('Search for OpenAI', [searchbox]));
     const afterType = await planner.proposeAction({
       ...context('Search for OpenAI', [searchbox]),
       priorOutcome: { actionId: createActionId('act_1'), status: 'VERIFIED', summary: 'matched' },
     });
-    expect(afterType.proposal.type).toBe('ASK_USER');
-    expect(afterType.proposal.reasoning).toMatch(/no unique search button/i);
+    expect(afterType.proposal.type).toBe('PRESS_ENTER');
+    expect(afterType.proposal.targetId).toBe(searchbox.id);
     const arbiter = arbitratePlannerComplete({
       goal: 'Search for OpenAI',
       verifiedCount: 1,
@@ -561,7 +567,7 @@ describe('ASK_USER Continue after composite search', () => {
     gate: { submit: 'unique' | 'none' | 'ambiguous' | 'replaced' };
   } {
     const counts = { typeText: 0, click: 0 };
-    const gate: { submit: 'unique' | 'none' | 'ambiguous' | 'replaced' } = { submit: 'none' };
+    const gate: { submit: 'unique' | 'none' | 'ambiguous' | 'replaced' } = { submit: 'ambiguous' };
     let typed = false;
     let submitted = false;
     const ports: PagePorts = {
@@ -584,7 +590,7 @@ describe('ASK_USER Continue after composite search', () => {
             typed = true;
             return { ok: true, data: { success: true, fieldState: 'MATCHED' } as T };
           }
-          if (message.action.proposal.type === 'CLICK') {
+          if (message.action.proposal.type === 'CLICK' || message.action.proposal.type === 'PRESS_ENTER') {
             counts.click += 1;
             submitted = true;
             return { ok: true, data: { success: true } as T };

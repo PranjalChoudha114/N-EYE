@@ -4,11 +4,13 @@
  */
 
 import type { ProductState, PipelineId } from '../runtime/ui-snapshot.js';
+import { actionValidationOf } from '../runtime/ui-snapshot.js';
 import { applyBuildIdentityToDom } from '../dev/build-identity.js';
 import { boundaryVisualization } from './privacy-summary.js';
 import { setSafeText } from './safe-text.js';
 import { iconMoon, iconSun, iconSystem, replaceIcon } from './icons.js';
 import type { ProductEls } from './shell.js';
+import { paintTaskReport } from './task-report-view.js';
 import { themeControlLabel, type ThemePref } from './theme.js';
 import { pipelineRailLabel, pipelineStageHelp } from './pipeline-copy.js';
 import {
@@ -26,7 +28,7 @@ export interface ProductUi {
   update(state: ProductState, extras?: { role?: 'owner' | 'view'; themePref?: ThemePref }): void;
   setDetailsOpen(open: boolean): void;
   detailsOpen(): boolean;
-  setTab(tab: 'activity' | 'privacy' | 'action' | 'evidence'): void;
+  setTab(tab: 'activity' | 'privacy' | 'action' | 'evidence' | 'report'): void;
 }
 
 const PIPELINE_IDS: PipelineId[] = ['SEE', 'PERCEIVE', 'PROTECT', 'THINK', 'VALIDATE', 'ACT', 'VERIFY'];
@@ -56,10 +58,10 @@ export function bindProductUi(els: ProductEls): ProductUi {
   let details = false;
 
   const tabButtons = Array.from(els.tabs.querySelectorAll<HTMLButtonElement>('[data-tab]'));
-  const tabOrder = ['activity', 'privacy', 'action', 'evidence'] as const;
+  const tabOrder = ['activity', 'privacy', 'action', 'evidence', 'report'] as const;
   let toastTimer = 0;
 
-  const setTab = (tab: 'activity' | 'privacy' | 'action' | 'evidence'): void => {
+  const setTab = (tab: 'activity' | 'privacy' | 'action' | 'evidence' | 'report'): void => {
     for (const btn of tabButtons) {
       const on = btn.dataset['tab'] === tab;
       btn.classList.toggle('is-active', on);
@@ -69,6 +71,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
     show(els.panelPrivacy, tab === 'privacy');
     show(els.panelAction, tab === 'action');
     show(els.panelEvidence, tab === 'evidence');
+    show(els.panelReport, tab === 'report');
   };
 
   const setDetailsOpen = (open: boolean): void => {
@@ -86,7 +89,13 @@ export function bindProductUi(els: ProductEls): ProductUi {
   for (const btn of tabButtons) {
     btn.addEventListener('click', () => {
       const tab = btn.dataset['tab'];
-      if (tab === 'activity' || tab === 'privacy' || tab === 'action' || tab === 'evidence') {
+      if (
+        tab === 'activity' ||
+        tab === 'privacy' ||
+        tab === 'action' ||
+        tab === 'evidence' ||
+        tab === 'report'
+      ) {
         setTab(tab);
       }
     });
@@ -171,13 +180,13 @@ export function bindProductUi(els: ProductEls): ProductUi {
     const extraLabel =
       state.phase === 'AWAITING_CONFIRMATION'
         ? 'Review'
-        : asking
-          ? 'Details'
-          : state.receipt
-            ? 'View result'
+        : state.taskReport && !state.running
+          ? 'View Report'
+          : asking
+            ? 'Details'
             : '';
     show(els.extra, Boolean(extraLabel) && !state.running);
-    setSafeText(els.extra, extraLabel || 'View result');
+    setSafeText(els.extra, extraLabel || 'View Report');
 
     show(els.receipt, Boolean(state.receiptView));
     els.receipt.replaceChildren();
@@ -328,6 +337,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
     els.actionView.replaceChildren();
     if (state.action) {
       const a = state.action;
+      const checks = actionValidationOf(a);
       els.actionView.append(row('AI proposes', a.proposalText));
       if (a.proposalType) els.actionView.append(row('Proposal type', a.proposalType));
       els.actionView.append(row('Target', a.targetLabel));
@@ -337,15 +347,15 @@ export function bindProductUi(els: ProductEls): ProductUi {
       if (a.confirmationRequired !== undefined) {
         els.actionView.append(row('Your approval', a.confirmationRequired ? 'Required' : 'Not required'));
       }
-      els.actionView.append(row('Target still current', yn(a.validation.targetCurrent)));
-      els.actionView.append(row('Frame still current', yn(a.validation.frameCurrent)));
-      els.actionView.append(row('Page still current', yn(a.validation.pageCurrent)));
-      els.actionView.append(row('Private reference still valid', yn(a.validation.tokenScopeValid)));
-      els.actionView.append(row('Risk policy', a.validation.riskPolicy || '—'));
+      els.actionView.append(row('Target still current', yn(checks.targetCurrent)));
+      els.actionView.append(row('Frame still current', yn(checks.frameCurrent)));
+      els.actionView.append(row('Page still current', yn(checks.pageCurrent)));
+      els.actionView.append(row('Private reference still valid', yn(checks.tokenScopeValid)));
+      els.actionView.append(row('Risk policy', checks.riskPolicy || '—'));
       els.actionView.append(
         row(
           'Checked the page again',
-          a.validation.targetCurrent === true ? 'Live target matched' : '—',
+          checks.targetCurrent === true ? 'Live target matched' : '—',
           undefined,
           'N-Eye rechecked the control before acting because webpages can change.'
         )
@@ -412,6 +422,15 @@ export function bindProductUi(els: ProductEls): ProductUi {
       ])
     );
     els.evidenceView.append(
+      group('Local intelligence', [
+        row('N-Eye Intelligence', ev.nalisVersion, undefined, 'Technical: local intelligence layer (historical internal identifier NI/NALIS)'),
+        row('Intelligence health', ev.nalisHealth),
+        row('Learned entries', String(ev.memoryCount)),
+        row('Learning', ev.learningEnabled ? 'On (session, generalized)' : 'Off'),
+        row('Reasoning path', ev.reasoningProvenance),
+      ])
+    );
+    els.evidenceView.append(
       group('Timing', [
         row('SEE', state.latency.see),
         row('PERCEIVE', state.latency.perceive),
@@ -421,6 +440,7 @@ export function bindProductUi(els: ProductEls): ProductUi {
         row('ACT', state.latency.act),
         row('VERIFY', state.latency.verify),
         row('TOTAL', state.latency.total),
+        row('Waiting for your approval', state.latency.approvalWait),
       ])
     );
     const jsonBlock = document.createElement('details');
@@ -433,6 +453,10 @@ export function bindProductUi(els: ProductEls): ProductUi {
     code.append(dump);
     jsonBlock.append(jsonSummary, code);
     els.evidenceView.append(jsonBlock);
+
+    paintTaskReport(els.reportView, state.taskReport);
+    const reportTab = tabButtons.find((btn) => btn.dataset['tab'] === 'report');
+    if (reportTab) show(reportTab, Boolean(state.taskReport));
 
     if (state.receipt) {
       const recBlock = document.createElement('details');
@@ -490,9 +514,8 @@ export function bindProductUi(els: ProductEls): ProductUi {
 
   els.extra.addEventListener('click', () => {
     setDetailsOpen(true);
-    setTab(
-      els.extra.textContent === 'Review' ? 'action' : els.extra.textContent === 'Details' ? 'privacy' : 'evidence'
-    );
+    const label = els.extra.textContent || '';
+    setTab(label === 'Review' ? 'action' : label === 'Details' ? 'privacy' : label === 'View Report' ? 'report' : 'evidence');
   });
 
   return { els, update, setDetailsOpen, detailsOpen: () => details, setTab };

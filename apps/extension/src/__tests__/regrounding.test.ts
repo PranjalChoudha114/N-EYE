@@ -19,7 +19,7 @@ describe('Live Re-Grounding Authority', () => {
   it('successfully re-grounds live mounted element with matching fingerprint', () => {
     const btn = document.getElementById('btn-submit') as HTMLButtonElement;
     const epoch = createPageEpoch(1);
-    const fp = createTargetFingerprint('button', 'button', null, 'Submit Application', {
+    const fp = createTargetFingerprint('button', 'button', 'submit', 'Submit Application', {
       xPercent: 10,
       yPercent: 10,
       widthPercent: 20,
@@ -36,7 +36,7 @@ describe('Live Re-Grounding Authority', () => {
   it('blocks re-grounding and throws TargetStaleError when target element is detached from DOM', () => {
     const btn = document.getElementById('btn-submit') as HTMLButtonElement;
     const epoch = createPageEpoch(1);
-    const fp = createTargetFingerprint('button', 'button', null, 'Submit Application', {
+    const fp = createTargetFingerprint('button', 'button', 'submit', 'Submit Application', {
       xPercent: 10,
       yPercent: 10,
       widthPercent: 20,
@@ -62,7 +62,7 @@ describe('Live Re-Grounding Authority', () => {
   it('reports fingerprint mismatch when live control semantics diverge', () => {
     const btn = document.getElementById('btn-submit') as HTMLButtonElement;
     const epoch = createPageEpoch(1);
-    const fp = createTargetFingerprint('button', 'button', null, 'Submit Application', {
+    const fp = createTargetFingerprint('button', 'button', 'submit', 'Submit Application', {
       xPercent: 10,
       yPercent: 10,
       widthPercent: 20,

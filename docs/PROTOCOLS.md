@@ -39,7 +39,7 @@ Strict allowlisted JSON object sent to remote planner:
 ### 2.5 ActionProposal (Zone 5 -> Zone 4 -> Zone 3: Untrusted Inbound)
 Structured next action suggestion returned by planner:
 - `actionId`: `ActionId`
-- `type`: `CLICK` | `TYPE_TOKEN` | `TYPE_TEXT` | `SCROLL` | `SELECT` | `WAIT` | `ASK_USER` | `COMPLETE`
+- `type`: `CLICK` | `TYPE_TOKEN` | `TYPE_TEXT` | `SCROLL` | `SELECT` | `PRESS_ENTER` | `WAIT` | `ASK_USER` | `COMPLETE`
 - `targetId`?: `ElementId`
 - `tokenId`?: `TokenId`
 - `tokenSymbol`?: string (e.g. `[EMAIL_1]`)

@@ -17,6 +17,16 @@ export interface SafeElement {
    * PRIVACY: Never a URL, hostname, or query string.
    */
   frameId?: FrameId;
+  /**
+   * Sanitized nearest region heading/legend. Ranking only — not live identity.
+   * PRIVACY: Secrets must already be stripped; never a raw email/password/canary.
+   */
+  regionHeading?: string;
+  /**
+   * True when this control submits an owning form.
+   * RISK: Structure, not label. Used for SEARCH_SUBMIT ranking.
+   */
+  formSubmitting?: boolean;
 }
 
 export interface TokenCapability {

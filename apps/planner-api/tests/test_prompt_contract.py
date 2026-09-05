@@ -26,11 +26,14 @@ REQUIRED_CLAUSES = [
     "Policy contract:",
     "For SELECT, set textValue",
     "For SCROLL, set scrollDelta",
+    "PRESS_ENTER",
+    "region heading",
+    "SCROLL is a bounded exploration",
 ]
 
 
 def test_prompt_contract_version_is_stable():
-    assert PROMPT_CONTRACT_VERSION == "n-eye-planner-policy/3"
+    assert PROMPT_CONTRACT_VERSION == "n-eye-planner-policy/5"
 
 
 def test_prompt_contract_contains_untrusted_data_clauses(sample_safe_context: SafeContext):

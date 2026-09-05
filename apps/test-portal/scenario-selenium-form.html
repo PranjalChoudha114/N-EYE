@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>N-Eye Test Portal — Selenium-like labeled form</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <div class="badge">N-EYE CONTROLLED TEST BENCH</div>
+      <h1>Labeled web form — FR1 fixture</h1>
+      <p class="subtitle">Mirrors official Selenium web-form control names. Not a site-specific product path.</p>
+    </header>
+    <main class="card form-card">
+      <form id="web-form" method="get" action="#" onsubmit="event.preventDefault(); document.getElementById('result-message').style.display='block';">
+        <div class="form-row">
+          <label class="form-label" for="my-text-id">Text input</label>
+          <input id="my-text-id" name="my-text" class="form-control" type="text">
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="my-password">Password</label>
+          <input type="password" id="my-password" name="my-password" class="form-control">
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="my-textarea">Textarea</label>
+          <textarea class="form-control" name="my-textarea" id="my-textarea"></textarea>
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="my-disabled">Disabled input</label>
+          <input class="form-control" type="text" name="my-disabled" id="my-disabled" disabled>
+        </div>
+        <div class="form-row">
+          <label class="form-label" for="my-readonly">Readonly input</label>
+          <input class="form-control" type="text" name="my-readonly" id="my-readonly" readonly value="Readonly input">
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-outline-primary" type="submit">Submit</button>
+        </div>
+      </form>
+      <p id="result-message" style="display:none">Form submitted.</p>
+    </main>
+  </div>
+</body>
+</html>

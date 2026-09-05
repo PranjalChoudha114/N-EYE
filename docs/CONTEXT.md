@@ -34,13 +34,13 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | Forensic P1: post-confirm unique semantic re-ground. Wikipedia-like Allow once Chrome retest: HUMAN REQUIRED. |
-| **Branch** | `main` |
-| **HEAD Commit** | This identity-repair commit. Rebuild `apps/extension/dist/` so Side Panel identity matches `git rev-parse --short HEAD` with no dirty `*` if the tree is clean. |
-| **Latest Verified Gate** | Post-confirm target identity: reminted eN is not a capability. TESTED. Real Chrome Allow once on search-submit: HUMAN REQUIRED. |
-| **Next Eligible Gate** | Human Chrome: wikipedia.org `Search for artificial intelligence` — Allow once after HIGH search-submit must click the live Search control. YouTube Continue still HUMAN REQUIRED. Scenario 08 visual-only Chrome still UNVERIFIED. |
-| **SIH Prototype Completion** | ~95% (planning estimate; hidden templates exist; Chrome owner-loop still MANUAL) |
-| **Core Architecture Completion** | ~95% (planning estimate) |
+| **Current Phase** | T029-R1 forensic repair (visual grounding + semantic affordances) on dirty `main` (HEAD `64638ad` plus uncommitted T025–T029 + R1). T030 not started. |
+| **Branch** | `main` (dirty until the T029-R1 commit lands) |
+| **HEAD Commit** | `64638ad42da2fa401fa2f471d4f39e116770380f` plus T025–T029 + R1 working tree. Dist after R1 rebuild: `DEV • 64638ad*` · `Built 2026-09-05T07:02:05.247Z (uncommitted source)`. |
+| **Latest Verified Gate** | T029-R1 automated: typecheck/lint PASS; protocol 27; extension **545**; planner-api 47; Judge-Kill original holdout JSON preserved 32/32 (`measuredAt` 2026-09-05T05:18:10.995Z); post-R1 re-eval 123/123 (`t029-r1-judge-kill.json`). P0 none. Scenario 08 Chrome remains HUMAN REQUIRED. Live Remote ENVIRONMENT BLOCKED (`ECONNREFUSED :8000`). |
+| **Next Eligible Gate** | Human fills `docs/evidence/T029-R1-REAL-CHROME-CHECKLIST.md` (especially RC08). T030 only after that evidence. See `docs/evidence/T029-T030-RESIDUAL-CHECKLIST.md`. |
+| **SIH Prototype Completion** | ~96% (planning estimate; Chrome owner-loop still MANUAL) |
+| **Core Architecture Completion** | ~96% (planning estimate) |
 | **Company-Product Completion** | ~26% (planning estimate) |
 
 ---
@@ -988,6 +988,11 @@ pnpm test
 17. **`PlanRequest.clientCapabilities`**: Pydantic `Dict[str, Any]` is an unused schema hole (not forwarded to Gemini as page content).
 18. **Cross-origin frame pixels**: N-Eye does not click approximate coordinates inside inaccessible iframes. Documented limitation, not a bypass.
 19. **True MV3 service-worker kill**: Architecture and hydrate tests exist. Real Chrome termination is MANUAL / UNVERIFIED.
+20. **Human Chrome FR1 / T029 / T029-R1 checklists**: `docs/evidence/T027-T028-MANUAL-CHECKLIST.md`, `T029-REAL-CHROME-CHECKLIST.md`, and `T029-R1-REAL-CHROME-CHECKLIST.md` are templates until a human fills PASS/FAIL. Node Judge-Kill is not Chrome E2E. Scenario 08 Chrome = UNVERIFIED until RC08.
+21. **Verifier URL/origin success (action-level)**: Any URL or origin change is still action `VERIFIED_SUCCESS` (query/hash stripped from evidence strings). **Task-level** SEARCH/NAVIGATE now refuse COMPLETE when `outcomeEvidenceHay` is present and does not mention the query/resource (T029-R1-F007). Generic click goals are unchanged.
+22. **TaskGraph vs trust-loop**: `createTaskGraph` is not called from `trust-loop.ts`. Live MULTI_STEP completion is interpreter + Mock + arbiter (T029-F009).
+23. **Untrusted Enter / closed shadow / CORS `*`**: REC-035, REC-036, CONTEXT CORS notes unchanged.
+24. **PROTOCOLS.md vs `PRESS_ENTER`**: Protocol source includes `PRESS_ENTER`; `docs/PROTOCOLS.md` did not name it as of T029 (documentation drift T029-F012). Source wins.
 
 ---
 
@@ -1448,7 +1453,7 @@ See [`docs/RUNBOOK.md`](file:///Users/pranjalchoudha/Desktop/N-Eye/docs/RUNBOOK.
 - Planner does not COMPLETE a pending search-submit because `stepCount >= 3`.
 - Search outcome proof is URL/origin transition (`verificationShowsNavigation`). Epoch, click(), dispatch, and field MATCHED are not enough.
 - Copy “Typed text and search action were verified locally.” only when typing and navigation are both locally proven.
-- Enter-key submit is **NOT_IMPLEMENTED** (REC-032). If the unique control click does not navigate, ASK_USER is honest.
+- Enter-key submit is **NOT_IMPLEMENTED** (REC-032). If the unique control click does not navigate, ASK_USER is honest. **Superseded in T025 (this working tree):** constrained `PRESS_ENTER` is IMPLEMENTED/TESTED (ADR-0014). Real-Chrome YouTube Enter remains UNVERIFIED.
 
 **UI:** Overlay/Side Panel presentation and hit-test repair not modified in this gate.
 
@@ -1500,3 +1505,333 @@ The Search control still looked like the approved target.
 
 **Build:** Reload unpacked `apps/extension/dist/` after this commit so Side Panel identity matches HEAD with no dirty `*`.
 
+---
+
+## 71. T025 + T026 (this working tree — uncommitted)
+
+**Date:** 2026-09-01
+**HEAD:** `64638ad42da2fa401fa2f471d4f39e116770380f`
+**Working tree:** dirty (`DEV • 64638ad*`). Dist: `Built 2026-09-01T15:36:37.589Z (uncommitted source)`. Reload this dist; do not reuse an older unpacked build.
+**Commit:** not created (mission default).
+
+### What this gate added
+
+- Zone-3 deterministic goal interpreter + task/subgoal state + recovery policy + intelligence router (ADR-0013).
+- Constrained `PRESS_ENTER` (protocol, schema, validator HIGH, executor `requestSubmit`/Enter-only, completion still needs navigation) (ADR-0014). Prompt contract `n-eye-planner-policy/4`.
+- REC-033: `HTMLButtonElement.type` in observer `inputType`. Live re-ground uses the same `inputTypeOf`. HIGH risk remains form-associated (`formSubmitting`) or file, not every default button.
+- Hidden descendants skipped in button/link visible labels.
+- Role `a` is click-capable (observer emits tagName as role for `<a>`).
+- Task-conditioned perception skip when the goal uniquely grounds on DOM; SafeContext ranking by goal hints (no password harvest).
+- Real-pixel OCR → fused canvas CLICK (`visual-pixels-ocr.test.ts`, Tesseract on `canvas-target.png`). Mock visual-action click still exists.
+- Local language model REJECT (ADR-0015). Admission bench vs regex baseline.
+- Remote parse: skip Gemini thought parts, strip markdown fences, drop harmless extra keys, reject authority-claim extras.
+
+### Evidence (this run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | 0 errors, 1 pre-existing warning (`real-gemini-integration.test.ts` console) |
+| protocol tests | 27 passed |
+| extension tests | 390 passed |
+| planner-api pytest | 44 passed (includes live Gemini this run) |
+| `pnpm build:extension` | PASS |
+| Live gateway `/v1/health` | `provider=gemini`, `model=gemini-2.5-flash` |
+| `real-gemini-integration.test.ts` | PASS: TYPE_TOKEN → local execute → VERIFIED_SUCCESS. Serialized SafeContext lacked `REAL_TEST_PASSWORD_X7K92` and raw email; contained `[EMAIL_1]`. `metadata.provider=gemini`. |
+| Real Chrome Side Panel | **UNVERIFIED** / HUMAN REQUIRED |
+
+### Honest residuals
+
+- Wikipedia Allow once Chrome: still HUMAN REQUIRED (post-confirm remint tests remain green).
+- YouTube Enter: IMPLEMENTED as generic PRESS_ENTER; untrusted KeyboardEvent may not submit; Chrome HUMAN REQUIRED.
+- GitHub “Open the N-EYE repository”: TESTED on synthetic unique `<a>` / role `a`; live GitHub HUMAN REQUIRED.
+- Scenario 08 real Chrome pixels → click: UNVERIFIED. Node Tesseract pixels → proposal → (separate) mock-OCR DOM click TESTED.
+- Capability routing is not the default UI (exclusive MOCK/REMOTE).
+- Perception still imports unique-target helpers from `mock-grammar` (layering smell, not a privacy import of planner transport).
+
+**Do not start T027 from this gate automatically.**
+
+---
+
+## 72. T025/T026-R1 semantic-region + exploration repair (this working tree — uncommitted)
+
+**Date:** 2026-09-02
+**HEAD:** `64638ad42da2fa401fa2f471d4f39e116770380f`
+**Working tree:** dirty (`DEV • 64638ad*`). Dist: `Built 2026-09-02T12:44:46.877Z (uncommitted source)`. Distinct from the prior T025/T026 dist (`Built 2026-09-01T15:36:37.589Z`). Reload this unpacked `apps/extension/dist/`.
+**Commit:** not created (mission default).
+
+### Fresh external Chrome failures (owner-reported; this agent did not re-run live Chrome)
+
+1. Wikipedia conventional search: worked.
+2. YouTube: search workflow reached; submit not reliable. Root cause was **not** proven on the live site in this run.
+3. AssertQA hostile multi-step: ASK_USER (safe). Isolated Dynamic ID Button failed after approval.
+
+### Proven first incorrect transitions (controlled)
+
+- **AssertQA Dynamic ID class:** D/E — semantic association / ranking. Goal named the region (“Dynamic ID Button”); the actionable child was “Click me”. Own-label scoring did not associate heading → child. Compounding: hint token `button` matched every `role=button`, so multi-button pages never reached a region pass. Opaque ID instability was **not** the first failure (fingerprint identity remains the control’s own label).
+- **YouTube search class (hypotheses tested separately, live site HUMAN REQUIRED):** icon/ARIA/SVG title and unique adjacent unlabeled submit are now generic SEARCH_SUBMIT signals. Duplicate labeled Search still ASK_USER. If the submit host is closed-shadow, observation cannot see it; PRESS_ENTER (`requestSubmit` or untrusted Enter) is the fallback. Untrusted KeyboardEvent limitation remains REC-035.
+- **Sibling:** region walk inherited a *later* section heading into an earlier form control (Search@Dynamic ID Button). Fixed by stopping at the nearest semantic region (form/section/…).
+- **Sibling:** TOKENIZE on a heading email rewrote the child button’s `safeLabel`. Fixed: rewrite only when the span is in the control’s own label.
+
+### Repair (general; no site selectors)
+
+- Optional sanitized `regionHeading` + `formSubmitting` on SafeElement (ranking/submit scoring only; **not** fingerprint identity). ADR-0016. Prompt contract `n-eye-planner-policy/5`.
+- Two-pass click grounding; chrome-noun hint filter; bounded exploration SCROLL (max 2); SCROLL ≠ click/search completion; pointer hit-test before CLICK; SVG title/aria as accessible name; open/nested open shadow tests; closed shadow not claimed.
+
+### Evidence (this run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | 0 errors, 1 pre-existing warning (`real-gemini-integration.test.ts` console) |
+| protocol tests | 27 passed |
+| extension tests | 426 passed (includes 10/10 primary demo rehearsal) |
+| planner-api pytest | 47 passed (this process; live Gemini gateway was **not** up — extension live test skipped `ECONNREFUSED :8000`) |
+| `pnpm build:extension` | PASS |
+| Observer 100-el bench | MEASURED this run: median 15.90 ms, p95 27.48 ms (development, not SIH formal) |
+| Real Chrome Side Panel | **UNVERIFIED** / HUMAN REQUIRED |
+
+### Demo
+
+- **Primary:** test-portal Scenario 15, goal `Click the Dynamic ID Button`. Automated rehearsal **10/10**. Real OCR is **not** on this primary path (DOM/region sufficient).
+- **Secondary:** same page `Click the painted CONTINUE control` (visual/OCR) and icon search / below-fold / overlay.
+- **Backup:** Mock + Scenario 01.
+
+**Do not start T027 from this gate automatically.**
+
+## 73. NALIS v1 — Adaptive Local Intelligence System (this working tree — uncommitted)
+
+**Date:** 2026-09-04
+**HEAD:** `64638ad42da2fa401fa2f471d4f39e116770380f`
+**Working tree:** dirty (`DEV • 64638ad*`). Dist rebuilt after this gate (new timestamp vs R1 `Built 2026-09-02T12:44:46.877Z`). Reload unpacked `apps/extension/dist/`.
+**Commit:** not created (mission default).
+**ADR:** [ADR-0017](decisions/ADR-0017-nalis.md). ADR-0015 local LM REJECT is **not** reversed.
+
+### Why NALIS exists
+
+Literal phrase rules cannot finish composite goals, false completion after the first verified subgoal, unlabeled affordances, bounded exploration loops, or user-specific “my repo” ranking — without weakening privacy or moving the authority boundary.
+
+### Current intelligence failures addressed (generalized)
+
+- Composite search-then-open stuffed the open clause into the query (or became UNSUPPORTED).
+- First subgoal verification was treated as task success.
+- No verification-gated local preference memory.
+- No compact affordance/forensic/health surface for local intelligence degradation.
+
+### Architecture (implemented)
+
+USER → Goal Intelligence → TaskGraph → session memory hints (optional) → Semantic UI / affordances → bounded exploration → DETERMINISTIC (local model unadmitted) → protected Remote if mode allows → ASK_USER → local authority → execute → observe → verify → learning eligibility gate → forensic/health.
+
+Intelligence **proposes**. Local N-Eye **retains authority**. Webpage, OCR, Remote, and any local model have **zero** execution or safety-policy authority.
+
+### Model admission
+
+Deterministic NALIS path is the admitted local reasoner. Chrome built-in LanguageModel: UNAVAILABLE in this environment. Transformers.js/ONNX: **REJECT** (no download; ADR-0015). Wrong-action penalty 8, false-completion 10 vs ASK_USER 1 (`apps/extension/src/intelligence/nalis-bench.ts`).
+
+### Privacy / personalization
+
+SESSION in-memory generalized episodes only. Sanitizer uses existing detectors/policy. Learning eligibility requires local verification. Page/Remote/model cannot write preference. Personalization cannot skip confirmation or lower risk. Clear/disable implemented. No vault reuse. No chrome.storage.
+
+### Evidence (this run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | 0 errors, 1 pre-existing warning (`real-gemini-integration.test.ts` console) |
+| protocol tests | 27 passed |
+| extension tests | 449 passed (includes 10/10 Scenario 15 demo rehearsal) |
+| planner-api pytest | 47 passed (live Gemini gateway **not** up — extension live test skipped `ECONNREFUSED :8000`) |
+| `pnpm build:extension` | PASS |
+| Dist identity | `DEV • 64638ad*` · `Built 2026-09-04T05:26:17.185Z (uncommitted source)` (distinct from R1 `2026-09-02T12:44:46.877Z`) |
+| Observer 100-el bench | MEASURED this run: median 4.68 ms, p95 8.53 ms (development, not SIH formal) |
+| Local neural model | **REJECT** / not downloaded |
+| Real Chrome Side Panel | **UNVERIFIED** / HUMAN REQUIRED |
+
+Independent adversarial review ([NALIS forensic review](7d389f03-93d8-49ab-912a-8a9505d8027b)): P0 composite step-count completion and fill-then-click collapse **fixed**; P1 forbidSubmit gate, opaque-id memory, capability dryRun **fixed**. Residual P2: TaskGraph/Semantic UI are not the trust-loop driver; identical-failure key still includes page epoch (pre-existing).
+
+### Open limitations
+
+- Real Chrome HUMAN REQUIRED (same as R1).
+- Session memory dies on reload; long-term persistence not admitted (REC-039).
+- Hindi/mixed language unsupported by the deterministic tokenizer (honest).
+- YouTube untrusted-Enter / closed shadow unchanged (REC-035/036).
+- Evidence rows only for learning controls (REC-038).
+
+**Do not start the normal T027 scoring lab from this gate automatically.**
+
+## 74. T027 + T028 — pre-score repair, View Report, 65%/35% labs (this working tree — uncommitted)
+
+**Date:** 2026-09-04
+**HEAD:** `64638ad42da2fa401fa2f471d4f39e116770380f`
+**Working tree:** dirty. Dist: `DEV • 64638ad*` · `Built 2026-09-04T08:33:41.284Z (uncommitted source)`. Reload unpacked `apps/extension/dist/`.
+**Commit:** not created (mission default).
+**ADR:** [ADR-0018](decisions/ADR-0018-verified-task-report.md). Human term **N-Eye Intelligence (NI)**; internal `nalis*` identifiers not broadly renamed (ADR-0017).
+**Hardware (this machine, not the Node `os.cpus()` empty model):** Apple M5 · 24 GB RAM · Darwin 25.6.0 · Node v26.7.0.
+
+### First-incorrect-transition (real-browser classes)
+
+| ID | Observed | Layer | First incorrect transition | Repair |
+|---|---|---|---|---|
+| A | `Cannot read properties of undefined (reading 'targetCurrent')` | SYSTEM LIFECYCLE / TARGET MATCHING | Execution-failure patch emitted `action` without `validation`; render read `validation.targetCurrent`. Missing target was thrown as an exception. | Missing `INVALID_TARGET` → typed ASK_USER (`TARGET_NOT_FOUND`); `mergeActionView` always supplies `validation`; human copy; no throw. |
+| B | YouTube-class: query typed, unique Search not found | UI MEANING / TARGET MATCHING | Search field required `type=search`/`role=searchbox`; unlabeled/SVG submit vs “Search with your voice” not scored as SEARCH_ACTION. | Generalized `isSearchField` (combobox/text + search name); unlabeled adjacent icon; voice/camera excluded. No youtube.com selector. Adjacent bonus does not break same-label Search ties. |
+| C | Dynamic ID click attempted; verification unresolved | OUTCOME VERIFICATION | Click can remint DOM `id` while label stays “Click me”; epoch-only is AMBIGUOUS by design. | Executor records live identity/ARIA change; CLICK + `targetIdentityChanged` → `VERIFIED_SUCCESS`. AssertQA Chrome still HUMAN REQUIRED. |
+| D | Scenario 08 pixel-only | VISUAL PERCEPTION | Required pixels → OCR → ground → act → verify without useful ARIA. | Automated fixture chain exists (`visual-pixels-ocr.test.ts`). Real Chrome Scenario 08 remains HUMAN REQUIRED. No hardcoded coordinates. |
+
+### View Report (ADR-0018)
+
+TASK → ledger events → fresh observation/verification → Report Verifier → human report. Facts require local events. Planner/page cannot author completion or privacy claims. View Report after every terminal task (Side Panel extra button + Report tab; overlay extra when not confirming).
+
+### T027 MEASURED (Node / fixtures — not a judge score)
+
+Dataset `t027-pii-corpus.v1` hash `63a35cd3f367227c` N=69. Holdout-shaped PAN `hold-pan` not used to retune. P1 repair: UPI no longer classifies `user@localhost` as `PII_ACCOUNT_ID`.
+
+Per-class F1 100.0% on implemented detectors **except** NAME/ADDRESS are labeled-field only (n_pos=1 each; free-text names still expected empty). Micro P/R/F1 100.0%. Sanitization 54/54 correct; residual leak 0; NEVER_SEND 24/24 leak 0; utility 68/69.
+
+Visual fixtures: cascade 7/7; grounding 7/7 (false=0, abstain=4); OCR 7/7; OCR p50 10.25 ms p95 27.89 ms n=7 (Tesseract.js). Pixel-only Chrome: LIMITATION.
+
+### T028 MEASURED (happy-dom / Node — not Chrome E2E)
+
+JS+CSS 292188 B uncompressed / 88650 B gzip PROXY; OCR assets 8123867 B; SafeContext 8280 B; screenshot outbound 0 B; heap proxy ~58.5 MB (Node `memoryUsage`, not Chrome RSS).
+
+Observation n=40 p50 5.75 p95 6.40 ms; privacy n=40 p50 0.02 p95 0.03; sanitization n=20 p50 0.42 p95 0.54; mock planner n=20 p50 0.02 p95 0.05; execution n=15 p50 0.20 p95 1.94; verification n=15 p50 5.61 p95 7.71. OCR cold warmup ~70 ms (visual pack).
+
+Canary (serialized SafeContext, summary, receipt, product snapshot, vault): PASS. Report/ledger canary: PASS. Live HTTP planner body: **not this run** (gateway `ECONNREFUSED :8000`).
+
+### Automated regression (this run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | 0 errors, 1 pre-existing warning (`real-gemini-integration.test.ts` console) |
+| protocol tests | 27 passed |
+| extension tests | 479 passed (includes 10/10 Scenario 15 demo rehearsal; missing-target; task-report matrix; Remote POST-body canary) |
+| planner-api pytest | 47 passed (live Gemini gateway **not** up) |
+| `pnpm build:extension` | PASS |
+| Live Remote / Chrome Side Panel | **UNVERIFIED** / HUMAN REQUIRED |
+
+### Forensic (independent assumptions)
+
+Tried: report lying; secret in ledger; visual DOM cheat; NI authority; false completion; holdout PAN retune; Remote payload leak. Automated: report claims without events are not FACT; canaries scrubbed from ledger; completion arbiter still rejects planner COMPLETE; hostile proposals still rejected (`proposal-adversarial`, `final-redteam`, planner `test_security`). P1 this pass: screenshot FACT now accepts evidence `PASS…` prefix (`PASS (0 Secrets Detected)`). Remote `/v1/plan` POST body canary is AUTOMATED ONLY (mocked fetch of the real serialized body). Residual: Chrome page↔report agreement UNVERIFIED; `targetIdentityChanged` could theoretically fire on SPA remint without user-visible copy change (limitation, not claimed as universal proof).
+
+**T029 later ran on this lineage** with the human Chrome checklist still empty (HUMAN EVIDENCE REQUIRED preserved; no fabricated Chrome PASS). See §76.
+
+## 75. T027/T028-FR1 — canonical control, AccName, TYPE→SUBMIT, typed evidence (this working tree — uncommitted)
+
+**Date:** 2026-09-04
+**HEAD:** `64638ad42da2fa401fa2f471d4f39e116770380f`
+**Working tree:** dirty. Dist: `DEV • 64638ad*` · `Built 2026-09-04T14:40:48.172Z (uncommitted source)`. Reload unpacked `apps/extension/dist/`.
+**Commit:** not created (mission: do not commit).
+**ADR:** [ADR-0019](decisions/ADR-0019-canonical-control-grounding.md). Complements ADR-0016/0018. No local LLM (ADR-0015).
+**Hardware:** Apple M5 · 24 GB RAM · Darwin 25.6.0 · Node v26.7.0 · pnpm 11.24.0.
+
+### First-incorrect-transition (FR1)
+
+| ID | Observed | Layer | First incorrect transition | Repair |
+|---|---|---|---|---|
+| F1 Selenium | No type, no submit; ASK_USER “more than one match”; Report `ask user on '—'` | TASK STATE then TARGET GROUNDING | `parseMultiStep` did not split `and submit the form`, so the field name included “submit”. TYPE haystack included `inputType`/`role`, so hint `text` tied Text input and Textarea. | Split `and submit`; `fieldIdentityHints("Text input field")` → phrase `text input`; AccName from `label[for]`; role `textbox`; identity haystack excludes type/role; Report never interpolates `—`. |
+| F2 YouTube | Query typed; unique Search not proven | AFFORDANCE / PLATFORM | Unlabeled/SVG vs voice already repaired in T027. Residual: unique Search or untrusted-event limitation. | No youtube.com hack. Controlled unlabeled/SVG fixtures. Chrome YouTube still HUMAN REQUIRED. |
+| F3 AssertQA | Click reached Do/Prove; verification uncertain | OUTCOME VERIFICATION | DOM id remint ≠ success (T027 `targetIdentityChanged`). | Unchanged this pass. Chrome HUMAN REQUIRED. |
+| F4 Scenario 03 | Missing target crashed `targetCurrent` | SYSTEM LIFECYCLE | T027 emptyValidation. | Regression retained. |
+| F8 Report | Screenshot FACT used `startsWith("PASS")` | REPORT | Human `PASS (0 Secrets Detected)` vs typed PASS. | `evidence.egressAudit` is authoritative. |
+| F9 Privacy | Blank Selenium form “private findings” | PRIVACY | `type=password` + label “Password” counted as values. | `hasValue` / `valuePresent`; Report DETECTED values vs empty controls. NEVER_SEND unchanged. |
+| F10 False complete | TYPE→SUBMIT completed after type | TASK STATE / ARBITER | `toMockIntent` MULTI_STEP was `type_text`; arbiter completed on MATCHED. | SUBMIT subgoal requires verified click after TYPE. |
+
+### Automated (this FR1 run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | 0 errors, 1 pre-existing warning (`real-gemini-integration.test.ts` console) |
+| protocol tests | 27 passed |
+| extension tests | 507 passed |
+| planner-api pytest | 47 passed |
+| `pnpm build:extension` | PASS · `DEV • 64638ad*` · `Built 2026-09-04T14:40:48.172Z (uncommitted source)` |
+| Control-vs-value vs T027 PII | Micro P/R/F1 still 100% on `t027-pii-corpus.v1` (corpus passwords are values / type=password TP; empty-control distinction is Report-layer) |
+| Live Remote / Chrome | **UNVERIFIED** / HUMAN REQUIRED |
+
+Human Chrome FR1 remaining **HUMAN EVIDENCE REQUIRED**. T029 continued without fabricating Chrome PASS. See §76.
+
+## 76. T029 — National Judge-Kill + forensic audit (this working tree — uncommitted)
+
+**Date:** 2026-09-05
+**HEAD:** `64638ad42da2fa401fa2f471d4f39e116770380f`
+**Working tree:** dirty (`DEV • 64638ad*`). Dist rebuilt: `Built 2026-09-05T05:17:41.318Z (uncommitted source)`. Reload unpacked `apps/extension/dist/`.
+**Commit / push / tag:** no / no / no (mission default).
+**Hardware:** Apple M5 · 24 GB · Darwin 25.6.0 · macOS 26.6 (25G72) · Node v26.7.0 · pnpm 11.24.0 · Python 3.14.6.
+**Precondition:** `docs/evidence/T027-T028-MANUAL-CHECKLIST.md` exists as a template with **empty PASS/FAIL**. Human Chrome FR1 = **HUMAN EVIDENCE REQUIRED**. T029 continued without fabricating Chrome PASS. That remains a T030 release blocker.
+
+Artifacts: `docs/evidence/T029-MASTER-REPORT.md`, `T029-JUDGE-KILL-MATRIX.md`, `T029-FORENSIC-DEFECT-LEDGER.md`, `T029-FROZEN-HOLDOUT-MANIFEST.md`, `T029-HOLDOUT-RESULTS.md`, `T029-PERFORMANCE-RESOURCE-DELTA.md`, `T029-PRIVACY-SECURITY-RESULTS.md`, `T029-REAL-CHROME-CHECKLIST.md`, `T029-T030-RESIDUAL-CHECKLIST.md`. Bench: `bench/judge-kill/t029-judge-kill.json` (`measuredAt` 2026-09-05T05:18:10.995Z).
+
+### Forensic first-incorrect-transitions (repaired)
+
+| ID | Severity | First incorrect transition | Generalized repair | Regression |
+|---|---|---|---|---|
+| T029-F001 / R1 | P1 | `and click Continue` absorbed into TYPE field name | Split TYPE/FILL/SELECT then click\|submit\|continue\|select without stealing search/open | `goal-interpreter.test.ts`, `t029-repairs.test.ts` R1 |
+| T029-F002 | P1 | Remaining `ACTIVATE_TARGET` ignored after TYPE MATCHED | MULTI_STEP tail activate/CONTINUE blocks type-only COMPLETE | `completion-arbiter.test.ts` |
+| T029-F003 / R5 | P1 | SELECT then continue mapped to click-first or completed after SELECT | Preserve `optionText`; Mock SELECT then unique tail click; remaining `CONTINUE` unfinished | `t029-repairs.test.ts` R5 |
+| T029-F004 | P1 | PRESS_ENTER + navigation completed unrelated click goals | PRESS_ENTER is not click-goal success | `completion-arbiter.test.ts` |
+| T029-F005 / R2 | P1 | Reminted `eN` + control-set length = CLICK success | Semantic-identity match; churn → AMBIGUOUS | `t029-repairs.test.ts` R2 |
+| T029-F006 / R3 | P1 | Raw URL query/hash in `observedDelta` / `priorOutcome` | `safeUrlEvidence` origin+path | `t029-repairs.test.ts` R3 |
+| T029-F007 / R4 | P1 | Empty OTP/label findings counted as values | `valuePresent: hasValue === true` | `privacy.test.ts` |
+| T029-F008 | P1 | Vault `tabId` unused; `allowed === '*'` | Optional tabId on resolve; no wildcard | `vault.test.ts` |
+
+No confirmed P0. Remaining P2: TaskGraph not trust-loop driver (F009); any URL/origin change still success (F010 / REC-048). PRESS_ENTER listed in `docs/PROTOCOLS.md` this gate (F012 drift closed).
+
+### Judge-Kill corpus `t029-judge-kill/1`
+
+Holdout IDs frozen in `docs/evidence/T029-FROZEN-HOLDOUT-MANIFEST.md` **before** scoring. Corpus is **new this gate**; no pre-repair holdout number. First score is post-repair **TESTED** (Node/happy-dom), **not** Chrome E2E.
+
+| Split | N | Pass | Classification |
+|---|---:|---:|---|
+| Development | 91 | 91 | TESTED |
+| Frozen holdout | 32 | 32 | TESTED (first scoring of this freeze) |
+| Total | 123 | 123 | TESTED |
+
+False-completion unit fails on this harness: 0. Chrome wrong-action / verified-task-success rates: **UNVERIFIED**.
+
+### Automated (this T029 run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` | PASS |
+| `pnpm lint` | 0 errors, 1 pre-existing warning (`real-gemini-integration.test.ts` console) |
+| protocol tests | 27 passed |
+| extension tests | 523 passed |
+| planner-api pytest | 47 passed |
+| `pnpm build:extension` | PASS · `DEV • 64638ad*` · `Built 2026-09-05T05:17:41.318Z (uncommitted source)` |
+| `pnpm bench:t029` | PASS · 123/123 · JSON rewritten this run |
+| Observer 100-el bench | MEASURED: median 6.68 ms, p95 12.09 ms (development, not SIH formal) |
+| Dist JS+CSS | MEASURED file sizes: 305117 B uncompressed (Python gzip PROXY 90811 B; method ≠ T028 `gzipSync`) |
+| Live Remote / Chrome Side Panel | **UNVERIFIED** / HUMAN REQUIRED / gateway `ECONNREFUSED :8000` |
+
+**Do not start T030 automatically.** Residue: `docs/evidence/T029-T030-RESIDUAL-CHECKLIST.md`.
+
+## 77. T029-R1 — Real-Chrome forensic repair (this working tree)
+
+**Date:** 2026-09-05
+**HEAD before R1 commit:** `64638ad42da2fa401fa2f471d4f39e116770380f`
+**Dist:** `DEV • 64638ad*` · `Built 2026-09-05T07:02:05.247Z (uncommitted source)`. Reload unpacked `apps/extension/dist/`.
+**Verdict:** CONDITIONAL PASS (automated). Scenario 08 / composite live sites / Remote = HUMAN REQUIRED or ENVIRONMENT BLOCKED.
+
+Artifacts: `docs/evidence/T029-R1-MASTER-REPORT.md`, `T029-R1-FORENSIC-LEDGER.md`, `T029-R1-REAL-CHROME-CHECKLIST.md`, `T029-R1-POST-REPAIR-EVALUATION.md`, `T029-R1-VISUAL-GROUNDING-TRACE.md`, `T029-R1-AFFORDANCE-AUDIT.md`. Original T029 holdout JSON **unchanged** (`measuredAt` 2026-09-05T05:18:10.995Z). Post-R1 bench: `bench/judge-kill/t029-r1-judge-kill.json`.
+
+### Scenario 08 FIT
+
+`groundAndFuse` IoU/center-distance failed for a small OCR word inside a large canvas → unlabeled → ASK_USER despite on-device OCR. Repair: VisualBindingScore (containment + ROI owner + uniqueness margin) + buffer→CSS scale. No CONTINUE / scenario-08 / coordinates.
+
+### Other R1 repairs
+
+Exact AccName uniqueness; SEARCH_COMMIT popup option/treeitem; Report action vs task; empty-password wording; phone precision; task-level wrong-destination; aria-controls popup collect; treeitem selector.
+
+### Automated (this R1 run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` / `pnpm lint` | PASS / 0 errors (1 pre-existing console warning) |
+| protocol / extension / planner-api | 27 / **545** / 47 |
+| `pnpm build:extension` | PASS · Built 2026-09-05T07:02:05.247Z |
+| Original holdout / R1 re-eval | 32/32 preserved / 123/123 TESTED |
+| Observer p95 this run | 8.63 ms MEASURED (dev) |
+| Live Remote / Chrome RC08 | ENVIRONMENT BLOCKED / HUMAN REQUIRED |
+
+**Do not start T030.** Human must execute `T029-R1-REAL-CHROME-CHECKLIST.md`.

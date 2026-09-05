@@ -1,6 +1,7 @@
 import type { ExecutionEvidence, FieldValueState, ValidatedAction } from '@n-eye/protocol';
 import type { ElementRegistry } from '../content/registry.js';
 import { assertLiveAuthority, findUniqueLiveTarget, regroundTarget, TargetStaleError } from '../authority/regrounding.js';
+import { clickHitTest } from './hit-test.js';
 
 export const MAX_SCROLL_EXECUTE_PX = 800;
 
@@ -110,6 +111,75 @@ function isScrollContainer(node: HTMLElement): boolean {
   const canY = (overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight + 1;
   const canX = (overflowX === 'auto' || overflowX === 'scroll') && node.scrollWidth > node.clientWidth + 1;
   return canY || canX;
+}
+
+function dispatchEnterKey(node: HTMLElement): void {
+  const init: KeyboardEventInit = {
+    key: 'Enter',
+    code: 'Enter',
+    keyCode: 13,
+    which: 13,
+    bubbles: true,
+    cancelable: true,
+  };
+  node.dispatchEvent(new KeyboardEvent('keydown', init));
+  node.dispatchEvent(new KeyboardEvent('keypress', init));
+  node.dispatchEvent(new KeyboardEvent('keyup', init));
+}
+
+function isNativeSubmitter(node: HTMLElement): node is HTMLButtonElement | HTMLInputElement {
+  if (node instanceof HTMLButtonElement) return node.type === 'submit';
+  if (node instanceof HTMLInputElement) return node.type === 'submit' || node.type === 'image';
+  return false;
+}
+
+/**
+ * Activate a control with native submitter semantics when it owns a form.
+ * WHY: button.click() can skip HTML submitter/validation pairing; form.submit() skips validation.
+ * MUST NOT: chrome.debugger. Custom non-form widgets keep node.click().
+ */
+function executePointerActivation(node: HTMLElement): void {
+  if ((node as HTMLButtonElement).disabled || node.getAttribute('aria-disabled') === 'true') {
+    throw new Error('Target is disabled.');
+  }
+  const form =
+    (node instanceof HTMLButtonElement || node instanceof HTMLInputElement) && node.form
+      ? node.form
+      : null;
+  if (form && isNativeSubmitter(node) && typeof form.requestSubmit === 'function') {
+    try {
+      form.requestSubmit(node);
+      return;
+    } catch {
+      node.click();
+      return;
+    }
+  }
+  node.click();
+}
+
+/**
+ * Constrained implicit submit (Zone 1).
+ * WHY: Some search/forms submit on Enter rather than a unique visible button.
+ * TRUST: Only Enter, only on a locally validated typeable target. Never planner-chosen keys.
+ * Prefer form.requestSubmit() (HTML implicit submit) over untrusted KeyboardEvents.
+ */
+function executeConstrainedEnter(node: HTMLElement): ExecutionResult {
+  const form =
+    node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement
+      ? node.form
+      : node.closest('form');
+  if (form instanceof HTMLFormElement && typeof form.requestSubmit === 'function') {
+    try {
+      form.requestSubmit();
+      return { success: true, targetTag: node.tagName.toLowerCase(), outcome: 'SAFE_REGROUND' };
+    } catch {
+      dispatchEnterKey(node);
+      return { success: true, targetTag: node.tagName.toLowerCase(), outcome: 'SAFE_REGROUND' };
+    }
+  }
+  dispatchEnterKey(node);
+  return { success: true, targetTag: node.tagName.toLowerCase(), outcome: 'SAFE_REGROUND' };
 }
 
 function executeViewportScroll(dx: number, dy: number): ExecutionResult {
@@ -288,8 +358,40 @@ export function executeValidatedAction(
       liveNode.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' as ScrollBehavior });
       liveNode.focus();
       assertLiveAuthority(liveNode, action.expectedFingerprint, action.expectedFrameId);
-      liveNode.click();
-      return { success: true, targetTag: liveNode.tagName.toLowerCase(), outcome: 'SAFE_REGROUND' };
+      const hit = clickHitTest(liveNode);
+      if (!hit.ok) {
+        return {
+          success: false,
+          error: 'Pointer target is occluded. N-Eye will not hammer-click through an overlay.',
+          outcome: 'REOBSERVE',
+          targetTag: liveNode.tagName.toLowerCase(),
+        };
+      }
+      // WHY: Dynamic-id widgets keep the same label; the live node id/ARIA is the correlated effect.
+      const beforeDomId = liveNode.id;
+      const beforePressed = liveNode.getAttribute('aria-pressed');
+      const beforeExpanded = liveNode.getAttribute('aria-expanded');
+      const beforeDisabled = liveNode.hasAttribute('disabled');
+      executePointerActivation(liveNode);
+      const identityChanged =
+        !liveNode.isConnected ||
+        liveNode.id !== beforeDomId ||
+        liveNode.getAttribute('aria-pressed') !== beforePressed ||
+        liveNode.getAttribute('aria-expanded') !== beforeExpanded ||
+        liveNode.hasAttribute('disabled') !== beforeDisabled;
+      return {
+        success: true,
+        targetTag: liveNode.tagName.toLowerCase(),
+        outcome: 'SAFE_REGROUND',
+        targetIdentityChanged: identityChanged,
+      };
+    }
+
+    if (proposal.type === 'PRESS_ENTER') {
+      liveNode.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' as ScrollBehavior });
+      liveNode.focus();
+      assertLiveAuthority(liveNode, action.expectedFingerprint, action.expectedFrameId);
+      return executeConstrainedEnter(liveNode);
     }
 
     if (proposal.type === 'SELECT') {

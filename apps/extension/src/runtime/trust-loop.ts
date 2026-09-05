@@ -31,7 +31,7 @@ import { validateSafeContextEgress } from '../privacy/egress-guard.js';
 import { PlannerManager } from '../planner/planner-manager.js';
 import type { GatewayHealth, PlannerMode } from '../planner/types.js';
 import { PLANNER_MAX_ATTEMPTS } from '../planner/transport-error.js';
-import { validateActionProposal } from '../authority/validator.js';
+import { validateActionProposal, ActionValidationError } from '../authority/validator.js';
 import {
   buildConfirmationBinding,
   ConfirmationBroker,
@@ -39,8 +39,13 @@ import {
   verifyConfirmationBinding,
 } from '../authority/confirmation.js';
 import { SecurityLog } from '../authority/security-log.js';
-import { verifyActionExecution, verificationShowsNavigation } from '../verification/verifier.js';
+import { verifyActionExecution, verificationShowsNavigation, safeUrlEvidence } from '../verification/verifier.js';
 import { shouldStopAfterUnverifiedHighRisk } from '../verification/idempotency.js';
+import {
+  beginRecoveryBudget,
+  identicalFailureKey,
+  shouldAbstainAfterFailure,
+} from '../intelligence/recovery-policy.js';
 import { applyFusionLabels, runPerception } from '../perception/index.js';
 import type { OcrEngine } from '../perception/ocr-engine.js';
 import {
@@ -74,15 +79,21 @@ import { buildPrivacySummary } from '../ui/privacy-summary.js';
 import { mapReceiptView } from '../ui/receipt-map.js';
 import { toastFromEvent, toastFromPhase } from '../ui/notification-map.js';
 import { describeAction } from '../ui/action-copy.js';
+import { ENGINE_FAILURE_HUMAN, MISSING_TARGET_HUMAN, isEngineExceptionText } from '../ui/human-copy.js';
 import {
   createIdleState,
   emptyEvidence,
+  emptyValidation,
   idlePipeline,
+  isTerminalOutcome,
   markSessionInterrupted,
+  mergeActionView,
   stripQuery,
   type PipelineId,
   type ProductState,
 } from './ui-snapshot.js';
+import { EvidenceLedger } from './evidence-ledger.js';
+import { buildVerifiedTaskReport } from './task-report.js';
 import { delay, executeOnTab, probeFieldOnTab, type PagePorts } from './page-ports.js';
 import { abortableDelay } from './abortable-delay.js';
 import {
@@ -93,9 +104,16 @@ import {
   pipelineForVerifiedCompletion,
 } from './completion-arbiter.js';
 import { parseMockGoal, pickUniqueTypeTextTarget } from '../planner/mock-grammar.js';
+import { interpretGoal, scoreLabelAgainstHints } from '../intelligence/goal-interpreter.js';
+import { evaluateLearningEligibility, getNalisMemory } from '../intelligence/memory.js';
+import { beginForensicTrace, getForensicTrace, humanHealthLine, snapshotNalisHealth } from '../intelligence/forensic.js';
 
 export const MAX_STEPS = 8;
 export const WAIT_SETTLE_MS = 400;
+
+function sceneOutcomeHay(scene: RawScene): string {
+  return `${safeUrlEvidence(scene.url)} ${scene.title || ''}`;
+}
 
 export interface TrustLoopDeps {
   ports: PagePorts;
@@ -118,6 +136,7 @@ export class TrustLoopController {
   private readonly assuranceBus = new AssuranceBus();
   private readonly confirmations = new ConfirmationBroker();
   private readonly securityLog = new SecurityLog();
+  private readonly ledger = new EvidenceLedger();
   private state: ProductState = createIdleState();
   private tab: TabInfo | null = null;
   private abort: AbortController | null = null;
@@ -312,6 +331,15 @@ export class TrustLoopController {
    */
   private enterAskUser(detail: string, extra?: Partial<ProductState>): void {
     const view = buildAskUserView(detail);
+    if (view.reason === 'TARGET_NOT_FOUND' || view.reason === 'NO_SUPPORTED_ACTION') {
+      this.ledger.record('TARGET_NOT_FOUND', 'TARGET MATCHING', view.reason);
+    }
+    if (view.reason === 'PARTIAL_GOAL' || view.reason === 'SEARCH_SUBMIT_MISSING') {
+      this.ledger.record('PARTIAL_OUTCOME', 'OUTCOME VERIFICATION', view.reason);
+    }
+    if (view.reason === 'ENGINE_FAILURE') {
+      this.ledger.record('TASK_FAILED', 'SYSTEM LIFECYCLE', 'engine-exception');
+    }
     this.applyPhase('ASK_USER', view.message);
     this.patch({
       askUser: view,
@@ -397,6 +425,7 @@ export class TrustLoopController {
         return;
       }
       this.applyPhase('COMPLETED', decision.message);
+      this.ledger.record('OUTCOME_VERIFIED', 'OUTCOME VERIFICATION', decision.kind, { status: 'VERIFIED' });
       this.patch({
         toast: toastFromPhase(
           'COMPLETED',
@@ -410,6 +439,7 @@ export class TrustLoopController {
         evidence: {
           ...this.state.evidence,
           verificationResult: decision.alreadySatisfied ? 'ALREADY_SATISFIED' : 'VERIFIED_SUCCESS',
+          ...this.nalisEvidenceFields(),
         },
         action: this.state.action
           ? {
@@ -419,15 +449,89 @@ export class TrustLoopController {
             }
           : this.state.action,
       });
+      if (!decision.alreadySatisfied) {
+        getForensicTrace()?.append('VERIFICATION_COMPLETED', 'local arbiter VERIFIED_SEQUENCE');
+        this.maybeLearnVerifiedPreference();
+      }
       return;
     }
     this.patch({ pipeline: pipelineForUnprovenComplete(this.state.pipeline) });
+    this.ledger.record('PARTIAL_OUTCOME', 'OUTCOME VERIFICATION', decision.kind);
     this.enterAskUser(decision.message, {
       step: { index: step, max: MAX_STEPS, summary: decision.message },
       action: this.state.action
         ? { ...this.state.action, verification: 'AMBIGUOUS', verificationDelta: decision.message }
         : this.state.action,
     });
+  }
+
+  private nalisEvidenceFields(): Pick<
+    ProductState['evidence'],
+    'nalisVersion' | 'nalisHealth' | 'memoryCount' | 'learningEnabled'
+  > {
+    const health = snapshotNalisHealth();
+    return {
+      nalisVersion: health.version,
+      nalisHealth: humanHealthLine(health),
+      memoryCount: getNalisMemory().size(),
+      learningEnabled: getNalisMemory().isEnabled(),
+    };
+  }
+
+  private isMissingTargetFailure(err: unknown): boolean {
+    if (!(err instanceof ActionValidationError)) return false;
+    if (err.reasonCode !== 'INVALID_TARGET') return false;
+    return /was not found|requires a targetId/i.test(err.message);
+  }
+
+  private sealTaskReport(taskId: string): void {
+    if (this.state.running) return;
+    if (!isTerminalOutcome(this.state.phase) && this.state.phase !== 'COMPLETED') return;
+    this.ledger.record('REPORT_VERIFIED', 'REPORT GENERATION', `result-phase=${this.state.phase}`);
+    let buildId = '—';
+    try {
+      buildId = chrome.runtime.getManifest().version_name || '—';
+    } catch {
+      buildId = '—';
+    }
+    const report = buildVerifiedTaskReport({
+      state: this.state,
+      ledger: this.ledger,
+      taskId,
+      buildId,
+    });
+    this.patch({ taskReport: report });
+  }
+
+  /**
+   * Learn only possessive resource preferences after local verification.
+   * TRUST: Page/Remote text never enters this path. Risk/confirmation cannot be stored.
+   */
+  private maybeLearnVerifiedPreference(): void {
+    const interpreted = interpretGoal(this.state.goal || '');
+    if (interpreted.preferenceHint !== 'POSSESSIVE_RESOURCE') return;
+    const label = this.state.action?.targetLabel || '';
+    if (!label || /^e\d+$/i.test(label) || /\b(delete|remove|confirm|allow|submit|password)\b/i.test(label)) {
+      getForensicTrace()?.append('LEARNING_BLOCKED', 'unsafe-or-empty-label');
+      return;
+    }
+    const verdict = evaluateLearningEligibility({
+      locallyVerified: true,
+      plannerClaimedComplete: false,
+      userCorrected: false,
+      userReversed: false,
+      source: 'VERIFIED_TASK_OUTCOME',
+      privacyBlocked: false,
+    });
+    const stored = getNalisMemory().record({
+      verdict,
+      generalizedGoal: 'possessive-resource',
+      generalizedIntent: interpreted.family,
+      originScope: this.state.origin || this.state.siteHostname || '',
+      semanticUiPattern: 'OPEN_RESOURCE',
+      successfulStrategy: label.slice(0, 80),
+    });
+    getForensicTrace()?.append(stored ? 'MEMORY_UPDATED' : 'LEARNING_BLOCKED', stored ? stored.id : verdict.reason);
   }
 
   private setPipeline(id: PipelineId, visual: ProductState['pipeline'][PipelineId]): void {
@@ -454,9 +558,17 @@ export class TrustLoopController {
         dedupeKey: `blocked-sec:${reasonCode}:${event.timestamp}`,
         timestamp: event.timestamp,
       }),
-      action: this.state.action
-        ? { ...this.state.action, blockedReason: event.detail, securityReason: reasonCode }
-        : this.state.action,
+      action: mergeActionView(this.state.action, {
+        blockedReason: event.detail,
+        securityReason: reasonCode,
+        validation: this.state.action?.validation ?? {
+          targetCurrent: false,
+          frameCurrent: false,
+          pageCurrent: true,
+          tokenScopeValid: false,
+          riskPolicy: reasonCode,
+        },
+      }),
       evidence: { ...this.state.evidence, securityReason: reasonCode, validationResult: reasonCode },
     });
   }
@@ -599,13 +711,21 @@ export class TrustLoopController {
     this.vault.clear();
     this.planner.reset();
     this.clearLiveEvidence();
+    const trace = beginForensicTrace();
+    const parsed = interpretGoal(rawGoal);
+    const taskId = createTaskId(`task_${Date.now()}`);
+    this.ledger.begin(taskId);
+    this.ledger.record('TASK_RECEIVED', 'USER INTENT', `goal-len=${rawGoal.length}`);
+    this.ledger.record('TASK_UNDERSTOOD', 'USER INTENT', `family=${parsed.family}`);
+    this.ledger.record('LOCAL_INTELLIGENCE_USED', 'TASK PLANNING', 'deterministic interpreter');
+    trace.append('GOAL_PARSED', `${parsed.family} conf=${parsed.confidence.toFixed(2)}`);
+    trace.append('TASKGRAPH_CREATED', `subgoals=${parsed.subgoals.length}`);
 
     this.abort = new AbortController();
     const signal = this.abort.signal;
     const taskGeneration = ++this.taskGeneration;
     this.completionAlreadySatisfied = false;
 
-    const taskId = createTaskId(`task_${Date.now()}`);
     this.patch({
       running: true,
       canRun: false,
@@ -614,6 +734,7 @@ export class TrustLoopController {
       pipeline: idlePipeline(),
       toast: null,
       askUser: null,
+      taskReport: null,
     });
 
     let priorOutcome: SafeContext['priorOutcome'] | undefined;
@@ -624,6 +745,11 @@ export class TrustLoopController {
     let lastFieldState: FieldValueState | undefined;
     let verifiedClick = false;
     let verifiedSearchOutcome = false;
+    let verifiedResourceOpen = false;
+    let outcomeEvidenceHay = '';
+    let lastFailureKey: string | null = null;
+    let identicalFailCount = 0;
+    let remainingRetryBudget = beginRecoveryBudget();
 
     try {
       for (let step = 1; step <= MAX_STEPS; step++) {
@@ -645,6 +771,18 @@ export class TrustLoopController {
         this.setPipeline('SEE', 'done');
         if (!preScene) {
           throw new Error('Failed to observe active page state.');
+        }
+        this.ledger.record('PAGE_OBSERVED', 'PAGE OBSERVATION', `controls=${preScene.elements.length}`, {
+          durationMs: performance.now() - seeStart,
+        });
+        outcomeEvidenceHay = sceneOutcomeHay(preScene);
+        const pageHay = preScene.elements
+          .map((el) => `${el.ariaLabel || ''} ${el.innerTextCandidate || ''} ${el.regionHeading || ''}`)
+          .join(' ');
+        if (/system\s*:|ignore n-eye|already (approved|confirmed)|skip confirmation/i.test(pageHay)) {
+          this.ledger.record('UNTRUSTED_INPUT', 'PAGE OBSERVATION', 'policy-like page text treated as data only', {
+            provenance: 'UNTRUSTED_PAGE',
+          });
         }
 
         this.setPipeline('PERCEIVE', 'active');
@@ -683,6 +821,8 @@ export class TrustLoopController {
             ...preScene,
             elements: applyFusionLabels(preScene.elements, perception.candidates),
           };
+          this.ledger.record('OCR_USED', 'VISUAL PERCEPTION', `rois=${perception.decision.roiSpecs.length}`);
+          this.ledger.record('VISUAL_ANALYSIS_USED', 'VISUAL PERCEPTION', perception.decision.reasons.join(',') || 'escalated');
         } else {
           this.setPipeline('PERCEIVE', 'skipped');
           this.patch({ perceiveLabel: 'SKIP' });
@@ -866,6 +1006,7 @@ export class TrustLoopController {
               findingsCount: combinedFindings.length,
               vaultTokenCount: this.vault.size(),
               egressResult: 'BLOCKED',
+              egressAudit: 'BLOCKED',
             },
           });
           throw egressErr;
@@ -885,11 +1026,24 @@ export class TrustLoopController {
             vaultTokenCount: this.vault.size(),
             payloadBytes: serializedBytes.length,
             egressResult: 'PASS (0 Secrets Detected)',
+            egressAudit: 'PASS',
             safeContextJson: JSON.stringify(JSON.parse(serializedBytes), null, 2),
           },
           advisories: buildAdvisoryRecommendations(combinedFindings, perception),
         });
         this.setPipeline('PROTECT', 'done');
+        if (combinedFindings.length > 0) {
+          this.ledger.record('PRIVACY_DETECTED', 'PRIVACY', `findings=${combinedFindings.length}`);
+        }
+        if (
+          decisions.some(
+            (d) => d.decision === 'MINIMIZE' || d.decision === 'MASK' || d.decision === 'REMOVE'
+          )
+        ) {
+          this.ledger.record('DATA_MINIMIZED', 'PRIVACY', 'minimize-or-mask');
+        }
+        this.ledger.record('DATA_PROTECTED', 'PRIVACY', `tokens=${this.vault.size()}`);
+        this.ledger.record('PROTECTED_CONTEXT_CREATED', 'PRIVACY', `bytes=${serializedBytes.length}`);
 
         const planStart = performance.now();
         this.setPipeline('THINK', 'active');
@@ -933,9 +1087,25 @@ export class TrustLoopController {
             plannerLatency: `${planMs.toFixed(1)} ms`,
             plannerAttempts: metadata.attempt ?? 1,
             recoveryPath: (metadata.attempt ?? 1) > 1 ? 'PLANNER_RETRY' : '—',
+            reasoningProvenance: metadata.reasoningProvenance || '—',
+            nalisVersion: snapshotNalisHealth().version,
+            nalisHealth: humanHealthLine(snapshotNalisHealth()),
+            memoryCount: getNalisMemory().size(),
+            learningEnabled: getNalisMemory().isEnabled(),
           },
         });
         this.setPipeline('THINK', 'done');
+        if (this.state.plannerMode === 'REMOTE' || /REMOTE/i.test(metadata.reasoningProvenance || '')) {
+          this.ledger.record('REMOTE_INTELLIGENCE_USED', 'TASK PLANNING', metadata.provider || 'remote');
+        } else {
+          this.ledger.record('LOCAL_INTELLIGENCE_USED', 'TASK PLANNING', metadata.model || 'deterministic');
+        }
+        this.ledger.record('ACTION_PROPOSED', 'TASK PLANNING', proposal.type, {
+          provenance: 'UNTRUSTED_MODEL',
+        });
+        if (proposal.type === 'PRESS_ENTER') {
+          this.ledger.record('FALLBACK_USED', 'TASK PLANNING', 'constrained-enter');
+        }
 
         const protectedView = protectedState(combinedFindings.length);
         this.applyPhase('PROTECTED', protectedView.detail);
@@ -968,11 +1138,15 @@ export class TrustLoopController {
           dedupeKey: `protected:${receipt.hostname}:${metadata.requestId}`,
         });
         const targetEl = workingScene.elements.find((e) => e.id === proposal.targetId);
-        const targetLabel = targetEl?.ariaLabel || targetEl?.innerTextCandidate || proposal.targetId || '—';
+        const named = `${targetEl?.ariaLabel || ''} ${targetEl?.innerTextCandidate || ''}`.trim();
+        const targetLabel =
+          proposal.type === 'ASK_USER' || proposal.type === 'COMPLETE' || proposal.type === 'WAIT'
+            ? named
+            : named || String(proposal.targetId || '');
         const frameLabel = targetEl?.frameProvenance
           ? `${targetEl.frameProvenance.frameKind} · ${targetEl.frameProvenance.frameId}`
           : 'Top document';
-        const actionView = {
+        const actionView = mergeActionView(undefined, {
           proposalText: describeAction(proposal, targetLabel),
           targetLabel,
           risk: proposal.riskLevel,
@@ -981,14 +1155,8 @@ export class TrustLoopController {
           targetId: String(proposal.targetId || '—'),
           frame: frameLabel,
           confirmationRequired: false,
-          validation: {
-            targetCurrent: null,
-            frameCurrent: null,
-            pageCurrent: null,
-            tokenScopeValid: null,
-            riskPolicy: null,
-          },
-        };
+          validation: emptyValidation(),
+        });
         this.patch({
           receipt,
           receiptView: mapReceiptView(receipt, summary),
@@ -1021,6 +1189,8 @@ export class TrustLoopController {
               verifiedClick,
               liveFieldState,
               verifiedSearchOutcome,
+              verifiedResourceOpen,
+              outcomeEvidenceHay,
             }),
             step
           );
@@ -1059,13 +1229,27 @@ export class TrustLoopController {
         }
         executedProposals.push(proposalSignature);
 
+        const goalIntel = interpretGoal(rawGoal);
+        if (goalIntel.forbidSubmit && (proposal.type === 'CLICK' || proposal.type === 'PRESS_ENTER')) {
+          const submitTarget = workingScene.elements.find((e) => e.id === proposal.targetId);
+          const submitish =
+            proposal.type === 'PRESS_ENTER' ||
+            submitTarget?.formSubmitting === true ||
+            submitTarget?.inputType === 'submit' ||
+            /\bsubmit\b/i.test(`${submitTarget?.innerTextCandidate || ''} ${submitTarget?.ariaLabel || ''}`);
+          if (submitish) {
+            this.enterAskUser('The goal forbids submitting. N-Eye will not submit this form.');
+            break;
+          }
+        }
+
         const validateStart = performance.now();
         this.setPipeline('VALIDATE', 'active');
         this.applyPhase('VALIDATING');
 
         let validatedAction: ValidatedAction;
         try {
-          validatedAction = validateActionProposal(proposal, workingScene, this.vault, taskId, origin);
+          validatedAction = validateActionProposal(proposal, workingScene, this.vault, taskId, origin, tabId);
         } catch (err) {
           const reasonCode: SecurityReasonCode =
             err instanceof Error && 'reasonCode' in err
@@ -1078,17 +1262,8 @@ export class TrustLoopController {
             targetId: String(proposal.targetId || ''),
           });
           this.setPipeline('VALIDATE', 'pending');
-          this.applyPhase('BLOCKED', (err as Error).message);
           this.patch({
-            toast: toastFromEvent({
-              kind: 'BLOCKED',
-              hostname: this.state.siteHostname,
-              message: `Action blocked. ${(err as Error).message}`,
-              severity: 'warning',
-              dedupeKey: `blocked-val:${Date.now()}`,
-              timestamp: Date.now(),
-            }),
-            action: {
+            action: mergeActionView(this.state.action, {
               proposalText: `Rejected: ${(err as Error).message}`,
               targetLabel,
               risk: proposal.riskLevel,
@@ -1106,15 +1281,33 @@ export class TrustLoopController {
               },
               blockedReason: (err as Error).message,
               securityReason: reasonCode,
-            },
+            }),
             evidence: {
               ...this.state.evidence,
               validationResult: (err as Error).message,
               securityReason: reasonCode,
             },
           });
+          if (this.isMissingTargetFailure(err)) {
+            this.ledger.record('TARGET_NOT_FOUND', 'TARGET MATCHING', 'INVALID_TARGET');
+            this.enterAskUser(`${MISSING_TARGET_HUMAN} TARGET_NOT_FOUND`);
+            break;
+          }
+          this.applyPhase('BLOCKED', (err as Error).message);
+          this.patch({
+            toast: toastFromEvent({
+              kind: 'BLOCKED',
+              hostname: this.state.siteHostname,
+              message: `Action blocked. ${(err as Error).message}`,
+              severity: 'warning',
+              dedupeKey: `blocked-val:${Date.now()}`,
+              timestamp: Date.now(),
+            }),
+          });
           throw err;
         }
+
+        this.ledger.record('ACTION_CHECKED', 'LOCAL SAFETY CHECK', validatedAction.approvedRiskLevel);
 
         this.patch({
           latency: { ...this.state.latency, validate: `${(performance.now() - validateStart).toFixed(1)} ms` },
@@ -1170,6 +1363,7 @@ export class TrustLoopController {
             evidence: { ...this.state.evidence, securityReason: 'CONFIRMATION_REQUIRED' },
           });
           this.applyPhase('AWAITING_CONFIRMATION', describeAction(proposal, targetLabel));
+          this.ledger.record('CONFIRMATION_REQUIRED', 'CONFIRMATION', validatedAction.approvedRiskLevel);
           this.patch({
             toast: toastFromPhase(
               'AWAITING_CONFIRMATION',
@@ -1177,9 +1371,19 @@ export class TrustLoopController {
             ),
           });
 
+          const approvalStarted = performance.now();
           const confirmed = await new Promise<boolean>((resolve) => {
             this.confirmWait = { confirmationId: request.confirmationId, resolve };
           });
+          this.patch({
+            latency: {
+              ...this.state.latency,
+              approvalWait: `${((performance.now() - approvalStarted) / 1000).toFixed(1)} s`,
+            },
+          });
+          if (confirmed) {
+            this.ledger.record('CONFIRMATION_GRANTED', 'CONFIRMATION', 'allow-once');
+          }
           if (!confirmed || signal.aborted) {
             this.confirmations.invalidate();
             this.applyPhase('CANCELLED', 'Action cancelled by user.');
@@ -1215,7 +1419,7 @@ export class TrustLoopController {
           let revalidated: ValidatedAction;
           try {
             const liveProposal = retargetProposalToApprovedBinding(proposal, freshScene, consumed.request);
-            revalidated = validateActionProposal(liveProposal, freshScene, this.vault, taskId, origin);
+            revalidated = validateActionProposal(liveProposal, freshScene, this.vault, taskId, origin, tabId);
           } catch (err) {
             const reasonCode =
               err instanceof Error && 'reasonCode' in err
@@ -1241,6 +1445,7 @@ export class TrustLoopController {
 
           actionToExecute = revalidated;
           executionScene = freshScene;
+          this.ledger.record('TARGET_RECHECKED', 'LIVE TARGET RE-CHECK', 'post-confirm');
           this.patch({
             evidence: {
               ...this.state.evidence,
@@ -1268,6 +1473,11 @@ export class TrustLoopController {
           },
         });
         this.setPipeline('ACT', 'done');
+        if (execResult.success) {
+          this.ledger.record('ACTION_EXECUTED', 'BROWSER EXECUTION', actionToExecute.proposal.type, {
+            status: 'VERIFIED',
+          });
+        }
 
         if (!execResult.success) {
           if (execResult.outcome === 'ASK_USER') {
@@ -1277,10 +1487,7 @@ export class TrustLoopController {
           const blocked = execResult.error || 'Execution failed';
           this.applyPhase('BLOCKED', blocked);
           this.patch({
-            action: {
-              ...(this.state.action as NonNullable<ProductState['action']>),
-              blockedReason: blocked,
-            },
+            action: mergeActionView(this.state.action, { blockedReason: blocked }),
             toast: {
               kind: 'BLOCKED',
               message: blocked.toLowerCase().includes('page')
@@ -1296,7 +1503,7 @@ export class TrustLoopController {
         this.applyPhase('VERIFYING');
         const searchIntent = parseMockGoal(rawGoal);
         const searchClickSettle =
-          proposal.type === 'CLICK' &&
+          (proposal.type === 'CLICK' || proposal.type === 'PRESS_ENTER') &&
           searchIntent.kind === 'type_text' &&
           searchIntent.requiresSearchSubmit;
         await this.wait(searchClickSettle ? WAIT_SETTLE_MS : 120);
@@ -1305,6 +1512,8 @@ export class TrustLoopController {
         }
         const postScene = await this.requestObservation(tabId, false);
         if (postScene) {
+          this.ledger.record('PAGE_REOBSERVED', 'OUTCOME VERIFICATION', `epoch=${String(postScene.pageEpoch)}`);
+          outcomeEvidenceHay = sceneOutcomeHay(postScene);
           let fieldState = execResult.fieldState;
           if (
             (actionToExecute.proposal.type === 'TYPE_TOKEN' || actionToExecute.proposal.type === 'TYPE_TEXT') &&
@@ -1328,6 +1537,7 @@ export class TrustLoopController {
             scrollMoved: execResult.scrollMoved,
             atScrollBoundary: execResult.atScrollBoundary,
             selectMatched: execResult.selectMatched,
+            targetIdentityChanged: execResult.targetIdentityChanged,
           });
           this.patch({
             action: {
@@ -1361,9 +1571,42 @@ export class TrustLoopController {
             verifiedCount += 1;
             lastVerifiedType = proposal.type;
             if (fieldState) lastFieldState = fieldState;
-            if (proposal.type === 'CLICK') verifiedClick = true;
+            if (proposal.type === 'CLICK' || proposal.type === 'PRESS_ENTER') verifiedClick = true;
             if (verificationShowsNavigation(executionScene, postScene)) {
               verifiedSearchOutcome = true;
+            }
+            if (proposal.type === 'CLICK') {
+              const clicked = executionScene.elements.find((e) => e.id === proposal.targetId);
+              const clickLabel = `${clicked?.ariaLabel || ''} ${clicked?.innerTextCandidate || ''}`;
+              const tail = interpretGoal(rawGoal);
+              if (tail.tailEntity && scoreLabelAgainstHints(clickLabel, tail.labelHints) > 0) {
+                verifiedResourceOpen = true;
+              }
+            }
+            lastFailureKey = null;
+            identicalFailCount = 0;
+          } else {
+            remainingRetryBudget -= 1;
+            const nextKey = identicalFailureKey(
+              proposal.type,
+              String(proposal.targetId || ''),
+              Number(executionScene.pageEpoch)
+            );
+            const verdict = shouldAbstainAfterFailure({
+              previousKey: lastFailureKey,
+              nextKey,
+              identicalCount: identicalFailCount,
+              stateChanged: executionScene.pageEpoch !== postScene.pageEpoch,
+              remainingRetryBudget,
+            });
+            lastFailureKey = nextKey;
+            identicalFailCount = verdict.identicalCount;
+            if (verdict.abstain) {
+              this.enterAskUser(
+                verdict.reason ||
+                  'The same action failed without a page-state change. N-Eye will not loop.'
+              );
+              break;
             }
           }
         }
@@ -1391,17 +1634,23 @@ export class TrustLoopController {
             lastFieldState,
             verifiedClick,
             verifiedSearchOutcome,
+            verifiedResourceOpen,
+            outcomeEvidenceHay,
           }),
           this.state.step?.index ?? MAX_STEPS
         );
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
+        this.ledger.record('TASK_CANCELLED', 'SYSTEM LIFECYCLE', 'user-or-abort');
         this.applyPhase('CANCELLED', 'Task cancelled by user.');
         this.clearLiveEvidence();
       } else if (this.state.phase === 'BLOCKED' || this.state.phase === 'CANCELLED') {
         // failClosed / validation already told the truth. Do not promote a security block into ERROR.
         this.patch({ step: { index: this.state.step?.index ?? 1, max: MAX_STEPS, summary: (err as Error).message } });
+      } else if (isEngineExceptionText((err as Error).message || '')) {
+        this.ledger.record('TASK_FAILED', 'SYSTEM LIFECYCLE', 'engine-exception');
+        this.enterAskUser(`${ENGINE_FAILURE_HUMAN} ${MISSING_TARGET_HUMAN}`);
       } else {
         const message = (err as Error).message;
         const phase = classifyPlannerFailure(err);
@@ -1426,6 +1675,7 @@ export class TrustLoopController {
         canCancel: false,
         confirmation: undefined,
       });
+      this.sealTaskReport(String(taskId));
     }
   }
 }

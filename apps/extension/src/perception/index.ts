@@ -15,4 +15,4 @@ export {
   MAX_ROI_HEIGHT_PX,
   MIN_ROI_SIDE_PX,
 } from './roi.js';
-export { mapCssBoxToBitmap, mapCssBoxToElementBuffer, clipBoxToBounds } from './coordinates.js';
+export { mapCssBoxToBitmap, mapCssBoxToElementBuffer, mapBitmapPointToCss, mapBitmapBoxToCss, clipBoxToBounds } from './coordinates.js';
