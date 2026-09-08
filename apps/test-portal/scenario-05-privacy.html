@@ -16,7 +16,8 @@
 
     <main class="card">
       <h2>Evaluation Form Fields</h2>
-      <form onsubmit="event.preventDefault();">
+      <!-- WHY: A real same-document submit must change visible status and control state. Not an N-Eye success hook. -->
+      <form id="privacy-eval-form" onsubmit="event.preventDefault(); (function () { var result = document.getElementById('privacy-result'); if (result) { result.hidden = false; result.textContent = 'Test context submitted.'; } var btn = document.getElementById('privacy-submit'); if (btn) { btn.disabled = true; btn.textContent = 'Test context submitted'; } })();">
         <div class="form-row">
           <label for="f-email">1. Direct PII: Email Address</label>
           <input type="email" id="f-email" placeholder="john.doe@company.org" value="john.doe@company.org">
@@ -43,9 +44,10 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="btn btn-primary">Submit Test Context</button>
+          <button type="submit" id="privacy-submit" class="btn btn-primary">Submit Test Context</button>
         </div>
       </form>
+      <p id="privacy-result" class="alert-success" role="status" aria-live="polite" hidden></p>
     </main>
 
     <footer class="footer">

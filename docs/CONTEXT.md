@@ -34,11 +34,11 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T029-R1 forensic repair (visual grounding + semantic affordances) on dirty `main` (HEAD `64638ad` plus uncommitted T025–T029 + R1). T030 not started. |
-| **Branch** | `main` (dirty until the T029-R1 commit lands) |
-| **HEAD Commit** | `64638ad42da2fa401fa2f471d4f39e116770380f` plus T025–T029 + R1 working tree. Dist after R1 rebuild: `DEV • 64638ad*` · `Built 2026-09-05T07:02:05.247Z (uncommitted source)`. |
-| **Latest Verified Gate** | T029-R1 automated: typecheck/lint PASS; protocol 27; extension **545**; planner-api 47; Judge-Kill original holdout JSON preserved 32/32 (`measuredAt` 2026-09-05T05:18:10.995Z); post-R1 re-eval 123/123 (`t029-r1-judge-kill.json`). P0 none. Scenario 08 Chrome remains HUMAN REQUIRED. Live Remote ENVIRONMENT BLOCKED (`ECONNREFUSED :8000`). |
-| **Next Eligible Gate** | Human fills `docs/evidence/T029-R1-REAL-CHROME-CHECKLIST.md` (especially RC08). T030 only after that evidence. See `docs/evidence/T029-T030-RESIDUAL-CHECKLIST.md`. |
+| **Current Phase** | T029-R2 micro-repair: Scenario 05 privacy submit postcondition (fixture). T030 not started. |
+| **Branch** | `main` |
+| **HEAD Commit** | `cdddfefea9f58eca2ebf4754ab5f9883704567d3` plus T029-R2 working tree until commit. Dist: `DEV • cdddfef*` · `Built 2026-09-08T04:15:32.244Z (uncommitted source)`. |
+| **Latest Verified Gate** | T029-R2 automated: typecheck/lint PASS; protocol 27; extension **553**; planner-api 47. Production verifier unchanged. Scenario 05 Chrome submit retest HUMAN REQUIRED. Scenario 08 Chrome remains HUMAN REQUIRED. Live Remote ENVIRONMENT BLOCKED (`ECONNREFUSED :8000`). |
+| **Next Eligible Gate** | Human retest Scenario 05 submit (`http://localhost:5173/scenario-05-privacy.html`) then remaining `T029-R1-REAL-CHROME-CHECKLIST.md` RC08. T030 only after that evidence. |
 | **SIH Prototype Completion** | ~96% (planning estimate; Chrome owner-loop still MANUAL) |
 | **Core Architecture Completion** | ~96% (planning estimate) |
 | **Company-Product Completion** | ~26% (planning estimate) |
@@ -1835,3 +1835,33 @@ Exact AccName uniqueness; SEARCH_COMMIT popup option/treeitem; Report action vs 
 | Live Remote / Chrome RC08 | ENVIRONMENT BLOCKED / HUMAN REQUIRED |
 
 **Do not start T030.** Human must execute `T029-R1-REAL-CHROME-CHECKLIST.md`.
+
+## 78. T029-R2 — Scenario 05 privacy submit postcondition
+
+**Date:** 2026-09-08
+**HEAD before this commit:** `cdddfefea9f58eca2ebf4754ab5f9883704567d3`
+**Classification:** FIXTURE DEFECT. Production verifier/executor were not changed.
+**Verdict:** CONDITIONAL PASS (automated). Chrome Side Panel retest HUMAN REQUIRED.
+
+Human observed TYPE→CLICK on “Submit Test Context” then COULD NOT COMPLETE with honest `VERIFIED_FAILURE` (“No navigation, target consumption, or action-correlated state change”). Privacy taxonomy (email TOKENIZE; password/OTP/API NEVER_SEND) held.
+
+**FIT:** `apps/test-portal/scenario-05-privacy.html` `onsubmit` was `event.preventDefault()` only. Email already present. Click fired. Page exposed no observable postcondition. Verifier correctly refused completion.
+
+**Repair:** Same-document submit now shows `#privacy-result` (“Test context submitted.”) and disables/relabels `#privacy-submit`. No `window.__nEyeSuccess`. No production special-case. Existing verifier already treats disabled/identity change + visible-name shift as action-correlated success.
+
+**Not repaired:** Scenario 13 still preventDefault-only (resilience bench, not this demo path). Click-with-no-delta remains `VERIFIED_FAILURE`. Unrelated DOM churn remains not success.
+
+Artifact: `docs/evidence/T029-R2-FORENSIC-LEDGER.md`.
+
+### Automated (this R2 run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` / `pnpm lint` | PASS / 0 errors (1 pre-existing console warning) |
+| protocol / extension / planner-api | 27 / **553** / 47 |
+| Targeted `t029-r2-privacy-submit.test.ts` | 8 passed TESTED |
+| `pnpm build:extension` | PASS · `DEV • cdddfef*` · Built 2026-09-08T04:15:32.244Z (uncommitted source at build) |
+| Observer 100-el bench this run | MEASURED p95 18.30 ms (development, not SIH formal) |
+| Chrome Scenario 05 submit | HUMAN REQUIRED |
+
+**Do not start T030.**

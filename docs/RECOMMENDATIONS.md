@@ -53,6 +53,7 @@ This log tracks architecture proposals, trade-offs, and decisions made during th
 | REC-048 | T029 residual (Chrome / Remote / destination proof) | **Proposed** | T030 | Human Chrome FR1 + T029-R1 RC08 still empty. Live `/v1/plan` body UNVERIFIED. Action-level verifier still treats any URL/origin change as success; **task-level** SEARCH/NAVIGATE now require query/resource mention in outcome hay (T029-R1-F007). Do not add site selectors or `chrome.debugger`. |
 | REC-049 | One-step OPEN_SEARCH_SURFACE | **Deferred** (POST-SIH) | Intelligence | Do not wander. A single reversible click on a unique search opener when no SEARCH_INPUT is exposed was not wired. H07 FIT was SEARCH_COMMIT representation, not missing opener click. |
 | REC-050 | Indian-mobile 10-digit prose FP | **Proposed** | Privacy | `IN_MOBILE` can still TOKENIZE a 10-digit run starting 6–9 in unrelated page text. Do not disable globally. Improve only with field/source/task context + regressions. |
+| REC-051 | Lab submit fixtures need real postconditions | **Adopted** (T029-R2) | Test portal / verification | Scenario 05 `preventDefault()`-only submit had no observable outcome; verifier correctly refused COMPLETE. Repair the fixture (status + disabled/relabel), not the verifier. Do not treat click/epoch/churn as success. Scenario 13 remains preventDefault-only by design. |
 
 ## 2. REC-016 — Third-Party Network Privacy Guard (not implemented)
 
