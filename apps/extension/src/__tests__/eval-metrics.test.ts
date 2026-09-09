@@ -7,6 +7,7 @@ import {
   pointInBox,
   precisionRecallF1,
   summarizeSamples,
+  wilsonScoreInterval,
 } from '../eval/metrics.js';
 
 describe('Evaluation metric formulas', () => {
@@ -19,6 +20,9 @@ describe('Evaluation metric formulas', () => {
     expect(precisionRecallF1(8, 2, 2).precision).toBeCloseTo(0.8);
     expect(precisionRecallF1(8, 2, 2).recall).toBeCloseTo(0.8);
     expect(precisionRecallF1(8, 2, 2).f1).toBeCloseTo(0.8);
+    const interval = wilsonScoreInterval(8, 10);
+    expect(interval && interval.low < 0.8).toBe(true);
+    expect(interval && interval.high > 0.8).toBe(true);
   });
 
   it('does not report p95 for a single sample', () => {

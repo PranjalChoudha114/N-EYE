@@ -2,32 +2,32 @@
   "manifest": {
     "schemaVersion": "n-eye-bench/1",
     "gate": "T019-T020",
-    "gitSha": "64638ad42da2fa401fa2f471d4f39e116770380f",
-    "gitShaShort": "64638ad",
+    "gitSha": "7bca2ec4f1946020d11428a38d74a11448039c08",
+    "gitShaShort": "7bca2ec",
     "dirty": true,
     "dirtySummary": [
-      "M apps/extension/src/__tests__/adaptive-perception.test.ts",
-      "M apps/extension/src/__tests__/canary.test.ts",
-      "M apps/extension/src/__tests__/completion-arbiter.test.ts",
-      "M apps/extension/src/__tests__/composite-search.test.ts",
-      "M apps/extension/src/__tests__/coordinates.test.ts",
-      "M apps/extension/src/__tests__/observer.test.ts",
-      "M apps/extension/src/__tests__/privacy.test.ts",
-      "M apps/extension/src/__tests__/regrounding.test.ts",
-      "M apps/extension/src/__tests__/risk-classifier.test.ts",
-      "M apps/extension/src/__tests__/trust-loop.test.ts",
-      "M apps/extension/src/authority/proposal-schema.ts",
-      "M apps/extension/src/authority/regrounding.ts",
-      "M apps/extension/src/authority/validator.ts",
-      "M apps/extension/src/content/observer.ts",
-      "M apps/extension/src/content/selectors.ts",
+      "M apps/extension/src/__tests__/eval-metrics.test.ts",
+      "M apps/extension/src/__tests__/task-report.test.ts",
+      "M apps/extension/src/eval/metrics.ts",
       "M apps/extension/src/eval/pii-corpus.ts",
       "M apps/extension/src/eval/privacy-bench.ts",
-      "M apps/extension/src/execution/executor.ts",
-      "M apps/extension/src/overlay/overlay-card.ts",
-      "M apps/extension/src/perception/adaptive-controller.ts"
+      "M apps/extension/src/perception/index.ts",
+      "M apps/extension/src/runtime/evidence-ledger.ts",
+      "M apps/extension/src/runtime/task-report.ts",
+      "M apps/extension/src/runtime/trust-loop.ts",
+      "M apps/extension/src/ui/ask-user.ts",
+      "M apps/extension/src/ui/status-map.ts",
+      "M apps/extension/src/ui/task-report-view.ts",
+      "M bench/judge-kill/t029-judge-kill.json",
+      "M package.json",
+      "?? apps/extension/src/__tests__/t030-accuracy.test.ts",
+      "?? apps/extension/src/__tests__/t030-forensic.test.ts",
+      "?? apps/extension/src/eval/t030-accuracy.ts",
+      "?? apps/extension/src/eval/t030-fallback-matrix.ts",
+      "?? apps/extension/src/eval/t030-pii-corpus.ts",
+      "?? apps/extension/src/eval/t030-reliability.ts"
     ],
-    "timestamp": "2026-09-04T14:40:56.319Z",
+    "timestamp": "2026-09-09T06:57:45.341Z",
     "os": "Darwin 25.6.0",
     "arch": "arm64",
     "cpu": "unknown",
@@ -81,35 +81,35 @@
   "classLatency": {
     "searchAffordance": {
       "count": 40,
-      "min": 0.0009579999999687061,
-      "max": 0.017792000000042663,
-      "p50": 0.0010420000000408436,
-      "p95": 0.00770799999997962,
-      "mean": 0.002639525000004994
+      "min": 0.0011249999999449756,
+      "max": 0.025415999999950145,
+      "p50": 0.0012499999999704414,
+      "p95": 0.007834000000002561,
+      "mean": 0.0028406749999916768
     },
     "indiaPrivacy": {
       "count": 30,
-      "min": 0.0012499999999704414,
-      "max": 0.009749999999996817,
-      "p50": 0.0013339999999857355,
-      "p95": 0.006250000000022737,
-      "mean": 0.002044433333331123
+      "min": 0.0012080000000196378,
+      "max": 0.046208000000035554,
+      "p50": 0.0013749999999959073,
+      "p95": 0.020416999999952168,
+      "mean": 0.0038376000000027942
     },
     "missingTargetCopy": {
       "count": 30,
-      "min": 0.00012499999996862243,
-      "max": 0.015166999999962627,
-      "p50": 0.00016699999997626946,
-      "p95": 0.0012919999999780885,
-      "mean": 0.0007457999999966584
+      "min": 0.00008300000001781882,
+      "max": 0.0162499999999568,
+      "p50": 0.00012500000002546585,
+      "p95": 0.0008339999999975589,
+      "mean": 0.0007318999999995412
     },
     "reportBuild": {
       "count": 20,
-      "min": 0.0027919999999994616,
-      "max": 0.025083999999992557,
-      "p50": 0.004542000000014923,
-      "p95": 0.02237499999995407,
-      "mean": 0.008864750000000754
+      "min": 0.006209000000012566,
+      "max": 0.059084000000041215,
+      "p50": 0.009208000000000993,
+      "p95": 0.038000000000010914,
+      "mean": 0.01663130000000592
     }
   }
 }

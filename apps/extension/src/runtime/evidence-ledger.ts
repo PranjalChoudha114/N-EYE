@@ -58,6 +58,7 @@ export type EvidenceStage =
   | 'SYSTEM LIFECYCLE';
 
 export interface EvidenceEvent {
+  id: string;
   taskId: string;
   eventType: EvidenceEventType;
   timestamp: number;
@@ -66,6 +67,12 @@ export interface EvidenceEvent {
   provenance: EvidenceProvenance;
   status: EvidenceStatus;
   durationMs?: number;
+  pageEpoch?: number;
+  origin?: string;
+  frameId?: string;
+  actionType?: string;
+  privacyClass?: string;
+  targetSemanticKey?: string;
 }
 
 const SECRETISH = /password|otp|api[_-]?key|bearer\s+|eyJ[A-Za-z0-9-_]+\.|sk_live_|CANARY_/i;
@@ -94,10 +101,24 @@ export class EvidenceLedger {
     eventType: EvidenceEventType,
     stage: EvidenceStage,
     safeEvidence: string,
-    extras?: Partial<Pick<EvidenceEvent, 'provenance' | 'status' | 'durationMs'>>
+    extras?: Partial<
+      Pick<
+        EvidenceEvent,
+        | 'provenance'
+        | 'status'
+        | 'durationMs'
+        | 'pageEpoch'
+        | 'origin'
+        | 'frameId'
+        | 'actionType'
+        | 'privacyClass'
+        | 'targetSemanticKey'
+      >
+    >
   ): EvidenceEvent | null {
     if (!this.taskId) return null;
     const event: EvidenceEvent = {
+      id: `e${this.events.length + 1}`,
       taskId: this.taskId,
       eventType,
       timestamp: Date.now(),
@@ -106,6 +127,12 @@ export class EvidenceLedger {
       provenance: extras?.provenance || 'LOCAL_SYSTEM',
       status: extras?.status || 'RECORDED',
       durationMs: extras?.durationMs,
+      pageEpoch: extras?.pageEpoch,
+      origin: extras?.origin,
+      frameId: extras?.frameId,
+      actionType: extras?.actionType,
+      privacyClass: extras?.privacyClass,
+      targetSemanticKey: extras?.targetSemanticKey,
     };
     this.events.push(event);
     if (this.events.length > 300) this.events = this.events.slice(-300);
@@ -118,6 +145,11 @@ export class EvidenceLedger {
 
   public has(type: EvidenceEventType): boolean {
     return this.events.some((e) => e.eventType === type);
+  }
+
+  public idsOf(types: EvidenceEventType[]): string[] {
+    const wanted = new Set(types);
+    return this.events.filter((e) => wanted.has(e.eventType)).map((e) => e.id);
   }
 
   public last(type: EvidenceEventType): EvidenceEvent | undefined {

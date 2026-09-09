@@ -54,6 +54,7 @@ function elementFrom(sample: PiiSample, index: number): RawElement {
     inputType: (sample.inputType as InputType | undefined) ?? null,
     isEnabled: true,
     bbox: { x: 8, y: 8, width: 160, height: 28 },
+    hasValue: sample.hasValue,
   };
 }
 

@@ -1,6 +1,6 @@
 # T028 canary / report channels
 
-SHA: `64638ad42da2fa401fa2f471d4f39e116770380f`
+SHA: `7bca2ec4f1946020d11428a38d74a11448039c08`
 
 Report/ledger canary pass: PASS
 Search affordance unique hits: 2/2

@@ -34,11 +34,11 @@ Before changing architecture: inspect accepted ADRs first. Before starting Gate 
 | Attribute | Value |
 |---|---|
 | **Project** | N-Eye |
-| **Current Phase** | T029-R2 micro-repair: Scenario 05 privacy submit postcondition (fixture). T030 not started. |
+| **Current Phase** | T030 core truth / accuracy / reliability certification. T031 (persistent local user trust) not started. |
 | **Branch** | `main` |
-| **HEAD Commit** | `cdddfefea9f58eca2ebf4754ab5f9883704567d3` plus T029-R2 working tree until commit. Dist: `DEV • cdddfef*` · `Built 2026-09-08T04:15:32.244Z (uncommitted source)`. |
-| **Latest Verified Gate** | T029-R2 automated: typecheck/lint PASS; protocol 27; extension **553**; planner-api 47. Production verifier unchanged. Scenario 05 Chrome submit retest HUMAN REQUIRED. Scenario 08 Chrome remains HUMAN REQUIRED. Live Remote ENVIRONMENT BLOCKED (`ECONNREFUSED :8000`). |
-| **Next Eligible Gate** | Human retest Scenario 05 submit (`http://localhost:5173/scenario-05-privacy.html`) then remaining `T029-R1-REAL-CHROME-CHECKLIST.md` RC08. T030 only after that evidence. |
+| **HEAD Commit** | Parent `7bca2ec4f1946020d11428a38d74a11448039c08` (T029-R2) plus T030 working tree until this commit. Dist at last pre-commit rebuild: `DEV • 7bca2ec*` · `Built 2026-09-09T07:08:23.799Z (uncommitted source)`. Rebuild after commit so the footer SHA matches HEAD without `*`. |
+| **Latest Verified Gate** | T030 automated: typecheck/lint PASS; protocol 27; extension **560**; planner-api 47. Accuracy harness + report-truth corpus TESTED. Live Gemini synthetic canary **VERIFIED IN REAL RUNTIME** this machine 2026-09-09. Chrome Side Panel / Scenario 08 / T030 checklist **HUMAN REQUIRED**. |
+| **Next Eligible Gate** | Human `docs/evidence/T030-REAL-CHROME-CHECKLIST.md` (includes Scenario 05/08). T031 only after human review of T030 evidence. Do not implement history/memory/passcode in T030. |
 | **SIH Prototype Completion** | ~96% (planning estimate; Chrome owner-loop still MANUAL) |
 | **Core Architecture Completion** | ~96% (planning estimate) |
 | **Company-Product Completion** | ~26% (planning estimate) |
@@ -988,11 +988,12 @@ pnpm test
 17. **`PlanRequest.clientCapabilities`**: Pydantic `Dict[str, Any]` is an unused schema hole (not forwarded to Gemini as page content).
 18. **Cross-origin frame pixels**: N-Eye does not click approximate coordinates inside inaccessible iframes. Documented limitation, not a bypass.
 19. **True MV3 service-worker kill**: Architecture and hydrate tests exist. Real Chrome termination is MANUAL / UNVERIFIED.
-20. **Human Chrome FR1 / T029 / T029-R1 checklists**: `docs/evidence/T027-T028-MANUAL-CHECKLIST.md`, `T029-REAL-CHROME-CHECKLIST.md`, and `T029-R1-REAL-CHROME-CHECKLIST.md` are templates until a human fills PASS/FAIL. Node Judge-Kill is not Chrome E2E. Scenario 08 Chrome = UNVERIFIED until RC08.
-21. **Verifier URL/origin success (action-level)**: Any URL or origin change is still action `VERIFIED_SUCCESS` (query/hash stripped from evidence strings). **Task-level** SEARCH/NAVIGATE now refuse COMPLETE when `outcomeEvidenceHay` is present and does not mention the query/resource (T029-R1-F007). Generic click goals are unchanged.
-22. **TaskGraph vs trust-loop**: `createTaskGraph` is not called from `trust-loop.ts`. Live MULTI_STEP completion is interpreter + Mock + arbiter (T029-F009).
+20. **Human Chrome checklists**: `T027-T028-MANUAL-CHECKLIST.md`, `T029-REAL-CHROME-CHECKLIST.md`, `T029-R1-REAL-CHROME-CHECKLIST.md`, and `T030-REAL-CHROME-CHECKLIST.md` stay empty until a human fills PASS/FAIL. Node Judge-Kill / T030 accuracy is not Chrome E2E. Scenario 08 Chrome = UNVERIFIED until C06/RC08.
+21. **Verifier URL/origin success (action-level)**: Any URL or origin change is still action `VERIFIED_SUCCESS` (query/hash stripped from evidence strings). **Task-level** SEARCH/NAVIGATE refuse COMPLETE when `outcomeEvidenceHay` is present and does not mention the query/resource (T029-R1-F007). Generic click goals are unchanged (T030-P003).
+22. **TaskGraph vs trust-loop**: `createTaskGraph` is not called from `trust-loop.ts`. T030 reliability corpus N=8: 0 interpreter vs graph disagreements. Live MULTI_STEP remains interpreter + Mock + arbiter (T029-F009). Wiring the graph is a T031/T032 decision, not a T030 FIT.
 23. **Untrusted Enter / closed shadow / CORS `*`**: REC-035, REC-036, CONTEXT CORS notes unchanged.
-24. **PROTOCOLS.md vs `PRESS_ENTER`**: Protocol source includes `PRESS_ENTER`; `docs/PROTOCOLS.md` did not name it as of T029 (documentation drift T029-F012). Source wins.
+24. **PII holdout (T030, not retuned)**: `IN_MOBILE` FP on bare 10-digit order prose (`hold-order-10digit`); Hindi name-label FN (`hold-hindi-name-label`). Development PII micro F1 remains 100% on t027-pii-corpus.v1.
+25. **PROTOCOLS.md vs `PRESS_ENTER`**: Closed in T029-F012; protocol source remains canonical if docs drift again.
 
 ---
 
@@ -1864,4 +1865,61 @@ Artifact: `docs/evidence/T029-R2-FORENSIC-LEDGER.md`.
 | Observer 100-el bench this run | MEASURED p95 18.30 ms (development, not SIH formal) |
 | Chrome Scenario 05 submit | HUMAN REQUIRED |
 
-**Do not start T030.**
+**Historical:** R2 originally deferred T030. T030 ran as the next core-certification gate; see §79.
+
+## 79. T030 — Core truth / accuracy / reliability certification
+
+**Date:** 2026-09-09  
+**HEAD before this gate:** `7bca2ec4f1946020d11428a38d74a11448039c08` (T029-R2)  
+**Working tree during measurement:** dirty  
+**Dist at measurement:** `DEV • 7bca2ec*` · `Built 2026-09-09T06:56:35.098Z (uncommitted source)`  
+**Verdict:** CONDITIONAL PASS (automated). Chrome Side Panel / Scenario 08 = HUMAN REQUIRED. T031 not started.
+
+Masterbook PDFs listed in §0 were **not in this repository clone**. Truth this gate: source + accepted ADRs + fresh tests/runtime.
+
+Artifacts: `docs/evidence/T030-MASTER-REPORT.md`, `T030-ACCURACY-CERTIFICATE.md` + `.json`, `T030-REPORT-TRUTH-CERTIFICATE.md`, `T030-PREDICTIVE-DEFECT-LEDGER.md`, `T030-FALLBACK-MATRIX.md`, `T030-CLAIM-REGISTRY.md`, `T030-REAL-CHROME-CHECKLIST.md`, `T030-PERFORMANCE-RESULTS.md`, `T030-PRIVACY-CANARY-RESULTS.md`, `T030-RESIDUAL-RISK-REGISTER.md`. Harness: `pnpm bench:t030`. Frozen PII holdout: `bench/t030/privacy/t030-pii-holdout.v1.json` (`t030-pii-holdout/1`, hash `c8cbd92d2f717e21`). Do **not** retune detectors on that JSON.
+
+### Independent repairs (human did not file)
+
+| ID | FIT | Repair |
+|---|---|---|
+| T030-F001 | `OCR_USED` from `perception.invoked` with 0 blocks; Evidence source could say OCR | Record OCR_USED only when `ocrBlocks.length > 0`; `evidencePerceptionSource` |
+| T030-F002 | `GROUNDING_AMBIGUOUS` collapsed to OCR_UNAVAILABLE / “Could not read visible text” | ASK_USER `VISUAL_UNBOUND`; engine failures keep distinct OCR copy |
+| T030-F003 | Any `ACTION_EXECUTED` authored “authorized click” | Click FACT only if `proposalType === 'CLICK'` |
+| T030-F004 | `ACTION_EXECUTED` stored `VERIFIED` at dispatch | `RECORDED`; abort → `action-may-have-executed-before-verify` |
+| T030-F005 | Screenshot FACT from `plannerMode === 'REMOTE'` | Requires ledger Remote + egress PASS + 0 screenshot bytes |
+
+No confirmed P0. Remaining P2: T029-F009 TaskGraph, T029-F010 action-level URL, IN_MOBILE holdout FP, Hindi NAME FN, untrusted Enter, closed shadow, CORS `*`.
+
+### Accuracy (MEASURED / TESTED — Node unless noted)
+
+| Dimension | Result | Classification |
+|---|---|---|
+| PII development t027-pii-corpus.v1 N=69 | micro P/R/F1 100%; NEVER_SEND leak 0 | MEASURED |
+| PII frozen holdout N=28 | micro F1 95.2%; PHONE F1 80% (1 FP); NAME F1 66.7% (1 FN) | MEASURED; not retuned |
+| Visual fixtures | cascade/grounding/OCR 7/7; false target 0; abstain 4; Wilson 64.6–100% | MEASURED fixtures; Chrome 08 HUMAN |
+| Report-truth corpus v1 N=10 | 10/10; factual precision 100%; unsupported high-impact FACT **0**; leaks 0 | TESTED |
+| Reliability corpus N=8 | verified success 1; false-complete caught 5; wrong action 0; correct abstention 2; TaskGraph disagreements 0 | TESTED contract |
+| Judge-Kill | 123/123 (91+32); false-complete fails 0 | TESTED Node |
+| Live Gemini canary | SafeContext lacked password/raw email canaries; `[EMAIL_1]` present | VERIFIED IN REAL RUNTIME this host |
+| Chrome page↔status↔report | empty checklist | UNVERIFIED |
+
+No single “N-Eye is X% accurate” number. Claims must cite `T030-ACCURACY-CERTIFICATE.json`.
+
+### Loops (source)
+
+`MAX_STEPS=8`; `PLANNER_MAX_ATTEMPTS=3`; `MAX_RECOVERY_ATTEMPTS=3`; `MAX_IDENTICAL_ACTION_FAILURES=2`; `MAX_EXPLORE_SCROLLS=2`. HIGH unverified: no replay.
+
+### Automated (this T030 run)
+
+| Check | Result |
+|---|---|
+| `pnpm typecheck` / `pnpm lint` | PASS / 0 errors (1 pre-existing console warning) |
+| protocol / extension / planner-api | 27 / **560** / 47 |
+| `pnpm bench:t029` / `pnpm bench:t030` | 123/123 / accuracy certificate written |
+| Observer 100-el | median 4.05 ms, p95 6.11 ms MEASURED (dev, this `pnpm test` run) |
+| Dist JS+CSS | 314292 B / gzip PROXY 94184 B MEASURED (prior T030 pack write; dist rebuild after commit) |
+| Live Gemini | **VERIFIED IN REAL RUNTIME** this host (`real-gemini-integration.test.ts` 7176 ms; `test_gemini_real.py` PASS). One `/v1/plan` 503 then retry SUCCESS. |
+| Chrome Side Panel | HUMAN REQUIRED |
+
+**Do not start T031 or T032 automatically.** Human reviews T030 first.

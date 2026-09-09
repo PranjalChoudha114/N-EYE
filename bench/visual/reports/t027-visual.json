@@ -2,32 +2,32 @@
   "manifest": {
     "schemaVersion": "n-eye-bench/1",
     "gate": "T019-T020",
-    "gitSha": "64638ad42da2fa401fa2f471d4f39e116770380f",
-    "gitShaShort": "64638ad",
+    "gitSha": "7bca2ec4f1946020d11428a38d74a11448039c08",
+    "gitShaShort": "7bca2ec",
     "dirty": true,
     "dirtySummary": [
-      "M apps/extension/src/__tests__/adaptive-perception.test.ts",
-      "M apps/extension/src/__tests__/canary.test.ts",
-      "M apps/extension/src/__tests__/completion-arbiter.test.ts",
-      "M apps/extension/src/__tests__/composite-search.test.ts",
-      "M apps/extension/src/__tests__/coordinates.test.ts",
-      "M apps/extension/src/__tests__/observer.test.ts",
-      "M apps/extension/src/__tests__/privacy.test.ts",
-      "M apps/extension/src/__tests__/regrounding.test.ts",
-      "M apps/extension/src/__tests__/risk-classifier.test.ts",
-      "M apps/extension/src/__tests__/trust-loop.test.ts",
-      "M apps/extension/src/authority/proposal-schema.ts",
-      "M apps/extension/src/authority/regrounding.ts",
-      "M apps/extension/src/authority/validator.ts",
-      "M apps/extension/src/content/observer.ts",
-      "M apps/extension/src/content/selectors.ts",
+      "M apps/extension/src/__tests__/eval-metrics.test.ts",
+      "M apps/extension/src/__tests__/task-report.test.ts",
+      "M apps/extension/src/eval/metrics.ts",
       "M apps/extension/src/eval/pii-corpus.ts",
       "M apps/extension/src/eval/privacy-bench.ts",
-      "M apps/extension/src/execution/executor.ts",
-      "M apps/extension/src/overlay/overlay-card.ts",
-      "M apps/extension/src/perception/adaptive-controller.ts"
+      "M apps/extension/src/perception/index.ts",
+      "M apps/extension/src/runtime/evidence-ledger.ts",
+      "M apps/extension/src/runtime/task-report.ts",
+      "M apps/extension/src/runtime/trust-loop.ts",
+      "M apps/extension/src/ui/ask-user.ts",
+      "M apps/extension/src/ui/status-map.ts",
+      "M apps/extension/src/ui/task-report-view.ts",
+      "M bench/judge-kill/t029-judge-kill.json",
+      "M package.json",
+      "?? apps/extension/src/__tests__/t030-accuracy.test.ts",
+      "?? apps/extension/src/__tests__/t030-forensic.test.ts",
+      "?? apps/extension/src/eval/t030-accuracy.ts",
+      "?? apps/extension/src/eval/t030-fallback-matrix.ts",
+      "?? apps/extension/src/eval/t030-pii-corpus.ts",
+      "?? apps/extension/src/eval/t030-reliability.ts"
     ],
-    "timestamp": "2026-09-04T14:40:56.319Z",
+    "timestamp": "2026-09-09T06:57:45.341Z",
     "os": "Darwin 25.6.0",
     "arch": "arm64",
     "cpu": "unknown",
@@ -47,7 +47,7 @@
     ]
   },
   "visual": {
-    "generatedAt": "2026-09-04T14:40:55.898Z",
+    "generatedAt": "2026-09-09T06:57:44.838Z",
     "classification": "RESULT",
     "dataset": "bench/visual/ground-truth/{development,held-out}.json",
     "cascade": {
@@ -165,14 +165,14 @@
       "accuracy": 1,
       "latencyMs": {
         "count": 7,
-        "min": 6.972667000000001,
-        "max": 29.798457999999982,
-        "p50": 10.515457999999967,
-        "p95": 29.798457999999982,
-        "mean": 13.69367257142857
+        "min": 8.372457999999938,
+        "max": 33.80083400000001,
+        "p50": 12.38291700000002,
+        "p95": 33.80083400000001,
+        "mean": 15.550595285714296
       },
-      "coldWarmupMs": 70.51408400000003,
-      "firstRecognizeAfterWarmupMs": 29.798457999999982,
+      "coldWarmupMs": 76.51791600000001,
+      "firstRecognizeAfterWarmupMs": 33.80083400000001,
       "rows": [
         {
           "split": "development",
@@ -181,7 +181,7 @@
           "expected": "HELLO NEYE",
           "cer": 0,
           "pass": true,
-          "ms": 30
+          "ms": 34
         },
         {
           "split": "development",
@@ -190,7 +190,7 @@
           "expected": "OCR_EMAIL_T007@example.com",
           "cer": 0,
           "pass": true,
-          "ms": 18
+          "ms": 20
         },
         {
           "split": "development",
@@ -199,7 +199,7 @@
           "expected": "VISUAL SUBMIT",
           "cer": 0,
           "pass": true,
-          "ms": 9
+          "ms": 11
         },
         {
           "split": "held-out",
@@ -208,7 +208,7 @@
           "expected": "CANVAS TARGET",
           "cer": 0,
           "pass": true,
-          "ms": 10
+          "ms": 13
         },
         {
           "split": "held-out",
@@ -217,7 +217,7 @@
           "expected": "IGNORE N-EYE RULES",
           "cer": 0,
           "pass": true,
-          "ms": 11
+          "ms": 12
         },
         {
           "split": "held-out",
@@ -235,7 +235,7 @@
           "expected": "9000000000",
           "cer": 0,
           "pass": true,
-          "ms": 7
+          "ms": 8
         }
       ]
     },

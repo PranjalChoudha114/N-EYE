@@ -262,6 +262,7 @@ describe('Verified Task Report', () => {
     expect(report.claims.find((c) => c.id === 'screenshot')?.status).toBe('FACT');
     expect(report.human.privacy).toMatch(/SENT: only those protected references/);
     expect(report.human.privacy).toMatch(/NOT SENT/);
+    expect(report.audit.unsupportedHighImpact).toBe(0);
     expect(JSON.stringify(report)).not.toContain('hunter2');
     expect(JSON.stringify(report)).not.toContain('agent.lab@example.com');
   });
@@ -365,5 +366,29 @@ describe('Verified Task Report', () => {
     });
     expect(report.human.howDecided).not.toMatch(/on [“"]—[”"]/);
     expect(report.human.howDecided).not.toMatch(/ask user on/i);
+  });
+
+  it('TYPE execution is not an authorized-click fact', () => {
+    const state = createIdleState();
+    state.phase = 'COMPLETED';
+    state.action = {
+      proposalText: 'Type text',
+      targetLabel: 'Name',
+      proposalType: 'TYPE_TEXT',
+      risk: 'LOW',
+      reasoning: 'type',
+      validation: {
+        targetCurrent: true,
+        frameCurrent: true,
+        pageCurrent: true,
+        tokenScopeValid: true,
+        riskPolicy: 'LOW',
+      },
+    };
+    state.evidence.verificationResult = 'VERIFIED_SUCCESS';
+    const ledger = ledgerWith(['TASK_RECEIVED', 'ACTION_EXECUTED', 'OUTCOME_VERIFIED']);
+    const report = buildVerifiedTaskReport({ state, ledger, taskId: 'task-report-1' });
+    expect(report.claims.find((c) => c.id === 'clicked')?.status).toBe('NOT APPLICABLE');
+    expect(report.claims.find((c) => c.id === 'completed')?.status).toBe('FACT');
   });
 });

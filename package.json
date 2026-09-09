@@ -18,6 +18,7 @@
     "bench:all": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t019.test.ts",
     "bench:t027": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/bench-t027-t028.test.ts",
     "bench:t029": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/t029-judge-kill.test.ts",
+    "bench:t030": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/t030-accuracy.test.ts",
     "bench:hidden": "N_EYE_BENCH_WRITE=1 pnpm --filter @n-eye/extension exec vitest run src/__tests__/hidden-generalization.test.ts",
     "clean": "pnpm -r run clean"
   },

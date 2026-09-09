@@ -1,3 +1,8 @@
+export {
+  classifyPerceptionFallback,
+  evidencePerceptionSource,
+  perceptionFailureUserMessage,
+} from './fallback-policy.js';
 export { decidePerception, isDomSufficient } from './adaptive-controller.js';
 export { runPerception, type PerceptionCaptureFn } from './orchestrator.js';
 export { PixelBuffer } from './pixel-buffer.js';

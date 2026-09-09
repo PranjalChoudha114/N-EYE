@@ -77,6 +77,33 @@ export function percentile(sortedAscending: number[], p: number): number | null 
   return sortedAscending[idx] ?? null;
 }
 
+/**
+ * Wilson score interval for a binomial proportion (z=1.96 → ~95%).
+ * WHY: Small fixture N must not be published as a point percentage without a range.
+ */
+export function wilsonScoreInterval(
+  successes: number,
+  n: number,
+  z = 1.96
+): { low: number; high: number } | null {
+  if (n <= 0 || successes < 0 || successes > n) return null;
+  const p = successes / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const center = p + z2 / (2 * n);
+  const margin = z * Math.sqrt((p * (1 - p) + z2 / (4 * n)) / n);
+  return {
+    low: Math.max(0, (center - margin) / denom),
+    high: Math.min(1, (center + margin) / denom),
+  };
+}
+
+export function formatWilson(successes: number, n: number): string {
+  const iv = wilsonScoreInterval(successes, n);
+  if (!iv) return 'n/a';
+  return `${(iv.low * 100).toFixed(1)}–${(iv.high * 100).toFixed(1)}%`;
+}
+
 export function summarizeSamples(values: number[]): {
   count: number;
   min: number | null;

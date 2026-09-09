@@ -10,6 +10,7 @@ import type { EvidenceEvent, EvidenceEventType, EvidenceLedger } from './evidenc
 import type { ProductState } from './ui-snapshot.js';
 import { classifyAskUser } from '../ui/ask-user.js';
 import { isPlaceholderLabel } from '../ui/human-copy.js';
+import { statusFromEvidence, validateClaims, type ReportAudit } from './report-claim-validator.js';
 
 export type TaskReportResult =
   | 'VERIFIED COMPLETE'
@@ -19,13 +20,22 @@ export type TaskReportResult =
   | 'CANCELLED'
   | 'SYSTEM ERROR';
 
-export type ClaimStatus = 'FACT' | 'UNVERIFIED' | 'UNKNOWN' | 'NOT OBSERVED' | 'NOT APPLICABLE';
+export type ClaimEvidenceStatus = 'PROVEN' | 'OBSERVED' | 'NOT_VERIFIED' | 'NOT_APPLICABLE';
+
+export type ClaimStatus = 'FACT' | 'OBSERVED' | 'UNVERIFIED' | 'UNKNOWN' | 'NOT OBSERVED' | 'NOT APPLICABLE';
 
 export interface ReportClaim {
   id: string;
+  claimId: string;
+  claimType: 'PERCEPTION' | 'PRIVACY' | 'EGRESS' | 'ACTION' | 'OUTCOME';
+  statementKey: string;
   text: string;
   requiredEvents: EvidenceEventType[];
+  evidenceIds: string[];
+  evidenceStatus: ClaimEvidenceStatus;
   status: ClaimStatus;
+  taskId: string;
+  stepId?: string;
 }
 
 export interface TaskReportHuman {
@@ -72,6 +82,7 @@ export interface VerifiedTaskReport {
   human: TaskReportHuman;
   technical: TaskReportTechnical;
   claims: ReportClaim[];
+  audit: ReportAudit;
   generatedAt: number;
 }
 
@@ -79,27 +90,28 @@ function has(ledger: EvidenceLedger, type: EvidenceEventType): boolean {
   return ledger.has(type);
 }
 
-function claim(
-  id: string,
-  text: string,
-  required: EvidenceEventType[],
-  ledger: EvidenceLedger,
-  extras?: { inapplicable?: boolean; unknown?: boolean; fact?: boolean }
-): ReportClaim {
-  if (extras?.inapplicable) {
-    return { id, text, requiredEvents: required, status: 'NOT APPLICABLE' };
-  }
-  if (extras?.unknown) {
-    return { id, text, requiredEvents: required, status: 'UNKNOWN' };
-  }
-  if (extras?.fact) {
-    return { id, text, requiredEvents: required, status: 'FACT' };
-  }
-  if (required.length === 0) {
-    return { id, text, requiredEvents: required, status: 'UNVERIFIED' };
-  }
-  const ok = required.every((t) => ledger.has(t));
-  return { id, text, requiredEvents: required, status: ok ? 'FACT' : 'UNVERIFIED' };
+function makeClaim(args: {
+  id: string;
+  claimType: ReportClaim['claimType'];
+  statementKey: string;
+  text: string;
+  required: EvidenceEventType[];
+  ledger: EvidenceLedger;
+  taskId: string;
+  evidenceStatus: ClaimEvidenceStatus;
+}): ReportClaim {
+  return {
+    id: args.id,
+    claimId: args.id,
+    claimType: args.claimType,
+    statementKey: args.statementKey,
+    text: args.text,
+    requiredEvents: args.required,
+    evidenceIds: args.ledger.idsOf(args.required),
+    evidenceStatus: args.evidenceStatus,
+    status: statusFromEvidence(args.evidenceStatus),
+    taskId: args.taskId,
+  };
 }
 
 export function classifyTaskReportResult(state: ProductState, ledger: EvidenceLedger): TaskReportResult {
@@ -150,59 +162,108 @@ export function buildVerifiedTaskReport(args: {
 }): VerifiedTaskReport {
   const { state, ledger, taskId } = args;
   const result = classifyTaskReportResult(state, ledger);
-  const remoteUsed = has(ledger, 'REMOTE_INTELLIGENCE_USED') || state.plannerMode === 'REMOTE';
+  const remoteUsed = has(ledger, 'REMOTE_INTELLIGENCE_USED');
   const ocrUsed = has(ledger, 'OCR_USED');
   const visualUsed = has(ledger, 'VISUAL_ANALYSIS_USED');
   const executed = has(ledger, 'ACTION_EXECUTED');
+  const checked = has(ledger, 'ACTION_CHECKED');
   const verified = has(ledger, 'OUTCOME_VERIFIED');
+  const protectedCtx = has(ledger, 'PROTECTED_CONTEXT_CREATED');
+  const dataProtected = has(ledger, 'DATA_PROTECTED');
   const missingTarget = has(ledger, 'TARGET_NOT_FOUND');
   const screenshotZero = state.evidence.screenshotOutBytes === 0;
   const egressPass = state.evidence.egressAudit === 'PASS';
+  const proposedType = state.action?.proposalType;
+  const isClick = proposedType === 'CLICK';
+  const passwordKept = Boolean(state.privacySummary?.keptLocal.some((n) => /password/i.test(n)));
+  const emailTokenized = Boolean(state.privacySummary?.tokenized.some((t) => /email/i.test(t.label)));
+
+  const screenshotStatus: ClaimEvidenceStatus = !remoteUsed
+    ? 'NOT_APPLICABLE'
+    : remoteUsed && protectedCtx && screenshotZero && egressPass
+      ? 'PROVEN'
+      : 'NOT_VERIFIED';
+
+  const clickStatus: ClaimEvidenceStatus = !isClick
+    ? 'NOT_APPLICABLE'
+    : checked && executed && verified && result === 'VERIFIED COMPLETE'
+      ? 'PROVEN'
+      : executed
+        ? 'OBSERVED'
+        : 'NOT_APPLICABLE';
+
+  const completedStatus: ClaimEvidenceStatus =
+    result === 'VERIFIED COMPLETE' && verified ? 'PROVEN' : 'NOT_APPLICABLE';
 
   const claims: ReportClaim[] = [
-    claim('ocr', 'N-Eye used OCR.', ['OCR_USED'], ledger, { inapplicable: !ocrUsed }),
-    claim('screenshot', 'No screenshot was sent.', ['PROTECTED_CONTEXT_CREATED'], ledger, {
-      inapplicable: !remoteUsed,
+    makeClaim({
+      id: 'ocr',
+      claimType: 'PERCEPTION',
+      statementKey: 'OCR_USED',
+      text: ocrUsed ? 'N-Eye read visible text locally (OCR).' : 'N-Eye used OCR.',
+      required: ['OCR_USED'],
+      ledger,
+      taskId,
+      evidenceStatus: ocrUsed ? 'PROVEN' : 'NOT_APPLICABLE',
     }),
-    claim('completed', 'The task completed.', ['OUTCOME_VERIFIED'], ledger, {
-      inapplicable: result !== 'VERIFIED COMPLETE',
+    makeClaim({
+      id: 'screenshot',
+      claimType: 'EGRESS',
+      statementKey: 'SCREENSHOT_NOT_SENT',
+      text: 'No screenshot was sent.',
+      required: ['PROTECTED_CONTEXT_CREATED', 'REMOTE_INTELLIGENCE_USED'],
+      ledger,
+      taskId,
+      evidenceStatus: screenshotStatus,
     }),
-    claim('clicked', 'N-Eye performed an authorized click.', ['ACTION_EXECUTED'], ledger, {
-      inapplicable: !executed,
+    makeClaim({
+      id: 'completed',
+      claimType: 'OUTCOME',
+      statementKey: 'TASK_COMPLETED',
+      text: 'The task completed.',
+      required: ['OUTCOME_VERIFIED'],
+      ledger,
+      taskId,
+      evidenceStatus: completedStatus,
     }),
-    claim('password-local', 'Password class findings were kept local (NEVER_SEND).', ['DATA_PROTECTED'], ledger, {
-      inapplicable: !state.privacySummary?.keptLocal.some((n) => /password/i.test(n)),
+    makeClaim({
+      id: 'clicked',
+      claimType: 'ACTION',
+      statementKey: 'AUTHORIZED_CLICK',
+      text:
+        clickStatus === 'OBSERVED'
+          ? 'N-Eye dispatched an authorized click. The requested task was not verified complete.'
+          : 'N-Eye performed an authorized click.',
+      required: clickStatus === 'PROVEN' ? ['ACTION_CHECKED', 'ACTION_EXECUTED', 'OUTCOME_VERIFIED'] : ['ACTION_EXECUTED'],
+      ledger,
+      taskId,
+      evidenceStatus: clickStatus,
+    }),
+    makeClaim({
+      id: 'password-local',
+      claimType: 'PRIVACY',
+      statementKey: 'PASSWORD_NEVER_SEND',
+      text: 'Password class findings were kept local (NEVER_SEND).',
+      required: ['DATA_PROTECTED'],
+      ledger,
+      taskId,
+      evidenceStatus: passwordKept && dataProtected ? 'PROVEN' : passwordKept ? 'NOT_VERIFIED' : 'NOT_APPLICABLE',
+    }),
+    makeClaim({
+      id: 'email-protected',
+      claimType: 'PRIVACY',
+      statementKey: 'EMAIL_PROTECTED',
+      text: 'Email was protected before reasoning.',
+      required: ['PRIVACY_DETECTED', 'DATA_PROTECTED', 'PROTECTED_CONTEXT_CREATED'],
+      ledger,
+      taskId,
+      evidenceStatus: emailTokenized
+        ? has(ledger, 'PRIVACY_DETECTED') && dataProtected && protectedCtx
+          ? 'PROVEN'
+          : 'NOT_VERIFIED'
+        : 'NOT_APPLICABLE',
     }),
   ];
-
-  const shot = claims.find((c) => c.id === 'screenshot');
-  if (shot && !remoteUsed) {
-    shot.status = 'NOT APPLICABLE';
-  } else if (shot && remoteUsed && screenshotZero && egressPass) {
-    shot.status = 'FACT';
-    shot.text = 'No screenshot was sent.';
-  } else if (shot && remoteUsed) {
-    shot.status = 'UNVERIFIED';
-  }
-
-  if (ocrUsed) {
-    const ocr = claims.find((c) => c.id === 'ocr');
-    if (ocr) {
-      ocr.status = 'FACT';
-      ocr.text = 'N-Eye read visible text locally (OCR).';
-    }
-  }
-
-  if (result === 'VERIFIED COMPLETE' && (verified || state.evidence.verificationResult === 'ALREADY_SATISFIED')) {
-    const done = claims.find((c) => c.id === 'completed');
-    if (done) done.status = 'FACT';
-  } else {
-    const done = claims.find((c) => c.id === 'completed');
-    if (done) {
-      done.status = 'NOT APPLICABLE';
-      done.text = 'The task completed.';
-    }
-  }
 
   const understood =
     state.askUser?.reason === 'UNKNOWN_GOAL'
@@ -227,19 +288,27 @@ export function buildVerifiedTaskReport(args: {
       privacyLines.push('DETECTED: no private information was classified on this step.');
     }
     if (state.privacySummary.keptLocal.length > 0) {
+      const passwordClaim = claims.find((c) => c.id === 'password-local');
+      const neverSendOk = passwordClaim?.evidenceStatus === 'PROVEN' || dataProtected;
       privacyLines.push(
-        valueCount > 0
+        valueCount > 0 && neverSendOk
           ? `PROTECTED / NOT SENT: ${state.privacySummary.keptLocal.join(', ')} stayed on this device (NEVER_SEND).`
           : `PROTECTED / NOT SENT: ${state.privacySummary.keptLocal.join(', ')} — sensitive control(s) classified; no private value was present to send.`
       );
     }
     if (state.privacySummary.tokenized.length > 0) {
       const names = state.privacySummary.tokenized.map((t) => t.label).join(', ');
+      const emailClaim = claims.find((c) => c.id === 'email-protected');
+      if (emailClaim?.evidenceStatus === 'PROVEN') {
+        privacyLines.push('Email was protected before reasoning.');
+      }
       privacyLines.push(`PROTECTED: ${names} replaced with local references before reasoning.`);
       privacyLines.push(
-        remoteUsed
+        remoteUsed && protectedCtx
           ? `SENT: only those protected references, not the original values.`
-          : `NOT SENT: Remote AI was not used, so protected references did not leave this device.`
+          : remoteUsed
+            ? 'SENT: not verified — protected-context evidence is incomplete.'
+            : `NOT SENT: Remote AI was not used, so protected references did not leave this device.`
       );
     }
   } else {
@@ -251,7 +320,7 @@ export function buildVerifiedTaskReport(args: {
     privacyLines.push('Remote AI was not used for this task. NOT SENT: no planner payload.');
   }
   const shotClaim = claims.find((c) => c.id === 'screenshot');
-  if (shotClaim?.status === 'FACT') {
+  if (shotClaim?.evidenceStatus === 'PROVEN') {
     privacyLines.push('No screenshot was sent.');
   } else if (!remoteUsed) {
     privacyLines.push('Screenshot outbound: not applicable (no remote request).');
@@ -259,7 +328,6 @@ export function buildVerifiedTaskReport(args: {
     privacyLines.push('Screenshot outbound: not proven as a report fact.');
   }
 
-  const proposedType = state.action?.proposalType;
   const proposedLabel = state.action?.targetLabel;
   let howDecided: string;
   if (missingTarget) {
@@ -280,12 +348,17 @@ export function buildVerifiedTaskReport(args: {
     howDecided = `N-Eye proposed ${proposedType.toLowerCase().replace(/_/g, ' ')} on “${proposedLabel}”.`;
   }
 
+  const clickClaim = claims.find((c) => c.id === 'clicked');
   const whatDid =
-    result === 'VERIFIED COMPLETE' && executed
-      ? `Authorized action: ${state.action?.proposalText || state.action?.proposalType || 'recorded execution'}.`
-      : executed && result !== 'VERIFIED COMPLETE'
-        ? `A local system step ran (${state.action?.proposalType || 'recorded'}). That is not the requested task succeeding.`
-        : 'No browser action was performed.';
+    clickClaim?.evidenceStatus === 'PROVEN'
+      ? `Authorized action: ${state.action?.proposalText || 'click'}.`
+      : clickClaim?.evidenceStatus === 'OBSERVED'
+        ? 'An authorized click was dispatched. That is not the requested task succeeding.'
+        : result === 'VERIFIED COMPLETE' && executed
+          ? `Authorized action: ${state.action?.proposalText || state.action?.proposalType || 'recorded execution'}.`
+          : executed && result !== 'VERIFIED COMPLETE'
+            ? `A local system step ran (${state.action?.proposalType || 'recorded'}). That is not the requested task succeeding.`
+            : 'No browser action was performed.';
 
   const rawHappened =
     state.action?.verificationDelta ||
@@ -376,22 +449,17 @@ export function buildVerifiedTaskReport(args: {
     events: ledger.list(),
   };
 
-  return {
+  const draft: VerifiedTaskReport = {
     taskId,
     result,
     human,
     technical,
-    claims: claims.map((c) => {
-      if (c.status !== 'FACT') return c;
-      if (c.id === 'screenshot' && remoteUsed && screenshotZero && egressPass) return c;
-      if (c.id === 'completed' && state.evidence.verificationResult === 'ALREADY_SATISFIED') return c;
-      if (c.requiredEvents.length > 0 && !c.requiredEvents.every((t) => ledger.has(t))) {
-        return { ...c, status: 'UNVERIFIED' };
-      }
-      return c;
-    }),
+    claims,
+    audit: { contradictions: [], unsupportedHighImpact: 0, downgraded: [] },
     generatedAt: Date.now(),
   };
+  const audited = validateClaims(draft.claims, ledger, result, JSON.stringify(draft.human));
+  return { ...draft, claims: audited.claims, audit: audited.audit };
 }
 
 const ENGINE_SAFE = 'Something went wrong while checking this page. N-Eye stopped without changing anything.';

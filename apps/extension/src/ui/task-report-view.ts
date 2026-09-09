@@ -83,14 +83,14 @@ export function paintTaskReport(host: HTMLElement, report: VerifiedTaskReport | 
   }
   const claimsHead = document.createElement('p');
   claimsHead.className = 'n-caption';
-  claimsHead.textContent = 'Claim audit (facts require local evidence)';
+  claimsHead.textContent = 'Claim audit (PROVEN requires local evidence; OBSERVED is not task success)';
   body.append(claimsHead);
   for (const claim of report.claims) {
     const row = document.createElement('div');
     row.className = 'n-row';
     const key = document.createElement('span');
     key.className = 'n-row-k';
-    key.textContent = claim.status;
+    key.textContent = `${claim.evidenceStatus} (${claim.status})`;
     const val = document.createElement('span');
     val.className = 'n-row-v';
     val.textContent = claim.text;

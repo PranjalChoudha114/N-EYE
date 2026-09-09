@@ -117,12 +117,14 @@ export function statusCopy(phase: ProductPhase, detail?: string): StatusCopy {
         message: detail || 'Retrying the same protected request. Privacy rules have not been relaxed.',
         tone: 'info',
       };
-    case 'OCR_UNAVAILABLE':
+    case 'OCR_UNAVAILABLE': {
+      const capture = /could not capture/i.test(detail || '');
       return {
-        headline: 'Could not read visible text',
+        headline: capture ? 'Could not capture visible pixels' : 'Could not read visible text',
         message: detail || 'Visible text could not be read on this device. The screenshot stayed here.',
         tone: 'warning',
       };
+    }
     case 'ASK_USER':
       return {
         headline: 'I need your help',

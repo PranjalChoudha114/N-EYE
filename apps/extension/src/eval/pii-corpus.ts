@@ -22,6 +22,8 @@ export interface PiiSample {
   expectedClasses: string[];
   rawSecrets: string[];
   notes?: string;
+  /** When false, the control is empty; detectors must not treat the label as a private value. */
+  hasValue?: boolean;
 }
 
 export const PII_SAMPLES: PiiSample[] = [

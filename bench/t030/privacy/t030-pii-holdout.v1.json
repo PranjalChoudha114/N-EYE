@@ -1,0 +1,301 @@
+{
+  "version": "t030-pii-holdout/1",
+  "frozen": true,
+  "notes": "Frozen T030 PII holdout. Do not retune detectors against this file. Labels are desired behavior, not current-detector mirrors.",
+  "samples": [
+    {
+      "id": "hold-email-plus",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "email",
+      "innerText": "ops+holdout@lab.example.org",
+      "expectedClasses": ["PII_EMAIL"],
+      "rawSecrets": ["ops+holdout@lab.example.org"]
+    },
+    {
+      "id": "hold-email-ocr",
+      "split": "eval",
+      "channel": "ocr",
+      "mode": "ocr",
+      "classTag": "ocr-pii",
+      "ocrText": "Invoice hold.ocr@example.net",
+      "expectedClasses": ["PII_EMAIL"],
+      "rawSecrets": ["hold.ocr@example.net"]
+    },
+    {
+      "id": "hold-phone-us-dash",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "phone",
+      "innerText": "Call 312-555-0198",
+      "expectedClasses": ["PII_PHONE"],
+      "rawSecrets": ["312-555-0198"]
+    },
+    {
+      "id": "hold-in-mobile-plus91",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "indian-mobile",
+      "innerText": "Mobile +91 88990 11223",
+      "expectedClasses": ["PII_PHONE"],
+      "rawSecrets": ["+91 88990 11223"]
+    },
+    {
+      "id": "hold-aadhaar",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "aadhaar",
+      "innerText": "Aadhaar 2345 6789 0127",
+      "expectedClasses": ["PII_ACCOUNT_ID"],
+      "rawSecrets": ["2345 6789 0127"]
+    },
+    {
+      "id": "hold-pan",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "pan",
+      "innerText": "PAN PQRST6789L",
+      "expectedClasses": ["PII_ACCOUNT_ID"],
+      "rawSecrets": ["PQRST6789L"]
+    },
+    {
+      "id": "hold-gstin",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "gstin",
+      "innerText": "GSTIN 07ABCDE1234F1Z5",
+      "expectedClasses": ["PII_ACCOUNT_ID"],
+      "rawSecrets": ["07ABCDE1234F1Z5"]
+    },
+    {
+      "id": "hold-ifsc",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "ifsc",
+      "innerText": "IFSC SBIN0004321",
+      "expectedClasses": ["PII_ACCOUNT_ID"],
+      "rawSecrets": ["SBIN0004321"]
+    },
+    {
+      "id": "hold-upi",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "upi",
+      "innerText": "Pay holdout@okicici",
+      "expectedClasses": ["PII_ACCOUNT_ID"],
+      "rawSecrets": ["holdout@okicici"]
+    },
+    {
+      "id": "hold-password-type",
+      "split": "eval",
+      "channel": "input_type",
+      "mode": "element",
+      "classTag": "password",
+      "inputType": "password",
+      "innerText": "Password",
+      "expectedClasses": ["SECRET_PASSWORD"],
+      "rawSecrets": [],
+      "hasValue": true
+    },
+    {
+      "id": "hold-empty-password",
+      "split": "eval",
+      "channel": "input_type",
+      "mode": "element",
+      "classTag": "empty-control",
+      "inputType": "password",
+      "innerText": "Password",
+      "expectedClasses": ["SECRET_PASSWORD"],
+      "rawSecrets": [],
+      "hasValue": false,
+      "notes": "Empty control is still SECRET_PASSWORD; valuePresent must be false."
+    },
+    {
+      "id": "hold-otp-label",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "otp",
+      "innerText": "Enter OTP",
+      "expectedClasses": ["SECRET_OTP"],
+      "rawSecrets": [],
+      "hasValue": false
+    },
+    {
+      "id": "hold-api-stripe",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "api-key",
+      "innerText": "sk_live_holdoutkey99112233445566",
+      "expectedClasses": ["SECRET_API_KEY"],
+      "rawSecrets": ["sk_live_holdoutkey99112233445566"]
+    },
+    {
+      "id": "hold-bearer",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "bearer",
+      "innerText": "Bearer abcdefghijklmnopqrstuvwxyz99hold",
+      "expectedClasses": ["SECRET_API_KEY"],
+      "rawSecrets": ["abcdefghijklmnopqrstuvwxyz99hold"]
+    },
+    {
+      "id": "hold-jwt",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "session",
+      "innerText": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0MDMwIn0.sigHoldOutValue",
+      "expectedClasses": ["SECRET_AUTH_TOKEN"],
+      "rawSecrets": ["eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ0MDMwIn0.sigHoldOutValue"]
+    },
+    {
+      "id": "hold-session-label",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "session",
+      "innerText": "session_token field",
+      "expectedClasses": ["SECRET_SESSION"],
+      "rawSecrets": []
+    },
+    {
+      "id": "hold-isbn",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "isbn",
+      "innerText": "ISBN 978-0-306-40615-7",
+      "expectedClasses": [],
+      "rawSecrets": [],
+      "notes": "Bibliographic identifiers must not be telephones."
+    },
+    {
+      "id": "hold-order-10digit",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "lookalike",
+      "innerText": "Order 9876543210 shipped",
+      "expectedClasses": [],
+      "rawSecrets": [],
+      "notes": "Bare 10-digit prose is not an intended phone. IN_MOBILE may still FP (REC-050). Not used to retune."
+    },
+    {
+      "id": "hold-hindi-name-label",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "hindi",
+      "innerText": "नाम",
+      "expectedClasses": ["PII_NAME"],
+      "rawSecrets": [],
+      "notes": "Desired: Hindi name label. Current English-only label detector is expected to FN."
+    },
+    {
+      "id": "hold-hindi-prose-name",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "hindi",
+      "innerText": "राम कुमार",
+      "expectedClasses": [],
+      "rawSecrets": [],
+      "notes": "Free-text names are not claimed as detected."
+    },
+    {
+      "id": "hold-unicode-email",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "unicode",
+      "innerText": "cafhold@example.com",
+      "expectedClasses": ["PII_EMAIL"],
+      "rawSecrets": ["cafhold@example.com"]
+    },
+    {
+      "id": "hold-empty-email-control",
+      "split": "eval",
+      "channel": "input_type",
+      "mode": "element",
+      "classTag": "empty-control",
+      "inputType": "email",
+      "innerText": "Email",
+      "expectedClasses": ["PII_EMAIL"],
+      "rawSecrets": [],
+      "hasValue": false
+    },
+    {
+      "id": "hold-name-label-en",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "label-only",
+      "innerText": "Full name",
+      "expectedClasses": ["PII_NAME"],
+      "rawSecrets": [],
+      "hasValue": false
+    },
+    {
+      "id": "hold-address-prose",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "lookalike",
+      "innerText": "12 MG Road, Bengaluru",
+      "expectedClasses": [],
+      "rawSecrets": [],
+      "notes": "Free-text address is not a labeled address field."
+    },
+    {
+      "id": "hold-continue-benign",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "benign",
+      "innerText": "Continue application",
+      "expectedClasses": [],
+      "rawSecrets": []
+    },
+    {
+      "id": "hold-user-at-lobby",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "lookalike",
+      "innerText": "Meet us @ the lobby",
+      "expectedClasses": [],
+      "rawSecrets": []
+    },
+    {
+      "id": "hold-otp-ocr",
+      "split": "eval",
+      "channel": "ocr",
+      "mode": "ocr",
+      "classTag": "ocr-pii",
+      "ocrText": "CANARY_OTP_T030_HOLD",
+      "expectedClasses": ["SECRET_OTP"],
+      "rawSecrets": ["CANARY_OTP_T030_HOLD"]
+    },
+    {
+      "id": "hold-year-not-phone",
+      "split": "eval",
+      "channel": "dom_label",
+      "mode": "element",
+      "classTag": "lookalike",
+      "innerText": "Copyright 2026",
+      "expectedClasses": [],
+      "rawSecrets": []
+    }
+  ]
+}

@@ -19,7 +19,8 @@ export type AskUserReason =
   | 'SEARCH_SUBMIT_MISSING'
   | 'PARTIAL_GOAL'
   | 'TARGET_NOT_FOUND'
-  | 'ENGINE_FAILURE';
+  | 'ENGINE_FAILURE'
+  | 'VISUAL_UNBOUND';
 
 export interface AskUserView {
   reason: AskUserReason;
@@ -37,6 +38,7 @@ const DISMISS = 'Cancel';
 const HINT = 'Rewrite your request below, then continue. This is not an approval.';
 
 const RULES: Array<{ reason: AskUserReason; tests: RegExp[] }> = [
+  { reason: 'VISUAL_UNBOUND', tests: [/visual_unbound/i, /could not uniquely bind/i, /found no readable text to bind/i] },
   { reason: 'TARGET_NOT_FOUND', tests: [/no unique matching target/i, /was not found in current scene/i, /target_not_found/i, /requires a targetid/i] },
   { reason: 'ENGINE_FAILURE', tests: [/cannot read propert/i, /targetcurrent/i, /stopped without changing anything/i] },
   { reason: 'AMBIGUOUS_TARGET', tests: [/multiple matching/i, /will not guess which/i] },
@@ -92,6 +94,8 @@ const HUMAN: Record<AskUserReason, string> = {
     "I couldn't find one safe, unique control that matches your request, so I stopped without clicking anything.",
   ENGINE_FAILURE:
     'Something went wrong while checking this page. N-Eye stopped without changing anything.',
+  VISUAL_UNBOUND:
+    'N-Eye read the page visually but could not uniquely bind that text to one control, so it stopped rather than guessing.',
 };
 
 export function classifyAskUser(detail: string): AskUserReason {

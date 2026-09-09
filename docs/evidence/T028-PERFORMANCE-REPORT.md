@@ -1,29 +1,29 @@
 # T028 resources / latency
 
-SHA: `64638ad42da2fa401fa2f471d4f39e116770380f`
+SHA: `7bca2ec4f1946020d11428a38d74a11448039c08`
 Hardware: unknown · RAM 25769803776 · Darwin 25.6.0
 Runtime: happy-dom
 
-JS+CSS: 298743 B uncompressed / 90302 B gzip PROXY
+JS+CSS: 314292 B uncompressed / 94184 B gzip PROXY
 OCR assets: 8123867 B
 SafeContext: 8348 B · screenshot outbound 0 B
-Memory proxy: 57249408 (PROXY: Node process.memoryUsage().heapUsed after bench, not Chrome extension RSS)
+Memory proxy: 46296928 (PROXY: Node process.memoryUsage().heapUsed after bench, not Chrome extension RSS)
 
 | Stage | n | p50 ms | p95 ms |
 |---|---:|---:|---:|
-| observation | 40 | 5.68 | 6.66 |
+| observation | 40 | 6.24 | 7.95 |
 | privacy | 40 | 0.02 | 0.03 |
-| sanitization | 20 | 0.43 | 0.57 |
+| sanitization | 20 | 0.42 | 0.55 |
 | mock planner | 20 | 0.02 | 0.06 |
 | validation | 20 | 0.00 | 0.00 |
-| execution | 15 | 0.19 | 1.71 |
-| verification | 15 | 5.52 | 7.66 |
+| execution | 15 | 0.21 | 1.89 |
+| verification | 15 | 5.63 | 13.33 |
 
 | Class (Node) | n | p50 ms | p95 ms |
 |---|---:|---:|---:|
 | search affordance | 40 | 0.00 | 0.01 |
-| India PII detect | 30 | 0.00 | 0.01 |
+| India PII detect | 30 | 0.00 | 0.02 |
 | missing-target copy | 30 | 0.00 | 0.00 |
-| report build | 20 | 0.00 | 0.02 |
+| report build | 20 | 0.01 | 0.04 |
 
 These are happy-dom/Node development measurements, not Chrome E2E SIH judge numbers.

@@ -107,6 +107,11 @@ import { parseMockGoal, pickUniqueTypeTextTarget } from '../planner/mock-grammar
 import { interpretGoal, scoreLabelAgainstHints } from '../intelligence/goal-interpreter.js';
 import { evaluateLearningEligibility, getNalisMemory } from '../intelligence/memory.js';
 import { beginForensicTrace, getForensicTrace, humanHealthLine, snapshotNalisHealth } from '../intelligence/forensic.js';
+import {
+  classifyPerceptionFallback,
+  evidencePerceptionSource,
+  perceptionFailureUserMessage,
+} from '../perception/fallback-policy.js';
 
 export const MAX_STEPS = 8;
 export const WAIT_SETTLE_MS = 400;
@@ -750,6 +755,7 @@ export class TrustLoopController {
     let lastFailureKey: string | null = null;
     let identicalFailCount = 0;
     let remainingRetryBudget = beginRecoveryBudget();
+    let actionMayHaveExecuted = false;
 
     try {
       for (let step = 1; step <= MAX_STEPS; step++) {
@@ -774,6 +780,8 @@ export class TrustLoopController {
         }
         this.ledger.record('PAGE_OBSERVED', 'PAGE OBSERVATION', `controls=${preScene.elements.length}`, {
           durationMs: performance.now() - seeStart,
+          pageEpoch: Number(preScene.pageEpoch),
+          origin: preScene.origin,
         });
         outcomeEvidenceHay = sceneOutcomeHay(preScene);
         const pageHay = preScene.elements
@@ -821,18 +829,24 @@ export class TrustLoopController {
             ...preScene,
             elements: applyFusionLabels(preScene.elements, perception.candidates),
           };
-          this.ledger.record('OCR_USED', 'VISUAL PERCEPTION', `rois=${perception.decision.roiSpecs.length}`);
-          this.ledger.record('VISUAL_ANALYSIS_USED', 'VISUAL PERCEPTION', perception.decision.reasons.join(',') || 'escalated');
+          // TRUST: OCR_USED means text was actually produced. Capture/engine failure is not OCR success.
+          if (perception.ocrBlocks.length > 0) {
+            this.ledger.record('OCR_USED', 'VISUAL PERCEPTION', `blocks=${perception.ocrBlocks.length}`);
+          }
+          this.ledger.record(
+            'VISUAL_ANALYSIS_USED',
+            'VISUAL PERCEPTION',
+            perception.decision.reasons.join(',') || 'escalated'
+          );
+          if (perception.fallback) {
+            this.ledger.record('FALLBACK_USED', 'VISUAL PERCEPTION', perception.fallback);
+          }
         } else {
           this.setPipeline('PERCEIVE', 'skipped');
           this.patch({ perceiveLabel: 'SKIP' });
         }
 
-        const perceptionSource = perception.invoked
-          ? perception.fusedElementIds.length > 0
-            ? 'FUSED'
-            : 'OCR'
-          : 'DOM';
+        const perceptionSource = evidencePerceptionSource(perception);
         this.patch({
           evidence: {
             ...this.state.evidence,
@@ -867,10 +881,13 @@ export class TrustLoopController {
           visualRequired &&
           !structureSufficient
         ) {
-          this.applyPhase(
-            'OCR_UNAVAILABLE',
-            'On-device capture/OCR failed and page structure is insufficient. The screenshot stayed on this device.'
-          );
+          const kind = classifyPerceptionFallback(perception.fallback);
+          const message = perceptionFailureUserMessage(perception.fallback);
+          if (kind === 'VISUAL_UNBOUND' || kind === 'STALE' || kind === 'STRUCTURE_FALLBACK') {
+            this.enterAskUser(message);
+            break;
+          }
+          this.applyPhase('OCR_UNAVAILABLE', message);
           this.patch({
             evidence: {
               ...this.state.evidence,
@@ -1474,8 +1491,10 @@ export class TrustLoopController {
         });
         this.setPipeline('ACT', 'done');
         if (execResult.success) {
+          actionMayHaveExecuted = true;
           this.ledger.record('ACTION_EXECUTED', 'BROWSER EXECUTION', actionToExecute.proposal.type, {
-            status: 'VERIFIED',
+            status: 'RECORDED',
+            actionType: actionToExecute.proposal.type,
           });
         }
 
@@ -1642,6 +1661,13 @@ export class TrustLoopController {
       }
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
+        if (actionMayHaveExecuted) {
+          this.ledger.record(
+            'FALLBACK_USED',
+            'SYSTEM LIFECYCLE',
+            'action-may-have-executed-before-verify'
+          );
+        }
         this.ledger.record('TASK_CANCELLED', 'SYSTEM LIFECYCLE', 'user-or-abort');
         this.applyPhase('CANCELLED', 'Task cancelled by user.');
         this.clearLiveEvidence();
